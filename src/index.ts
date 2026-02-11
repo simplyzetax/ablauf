@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { registry } from "./workflows/registry";
 import type { WorkflowRunnerStub } from "./engine/types";
+import { WorkflowError, WorkflowTypeUnknownError, PayloadValidationError } from "./engine/errors";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -8,10 +9,43 @@ function getWorkflowRunnerStub(env: Env, id: string): WorkflowRunnerStub {
 	return env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName(id)) as unknown as WorkflowRunnerStub;
 }
 
-// Error handling
+// Centralized error handler
 app.onError((err, c) => {
-	const message = err instanceof Error ? err.message : String(err);
-	return c.json({ error: message }, 500);
+	if (err instanceof WorkflowError) {
+		return c.json(
+			{
+				error: {
+					code: err.code,
+					message: err.message,
+					status: err.status,
+					source: err.source,
+					...(err.details && { details: err.details }),
+				},
+			},
+			err.status,
+		);
+	}
+
+	return c.json(
+		{
+			error: {
+				code: "INTERNAL_ERROR" as const,
+				message: "An unexpected error occurred",
+				status: 500,
+				source: "api" as const,
+			},
+		},
+		500,
+	);
+});
+
+// Middleware: re-hydrate WorkflowErrors from DO RPC calls
+app.use("/workflows/*", async (c, next) => {
+	try {
+		await next();
+	} catch (e) {
+		throw WorkflowError.fromSerialized(e);
+	}
 });
 
 app.get("/", (c) => {
@@ -24,11 +58,17 @@ app.post("/workflows", async (c) => {
 	const { type, id, payload } = body;
 
 	if (!registry[type]) {
-		return c.json({ error: `Unknown workflow type: "${type}"` }, 400);
+		throw new WorkflowTypeUnknownError(type);
 	}
 
 	const WorkflowClass = registry[type];
-	const parsed = WorkflowClass.inputSchema?.parse(payload) ?? payload;
+	let parsed: unknown;
+	try {
+		parsed = WorkflowClass.inputSchema?.parse(payload) ?? payload;
+	} catch (e) {
+		const issues = e instanceof Error && "issues" in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
+		throw new PayloadValidationError("Invalid workflow input", issues);
+	}
 
 	const stub = getWorkflowRunnerStub(c.env, id);
 	await stub.initialize({ type, id, payload: parsed });

@@ -2,6 +2,7 @@ import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { eq } from "drizzle-orm";
 import { stepsTable } from "../db/schema";
 import { SleepInterrupt, WaitInterrupt } from "./interrupts";
+import { StepRetryExhaustedError } from "./errors";
 import { parseDuration } from "./duration";
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
 import { DEFAULT_RETRY_CONFIG } from "./types";
@@ -82,7 +83,8 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 						attempts: newAttempts,
 					});
 				}
-				throw e;
+				const cause = e instanceof Error ? e.message : String(e);
+				throw new StepRetryExhaustedError(name, newAttempts, cause);
 			}
 
 			// Retries remaining: schedule retry via alarm instead of blocking

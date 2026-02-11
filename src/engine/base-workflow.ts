@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EventValidationError } from "./errors";
 import type {
 	Step,
 	WorkflowClass,
@@ -55,9 +56,15 @@ export abstract class BaseWorkflow<
 	) {
 		const schema = this.events[props.event];
 		if (!schema) {
-			throw new Error(`Unknown event "${props.event}" for workflow type "${this.type}"`);
+			throw new EventValidationError(props.event, [{ message: `Unknown event "${props.event}" for workflow type "${this.type}"` }]);
 		}
-		const payload = schema.parse(props.payload);
+		let payload: unknown;
+		try {
+			payload = schema.parse(props.payload);
+		} catch (e) {
+			const issues = e instanceof Error && "issues" in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
+			throw new EventValidationError(props.event, issues);
+		}
 		const stub = BaseWorkflow.getStub(env, props.id);
 		await stub.deliverEvent({ event: props.event, payload });
 	}
