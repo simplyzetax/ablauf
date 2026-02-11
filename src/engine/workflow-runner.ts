@@ -12,6 +12,7 @@ import type { WorkflowStatus, WorkflowStatusResponse, StepInfo } from "./types";
 export class WorkflowRunner extends DurableObject<Env> {
 	private db: DrizzleSqliteDODatabase;
 	private workflowType: string | null = null;
+	private workflowId: string | null = null;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -32,7 +33,9 @@ export class WorkflowRunner extends DurableObject<Env> {
 
 		const now = Date.now();
 		this.workflowType = props.type;
+		this.workflowId = props.id;
 		await this.db.insert(workflowTable).values({
+			workflowId: props.id,
 			type: props.type,
 			status: "running",
 			payload: JSON.stringify(props.payload),
@@ -59,7 +62,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 			completedAt: s.completedAt,
 		}));
 		return {
-			id: this.ctx.id.toString(),
+			id: wf.workflowId,
 			type: wf.type,
 			status: wf.status as WorkflowStatus,
 			payload: wf.payload ? JSON.parse(wf.payload) : null,
@@ -177,6 +180,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 		if (!wf) return;
 
 		this.workflowType = wf.type;
+		this.workflowId = wf.workflowId;
 
 		const WorkflowClass = registry[wf.type];
 		if (!WorkflowClass) {
@@ -202,7 +206,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 				result: JSON.stringify(result),
 				updatedAt: Date.now(),
 			});
-			await this.updateIndex(wf.type, this.ctx.id.toString(), "completed", Date.now());
+			await this.updateIndex(wf.type, wf.workflowId, "completed", Date.now());
 		} catch (e) {
 			if (e instanceof SleepInterrupt) {
 				await this.ctx.storage.setAlarm(e.wakeAt);
@@ -221,7 +225,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 					error: errorMsg,
 					updatedAt: Date.now(),
 				});
-				await this.updateIndex(wf.type, this.ctx.id.toString(), "errored", Date.now());
+				await this.updateIndex(wf.type, wf.workflowId, "errored", Date.now());
 			}
 		}
 	}
@@ -251,10 +255,17 @@ export class WorkflowRunner extends DurableObject<Env> {
 		const now = Date.now();
 		await this.db.update(workflowTable).set({ status, updatedAt: now });
 
-		const type = this.workflowType ?? (await this.db.select().from(workflowTable)).at(0)?.type;
-		if (type) {
-			this.workflowType = type;
-			await this.updateIndex(type, this.ctx.id.toString(), status, now);
+		const type = this.workflowType;
+		const id = this.workflowId;
+		if (type && id) {
+			await this.updateIndex(type, id, status, now);
+		} else {
+			const [wf] = await this.db.select().from(workflowTable);
+			if (wf) {
+				this.workflowType = wf.type;
+				this.workflowId = wf.workflowId;
+				await this.updateIndex(wf.type, wf.workflowId, status, now);
+			}
 		}
 	}
 

@@ -3,6 +3,7 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 // Per-workflow-instance tables (stored in each workflow DO)
 export const workflowTable = sqliteTable("workflow", {
 	id: integer("id").primaryKey().default(1),
+	workflowId: text("workflow_id").notNull(),
 	type: text("type").notNull(),
 	status: text("status").notNull().default("created"),
 	payload: text("payload"),
