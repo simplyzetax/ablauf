@@ -6,11 +6,12 @@ import { workflowTable, stepsTable, instancesTable } from "../db/schema";
 import { registry } from "../workflows/registry";
 import { StepContext } from "./step";
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./interrupts";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import type { WorkflowStatus, WorkflowStatusResponse, StepInfo } from "./types";
 
 export class WorkflowRunner extends DurableObject<Env> {
-	db: DrizzleSqliteDODatabase;
+	private db: DrizzleSqliteDODatabase;
+	private workflowType: string | null = null;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -23,7 +24,14 @@ export class WorkflowRunner extends DurableObject<Env> {
 	// ─── Workflow RPC Methods ───
 
 	async initialize(props: { type: string; id: string; payload: unknown }): Promise<void> {
+		// Idempotency guard: if already initialized, return early
+		const [existing] = await this.db.select().from(workflowTable);
+		if (existing) {
+			return;
+		}
+
 		const now = Date.now();
+		this.workflowType = props.type;
 		await this.db.insert(workflowTable).values({
 			type: props.type,
 			status: "running",
@@ -37,6 +45,9 @@ export class WorkflowRunner extends DurableObject<Env> {
 
 	async getStatus(): Promise<WorkflowStatusResponse> {
 		const [wf] = await this.db.select().from(workflowTable);
+		if (!wf) {
+			throw new Error("Workflow not initialized");
+		}
 		const stepRows = await this.db.select().from(stepsTable);
 		const steps: StepInfo[] = stepRows.map((s) => ({
 			name: s.name,
@@ -79,7 +90,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 			})
 			.where(eq(stepsTable.name, props.event));
 
-		await this.ctx.storage.deleteAlarm();
+		await this.scheduleNextAlarm();
 		await this.setStatus("running");
 		await this.replay();
 	}
@@ -126,18 +137,14 @@ export class WorkflowRunner extends DurableObject<Env> {
 	// ─── DO Alarm Handler ───
 
 	async alarm(): Promise<void> {
-		const sleepingSteps = await this.db
+		const pendingSteps = await this.db
 			.select()
 			.from(stepsTable)
-			.where(eq(stepsTable.status, "sleeping"));
-		const waitingSteps = await this.db
-			.select()
-			.from(stepsTable)
-			.where(eq(stepsTable.status, "waiting"));
+			.where(or(eq(stepsTable.status, "sleeping"), eq(stepsTable.status, "waiting")));
 
 		const now = Date.now();
 
-		for (const step of [...sleepingSteps, ...waitingSteps]) {
+		for (const step of pendingSteps) {
 			if (step.wakeAt && step.wakeAt <= now) {
 				if (step.status === "sleeping") {
 					await this.db
@@ -157,6 +164,8 @@ export class WorkflowRunner extends DurableObject<Env> {
 			}
 		}
 
+		// Schedule next alarm for any remaining pending steps
+		await this.scheduleNextAlarm();
 		await this.setStatus("running");
 		await this.replay();
 	}
@@ -166,6 +175,8 @@ export class WorkflowRunner extends DurableObject<Env> {
 	private async replay(): Promise<void> {
 		const [wf] = await this.db.select().from(workflowTable);
 		if (!wf) return;
+
+		this.workflowType = wf.type;
 
 		const WorkflowClass = registry[wf.type];
 		if (!WorkflowClass) {
@@ -215,13 +226,35 @@ export class WorkflowRunner extends DurableObject<Env> {
 		}
 	}
 
+	private async scheduleNextAlarm(): Promise<void> {
+		await this.ctx.storage.deleteAlarm();
+
+		// Include failed steps with wakeAt (pending retries)
+		const pendingSteps = await this.db
+			.select()
+			.from(stepsTable)
+			.where(or(eq(stepsTable.status, "sleeping"), eq(stepsTable.status, "waiting"), eq(stepsTable.status, "failed")));
+
+		let earliest: number | null = null;
+		for (const step of pendingSteps) {
+			if (step.wakeAt && (earliest === null || step.wakeAt < earliest)) {
+				earliest = step.wakeAt;
+			}
+		}
+
+		if (earliest !== null) {
+			await this.ctx.storage.setAlarm(earliest);
+		}
+	}
+
 	private async setStatus(status: WorkflowStatus): Promise<void> {
 		const now = Date.now();
 		await this.db.update(workflowTable).set({ status, updatedAt: now });
 
-		const [wf] = await this.db.select().from(workflowTable);
-		if (wf) {
-			await this.updateIndex(wf.type, this.ctx.id.toString(), status, now);
+		const type = this.workflowType ?? (await this.db.select().from(workflowTable)).at(0)?.type;
+		if (type) {
+			this.workflowType = type;
+			await this.updateIndex(type, this.ctx.id.toString(), status, now);
 		}
 	}
 

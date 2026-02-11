@@ -32,6 +32,11 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 
 		const attempts = existing?.attempts ?? 0;
 
+		// If step is pending retry and wakeAt hasn't passed yet, re-throw to keep sleeping
+		if (existing?.status === "failed" && existing.wakeAt && existing.wakeAt > Date.now()) {
+			throw new SleepInterrupt(name, existing.wakeAt);
+		}
+
 		try {
 			const result = await fn();
 			const serialized = JSON.stringify(result);
@@ -66,7 +71,7 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 				if (existing) {
 					await this.db
 						.update(stepsTable)
-						.set({ status: "failed", error: errorMsg, attempts: newAttempts })
+						.set({ status: "failed", error: errorMsg, attempts: newAttempts, wakeAt: null })
 						.where(eq(stepsTable.name, name));
 				} else {
 					await this.db.insert(stepsTable).values({
@@ -80,10 +85,15 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 				throw e;
 			}
 
+			// Retries remaining: schedule retry via alarm instead of blocking
+			const baseDelay = parseDuration(retryConfig.delay);
+			const delay = this.calculateBackoff(baseDelay, newAttempts, retryConfig.backoff);
+			const wakeAt = Date.now() + delay;
+
 			if (existing) {
 				await this.db
 					.update(stepsTable)
-					.set({ status: "failed", error: errorMsg, attempts: newAttempts })
+					.set({ status: "failed", error: errorMsg, attempts: newAttempts, wakeAt })
 					.where(eq(stepsTable.name, name));
 			} else {
 				await this.db.insert(stepsTable).values({
@@ -92,14 +102,12 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 					status: "failed",
 					error: errorMsg,
 					attempts: newAttempts,
+					wakeAt,
 				});
 			}
 
-			const baseDelay = parseDuration(retryConfig.delay);
-			const delay = this.calculateBackoff(baseDelay, newAttempts, retryConfig.backoff);
-			await new Promise((resolve) => setTimeout(resolve, delay));
-
-			return this.do(name, fn, options);
+			// Use alarm-based retry: throw SleepInterrupt so the DO sets an alarm
+			throw new SleepInterrupt(name, wakeAt);
 		}
 	}
 
