@@ -13,6 +13,12 @@
 				"WorkflowRunner"
 			],
 			"tag": "v1"
+		},
+		{
+			"new_sqlite_classes": [
+				"TestWorkflow"
+			],
+			"tag": "v1"
 		}
 	],
 	"durable_objects": {
@@ -20,6 +26,10 @@
 			{
 				"class_name": "WorkflowRunner",
 				"name": "WORKFLOW_RUNNER"
+			},
+			{
+				"class_name": "TestWorkflow",
+				"name": "TEST_WORKFLOW"
 			}
 		]
 	},

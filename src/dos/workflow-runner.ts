@@ -1,18 +1,25 @@
-import { DurableObject, env } from "cloudflare:workers";
+import { DurableObject } from "cloudflare:workers";
 
-interface WorkflowRunnerProps<Payload> {
+export interface WorkflowRunnerProps<Payload> {
 	id: string;
 	payload: Payload;
 }
 
-export class WorkflowRunner extends DurableObject<Env> {
+export abstract class WorkflowRunner<Payload, Result = void> extends DurableObject<Env> {
 
-	public static create<Payload>(props: WorkflowRunnerProps<Payload>): Promise<WorkflowRunner> {
-		return env.WORKFLOW_RUNNER.getByName(props.id);
+	static async create<P, R>(
+		namespace: DurableObjectNamespace<WorkflowRunner<P, R>>,
+		props: WorkflowRunnerProps<P>,
+	) {
+		const stub = namespace.getByName(props.id);
+		const result = await stub.initialize(props);
+		return { stub, result };
 	}
 
-	async intitialize(props: WorkflowRunnerProps<Payload>): Promise<void> {
-		this.ctx.storage.put("payload", props.payload);
-	}
+	abstract run(payload: Payload): Promise<Result>;
 
-} 
+	async initialize(props: WorkflowRunnerProps<Payload>): Promise<Result> {
+		await this.ctx.storage.put("payload", props.payload);
+		return this.run(props.payload);
+	}
+}
