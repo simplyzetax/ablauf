@@ -75,3 +75,38 @@ export interface StepInfo {
 	error: string | null;
 	completedAt: number | null;
 }
+
+export interface WorkflowRunnerInitProps {
+	type: string;
+	id: string;
+	payload: unknown;
+}
+
+export interface WorkflowRunnerEventProps {
+	event: string;
+	payload: unknown;
+}
+
+export interface WorkflowIndexEntry {
+	id: string;
+	status: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface WorkflowIndexListFilters {
+	status?: string;
+	limit?: number;
+}
+
+export interface WorkflowRunnerStub {
+	initialize(props: WorkflowRunnerInitProps): Promise<void>;
+	getStatus(): Promise<WorkflowStatusResponse>;
+	deliverEvent(props: WorkflowRunnerEventProps): Promise<void>;
+	pause(): Promise<void>;
+	resume(): Promise<void>;
+	terminate(): Promise<void>;
+	indexWrite(props: WorkflowIndexEntry): Promise<void>;
+	indexList(filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]>;
+	_expireTimers(): Promise<void>;
+}

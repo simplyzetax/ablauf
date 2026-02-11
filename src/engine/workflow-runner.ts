@@ -7,7 +7,7 @@ import { registry } from "../workflows/registry";
 import { StepContext } from "./step";
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./interrupts";
 import { eq, or } from "drizzle-orm";
-import type { WorkflowStatus, WorkflowStatusResponse, StepInfo } from "./types";
+import type { WorkflowStatus, WorkflowStatusResponse, StepInfo, WorkflowRunnerStub } from "./types";
 
 export class WorkflowRunner extends DurableObject<Env> {
 	private db: DrizzleSqliteDODatabase;
@@ -173,6 +173,16 @@ export class WorkflowRunner extends DurableObject<Env> {
 		await this.replay();
 	}
 
+	// ─── Test Helpers ───
+
+	/** Set all pending wakeAt times to the past so the alarm handler processes them immediately. */
+	async _expireTimers(): Promise<void> {
+		await this.db
+			.update(stepsTable)
+			.set({ wakeAt: 1 })
+			.where(or(eq(stepsTable.status, "sleeping"), eq(stepsTable.status, "waiting"), eq(stepsTable.status, "failed")));
+	}
+
 	// ─── Internal ───
 
 	private async replay(): Promise<void> {
@@ -272,7 +282,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 	private async updateIndex(type: string, id: string, status: string, now: number): Promise<void> {
 		try {
 			const indexId = this.env.WORKFLOW_RUNNER.idFromName(`__index:${type}`);
-			const indexStub = this.env.WORKFLOW_RUNNER.get(indexId);
+			const indexStub = this.env.WORKFLOW_RUNNER.get(indexId) as unknown as WorkflowRunnerStub;
 			await indexStub.indexWrite({ id, status, createdAt: now, updatedAt: now });
 		} catch {
 			// Index update is best-effort

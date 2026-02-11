@@ -1,4 +1,11 @@
-import type { Step, WorkflowDefaults, WorkflowStatusResponse } from "./types";
+import type {
+	Step,
+	WorkflowDefaults,
+	WorkflowStatusResponse,
+	WorkflowRunnerStub,
+	WorkflowRunnerInitProps,
+	WorkflowRunnerEventProps,
+} from "./types";
 
 export abstract class BaseWorkflow<
 	Payload = unknown,
@@ -12,18 +19,20 @@ export abstract class BaseWorkflow<
 	abstract run(step: Step<Events>, payload: Payload): Promise<Result>;
 
 	private static getStub(env: Env, id: string) {
-		return env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName(id));
+		return env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName(id)) as unknown as WorkflowRunnerStub;
 	}
 
 	static async create(env: Env, props: { id: string; payload: unknown }) {
 		const stub = this.getStub(env, props.id);
-		await stub.initialize({ type: this.type, id: props.id, payload: props.payload });
+		const initProps: WorkflowRunnerInitProps = { type: this.type, id: props.id, payload: props.payload };
+		await stub.initialize(initProps);
 		return stub;
 	}
 
 	static async sendEvent(env: Env, props: { id: string; event: string; payload: unknown }) {
 		const stub = this.getStub(env, props.id);
-		await stub.deliverEvent({ event: props.event, payload: props.payload });
+		const eventProps: WorkflowRunnerEventProps = { event: props.event, payload: props.payload };
+		await stub.deliverEvent(eventProps);
 	}
 
 	static async status(env: Env, id: string): Promise<WorkflowStatusResponse> {

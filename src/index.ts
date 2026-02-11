@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import { registry } from "./workflows/registry";
+import type { WorkflowRunnerStub } from "./engine/types";
 
 const app = new Hono<{ Bindings: Env }>();
+
+function getWorkflowRunnerStub(env: Env, id: string): WorkflowRunnerStub {
+	return env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName(id)) as unknown as WorkflowRunnerStub;
+}
 
 // Error handling
 app.onError((err, c) => {
@@ -22,7 +27,7 @@ app.post("/workflows", async (c) => {
 		return c.json({ error: `Unknown workflow type: "${type}"` }, 400);
 	}
 
-	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
+	const stub = getWorkflowRunnerStub(c.env, id);
 	await stub.initialize({ type, id, payload });
 
 	return c.json({ id, type, status: "running" }, 201);
@@ -31,7 +36,7 @@ app.post("/workflows", async (c) => {
 // Get workflow status
 app.get("/workflows/:id", async (c) => {
 	const id = c.req.param("id");
-	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
+	const stub = getWorkflowRunnerStub(c.env, id);
 	const status = await stub.getStatus();
 	return c.json(status);
 });
@@ -39,7 +44,7 @@ app.get("/workflows/:id", async (c) => {
 // Pause workflow
 app.post("/workflows/:id/pause", async (c) => {
 	const id = c.req.param("id");
-	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
+	const stub = getWorkflowRunnerStub(c.env, id);
 	await stub.pause();
 	return c.json({ id, status: "paused" });
 });
@@ -47,7 +52,7 @@ app.post("/workflows/:id/pause", async (c) => {
 // Resume workflow
 app.post("/workflows/:id/resume", async (c) => {
 	const id = c.req.param("id");
-	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
+	const stub = getWorkflowRunnerStub(c.env, id);
 	await stub.resume();
 	return c.json({ id, status: "running" });
 });
@@ -55,7 +60,7 @@ app.post("/workflows/:id/resume", async (c) => {
 // Terminate workflow
 app.post("/workflows/:id/terminate", async (c) => {
 	const id = c.req.param("id");
-	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
+	const stub = getWorkflowRunnerStub(c.env, id);
 	await stub.terminate();
 	return c.json({ id, status: "terminated" });
 });
@@ -65,7 +70,7 @@ app.post("/workflows/:id/events/:event", async (c) => {
 	const id = c.req.param("id");
 	const event = c.req.param("event");
 	const body = await c.req.json();
-	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
+	const stub = getWorkflowRunnerStub(c.env, id);
 	await stub.deliverEvent({ event, payload: body });
 	return c.json({ id, event, status: "delivered" });
 });
@@ -78,7 +83,7 @@ app.get("/workflows", async (c) => {
 
 	if (type) {
 		const indexId = c.env.WORKFLOW_RUNNER.idFromName(`__index:${type}`);
-		const indexStub = c.env.WORKFLOW_RUNNER.get(indexId);
+		const indexStub = c.env.WORKFLOW_RUNNER.get(indexId) as unknown as WorkflowRunnerStub;
 		const results = await indexStub.indexList({ status: status ?? undefined, limit });
 		return c.json({ type, instances: results });
 	}
@@ -86,7 +91,7 @@ app.get("/workflows", async (c) => {
 	const results = await Promise.all(
 		Object.keys(registry).map(async (wfType) => {
 			const indexId = c.env.WORKFLOW_RUNNER.idFromName(`__index:${wfType}`);
-			const indexStub = c.env.WORKFLOW_RUNNER.get(indexId);
+			const indexStub = c.env.WORKFLOW_RUNNER.get(indexId) as unknown as WorkflowRunnerStub;
 			const instances = await indexStub.indexList({ status: status ?? undefined, limit });
 			return { type: wfType, instances };
 		}),
