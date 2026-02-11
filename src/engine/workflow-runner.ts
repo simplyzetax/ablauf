@@ -91,6 +91,17 @@ export class WorkflowRunner extends DurableObject<Env> {
 	}
 
 	async deliverEvent(props: WorkflowRunnerEventProps): Promise<void> {
+		try {
+			await this._deliverEventInner(props);
+		} catch (e) {
+			if (e instanceof WorkflowError) {
+				throw new Error(JSON.stringify(e.toJSON()));
+			}
+			throw e;
+		}
+	}
+
+	private async _deliverEventInner(props: WorkflowRunnerEventProps): Promise<void> {
 		const [wf] = await this.db.select().from(workflowTable);
 		if (!wf) {
 			throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
@@ -137,12 +148,12 @@ export class WorkflowRunner extends DurableObject<Env> {
 	}
 
 	async pause(): Promise<void> {
-		await this.db.update(workflowTable).set({ paused: 1, updatedAt: Date.now() });
+		await this.db.update(workflowTable).set({ paused: true, updatedAt: Date.now() });
 		await this.setStatus("paused");
 	}
 
 	async resume(): Promise<void> {
-		await this.db.update(workflowTable).set({ paused: 0, updatedAt: Date.now() });
+		await this.db.update(workflowTable).set({ paused: false, updatedAt: Date.now() });
 		await this.setStatus("running");
 		await this.replay();
 	}
