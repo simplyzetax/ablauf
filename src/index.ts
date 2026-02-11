@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { WorkflowRunner } from "./dos/workflow-runner";
+import { TestWorkflow } from "./dos/test-workflow";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.get("/", async (c) => {
-	const { result } = await WorkflowRunner.create(c.env.TEST_WORKFLOW, {
+	const { result } = await TestWorkflow.create({
 		id: "test",
 		payload: { name: "World" },
 	});
