@@ -41,6 +41,7 @@ export interface WorkflowClass<
 	Events extends Record<string, unknown> = Record<string, never>,
 > {
 	type: string;
+	inputSchema?: import("zod").z.ZodType;
 	events?: Events;
 	defaults?: Partial<WorkflowDefaults>;
 	new (): WorkflowInstance<Payload, Result, Events>;

@@ -1,9 +1,9 @@
+import { z } from "zod";
 import { BaseWorkflow } from "../engine/base-workflow";
 import type { Step } from "../engine/types";
 
-interface TestPayload {
-	name: string;
-}
+const inputSchema = z.object({ name: z.string() });
+type TestPayload = z.infer<typeof inputSchema>;
 
 interface TestResult {
 	message: string;
@@ -16,6 +16,7 @@ type TestEvents = {
 
 export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEvents> {
 	static type = "test" as const;
+	static inputSchema = inputSchema;
 	static events = {
 		approval: {} as { approved: boolean },
 	};

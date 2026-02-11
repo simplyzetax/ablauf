@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type {
 	Step,
 	WorkflowDefaults,
@@ -13,6 +14,7 @@ export abstract class BaseWorkflow<
 	Events extends Record<string, unknown> = Record<string, never>,
 > {
 	static type: string;
+	static inputSchema: z.ZodType = z.unknown();
 	static events: Record<string, unknown> = {};
 	static defaults: Partial<WorkflowDefaults> = {};
 
@@ -23,8 +25,9 @@ export abstract class BaseWorkflow<
 	}
 
 	static async create(env: Env, props: { id: string; payload: unknown }) {
+		const payload = this.inputSchema.parse(props.payload);
 		const stub = this.getStub(env, props.id);
-		const initProps: WorkflowRunnerInitProps = { type: this.type, id: props.id, payload: props.payload };
+		const initProps: WorkflowRunnerInitProps = { type: this.type, id: props.id, payload };
 		await stub.initialize(initProps);
 		return stub;
 	}
