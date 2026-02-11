@@ -1,9 +1,9 @@
+import { z } from "zod";
 import { BaseWorkflow } from "../engine/base-workflow";
 import type { Step } from "../engine/types";
 
-interface FailingPayload {
-	failCount: number;
-}
+const inputSchema = z.object({ failCount: z.number() });
+type FailingPayload = z.infer<typeof inputSchema>;
 
 // Module-level counter persists across replay() calls within the same DO isolate.
 const callCounts = new Map<string, number>();
@@ -14,6 +14,7 @@ const callCounts = new Map<string, number>();
  */
 export class FailingStepWorkflow extends BaseWorkflow<FailingPayload, string> {
 	static type = "failing-step" as const;
+	static inputSchema = inputSchema;
 	static defaults = {
 		retries: { limit: 3, delay: "500ms", backoff: "exponential" as const },
 	};

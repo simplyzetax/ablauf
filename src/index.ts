@@ -27,8 +27,11 @@ app.post("/workflows", async (c) => {
 		return c.json({ error: `Unknown workflow type: "${type}"` }, 400);
 	}
 
+	const WorkflowClass = registry[type];
+	const parsed = WorkflowClass.inputSchema?.parse(payload) ?? payload;
+
 	const stub = getWorkflowRunnerStub(c.env, id);
-	await stub.initialize({ type, id, payload });
+	await stub.initialize({ type, id, payload: parsed });
 
 	return c.json({ id, type, status: "running" }, 201);
 });

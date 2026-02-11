@@ -1,24 +1,24 @@
+import { z } from "zod";
 import { BaseWorkflow } from "../engine/base-workflow";
 import type { Step } from "../engine/types";
 
-interface TestPayload {
-	name: string;
-}
+const inputSchema = z.object({ name: z.string() });
+type TestPayload = z.infer<typeof inputSchema>;
 
 interface TestResult {
 	message: string;
 	greeting: string;
 }
 
-type TestEvents = {
-	approval: { approved: boolean };
+const eventSchemas = {
+	approval: z.object({ approved: z.boolean() }),
 };
+type TestEvents = { [K in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[K]> };
 
 export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEvents> {
 	static type = "test" as const;
-	static events = {
-		approval: {} as { approved: boolean },
-	};
+	static inputSchema = inputSchema;
+	static events = eventSchemas;
 	static defaults = {
 		retries: { limit: 2, delay: "500ms", backoff: "exponential" as const },
 	};
