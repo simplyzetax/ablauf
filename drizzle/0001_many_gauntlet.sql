@@ -1,0 +1,1 @@
+ALTER TABLE `workflow` ADD `workflow_id` text NOT NULL;
