@@ -6,6 +6,16 @@ import { workflowTable, stepsTable, instancesTable } from "../db/schema";
 import { registry } from "../workflows/registry";
 import { StepContext } from "./step";
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./interrupts";
+import {
+	WorkflowNotFoundError,
+	WorkflowTypeUnknownError,
+	PayloadValidationError,
+	EventValidationError,
+	EventTimeoutError,
+	WorkflowNotRunningError,
+	WorkflowError,
+	extractZodIssues,
+} from "./errors";
 import { eq, or } from "drizzle-orm";
 import type {
 	WorkflowStatus,
@@ -56,10 +66,10 @@ export class WorkflowRunner extends DurableObject<Env> {
 	async getStatus(): Promise<WorkflowStatusResponse> {
 		const [wf] = await this.db.select().from(workflowTable);
 		if (!wf) {
-			throw new Error("Workflow not initialized");
+			throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
 		}
 		const stepRows = await this.db.select().from(stepsTable);
-		const steps: StepInfo[] = stepRows.map((s) => ({
+		const steps = stepRows.map<StepInfo>((s) => ({
 			name: s.name,
 			type: s.type,
 			status: s.status,
@@ -82,21 +92,38 @@ export class WorkflowRunner extends DurableObject<Env> {
 	}
 
 	async deliverEvent(props: WorkflowRunnerEventProps): Promise<void> {
+		try {
+			await this._deliverEventInner(props);
+		} catch (e) {
+			if (e instanceof WorkflowError) {
+				throw new Error(JSON.stringify(e.toJSON()));
+			}
+			throw e;
+		}
+	}
+
+	private async _deliverEventInner(props: WorkflowRunnerEventProps): Promise<void> {
 		const [wf] = await this.db.select().from(workflowTable);
 		if (!wf) {
-			throw new Error("Workflow not initialized");
+			throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
 		}
 
 		const WorkflowClass = registry[wf.type];
 		if (!WorkflowClass) {
-			throw new Error(`Unknown workflow type: "${wf.type}"`);
+			throw new WorkflowTypeUnknownError(wf.type);
 		}
 
 		const schema = WorkflowClass.events?.[props.event];
 		if (!schema) {
-			throw new Error(`Unknown event "${props.event}" for workflow type "${wf.type}"`);
+			throw new EventValidationError(props.event, [{ message: `Unknown event "${props.event}" for workflow type "${wf.type}"` }]);
 		}
-		const payload = schema.parse(props.payload);
+		let payload: unknown;
+		try {
+			payload = schema.parse(props.payload);
+		} catch (e) {
+			const issues = extractZodIssues(e);
+			throw new EventValidationError(props.event, issues);
+		}
 
 		const [step] = await this.db
 			.select()
@@ -104,7 +131,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 			.where(eq(stepsTable.name, props.event));
 
 		if (!step || step.status !== "waiting") {
-			throw new Error(`No waiting step found for event "${props.event}"`);
+			throw new WorkflowNotRunningError(wf.workflowId, step ? step.status : "no matching step");
 		}
 
 		await this.db
@@ -122,12 +149,12 @@ export class WorkflowRunner extends DurableObject<Env> {
 	}
 
 	async pause(): Promise<void> {
-		await this.db.update(workflowTable).set({ paused: 1, updatedAt: Date.now() });
+		await this.db.update(workflowTable).set({ paused: true, updatedAt: Date.now() });
 		await this.setStatus("paused");
 	}
 
 	async resume(): Promise<void> {
-		await this.db.update(workflowTable).set({ paused: 0, updatedAt: Date.now() });
+		await this.db.update(workflowTable).set({ paused: false, updatedAt: Date.now() });
 		await this.setStatus("running");
 		await this.replay();
 	}
@@ -182,7 +209,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 						.update(stepsTable)
 						.set({
 							status: "failed",
-							error: `Event "${step.name}" timed out`,
+							error: JSON.stringify(new EventTimeoutError(step.name).toJSON()),
 							completedAt: now,
 						})
 						.where(eq(stepsTable.name, step.name));
@@ -231,7 +258,13 @@ export class WorkflowRunner extends DurableObject<Env> {
 		}
 
 		try {
-			const payload = WorkflowClass.inputSchema.parse(wf.payload ? JSON.parse(wf.payload) : undefined);
+			let payload: unknown;
+			try {
+				payload = WorkflowClass.inputSchema.parse(wf.payload ? JSON.parse(wf.payload) : undefined);
+			} catch (e) {
+				const issues = extractZodIssues(e);
+				throw new PayloadValidationError("Invalid workflow input", issues);
+			}
 			const result = await instance.run(stepCtx, payload);
 			await this.db.update(workflowTable).set({
 				status: "completed",
@@ -251,7 +284,9 @@ export class WorkflowRunner extends DurableObject<Env> {
 			} else if (e instanceof PauseInterrupt) {
 				await this.setStatus("paused");
 			} else if (!isInterrupt(e)) {
-				const errorMsg = e instanceof Error ? e.message : String(e);
+				const errorMsg = e instanceof WorkflowError
+					? JSON.stringify(e.toJSON())
+					: e instanceof Error ? e.message : String(e);
 				await this.db.update(workflowTable).set({
 					status: "errored",
 					error: errorMsg,

@@ -15,6 +15,13 @@
       "when": 1770832367686,
       "tag": "0001_many_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1770852538522,
+      "tag": "0002_smooth_martin_li",
+      "breakpoints": true
     }
   ]
 }

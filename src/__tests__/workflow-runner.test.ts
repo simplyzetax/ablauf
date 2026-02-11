@@ -5,6 +5,7 @@ import type { WorkflowRunnerStub } from "../engine/types";
 import { TestWorkflow } from "../workflows/test-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
 import type { WorkflowStatus } from "../engine/types";
+import { WorkflowError } from "../engine/errors";
 
 /** Expire all pending timers and fire the alarm handler. */
 async function advanceAlarm(stub: { _expireTimers(): Promise<void> }) {
@@ -185,12 +186,20 @@ describe("WorkflowRunner", () => {
 				.then(() => null)
 				.catch((error: unknown) => error);
 			expect(badPayloadError).toBeTruthy();
+			if (badPayloadError instanceof Error) {
+				const restored = WorkflowError.fromSerialized(badPayloadError);
+				expect(restored.code).toBe("EVENT_INVALID");
+			}
 
 			const badEventError = await rawStub
 				.deliverEvent({ event: "not-approval", payload: { approved: true } })
 				.then(() => null)
 				.catch((error: unknown) => error);
 			expect(badEventError).toBeTruthy();
+			if (badEventError instanceof Error) {
+				const restored = WorkflowError.fromSerialized(badEventError);
+				expect(restored.code).toBe("EVENT_INVALID");
+			}
 		});
 	});
 
