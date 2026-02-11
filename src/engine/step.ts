@@ -6,7 +6,7 @@ import { parseDuration } from "./duration";
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
 import { DEFAULT_RETRY_CONFIG } from "./types";
 
-export class StepContext<Events extends Record<string, unknown> = Record<string, never>> implements Step<Events> {
+export class StepContext<Events extends object = {}> implements Step<Events> {
 	private defaults: WorkflowDefaults;
 
 	constructor(

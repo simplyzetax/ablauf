@@ -7,7 +7,14 @@ import { registry } from "../workflows/registry";
 import { StepContext } from "./step";
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./interrupts";
 import { eq, or } from "drizzle-orm";
-import type { WorkflowStatus, WorkflowStatusResponse, StepInfo, WorkflowRunnerStub } from "./types";
+import type {
+	WorkflowStatus,
+	WorkflowStatusResponse,
+	StepInfo,
+	WorkflowRunnerStub,
+	WorkflowRunnerEventProps,
+	WorkflowRunnerInitProps,
+} from "./types";
 
 export class WorkflowRunner extends DurableObject<Env> {
 	private db: DrizzleSqliteDODatabase;
@@ -24,7 +31,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 
 	// ─── Workflow RPC Methods ───
 
-	async initialize(props: { type: string; id: string; payload: unknown }): Promise<void> {
+	async initialize(props: WorkflowRunnerInitProps): Promise<void> {
 		// Idempotency guard: if already initialized, return early
 		const [existing] = await this.db.select().from(workflowTable);
 		if (existing) {
@@ -74,7 +81,23 @@ export class WorkflowRunner extends DurableObject<Env> {
 		};
 	}
 
-	async deliverEvent(props: { event: string; payload: unknown }): Promise<void> {
+	async deliverEvent(props: WorkflowRunnerEventProps): Promise<void> {
+		const [wf] = await this.db.select().from(workflowTable);
+		if (!wf) {
+			throw new Error("Workflow not initialized");
+		}
+
+		const WorkflowClass = registry[wf.type];
+		if (!WorkflowClass) {
+			throw new Error(`Unknown workflow type: "${wf.type}"`);
+		}
+
+		const schema = WorkflowClass.events?.[props.event];
+		if (!schema) {
+			throw new Error(`Unknown event "${props.event}" for workflow type "${wf.type}"`);
+		}
+		const payload = schema.parse(props.payload);
+
 		const [step] = await this.db
 			.select()
 			.from(stepsTable)
@@ -88,7 +111,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 			.update(stepsTable)
 			.set({
 				status: "completed",
-				result: JSON.stringify(props.payload),
+				result: JSON.stringify(payload),
 				completedAt: Date.now(),
 			})
 			.where(eq(stepsTable.name, props.event));
@@ -207,9 +230,8 @@ export class WorkflowRunner extends DurableObject<Env> {
 			return;
 		}
 
-		const payload = wf.payload ? JSON.parse(wf.payload) : null;
-
 		try {
+			const payload = WorkflowClass.inputSchema.parse(wf.payload ? JSON.parse(wf.payload) : undefined);
 			const result = await instance.run(stepCtx, payload);
 			await this.db.update(workflowTable).set({
 				status: "completed",

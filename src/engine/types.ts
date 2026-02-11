@@ -20,13 +20,29 @@ export interface WorkflowDefaults {
 	retries: RetryConfig;
 }
 
+export type WorkflowEvents = Record<string, unknown>;
+type EventKey<Events extends object> = Extract<keyof Events, string>;
+
+export type WorkflowEventSchemas<Events extends object> = {
+	[K in EventKey<Events>]: import("zod").z.ZodType<Events[K]>;
+};
+
+export type WorkflowEventProps<Events extends object> = [EventKey<Events>] extends [never]
+	? never
+	: {
+			[K in EventKey<Events>]: {
+				event: K;
+				payload: Events[K];
+			};
+		}[EventKey<Events>];
+
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	limit: 3,
 	delay: "1s",
 	backoff: "exponential",
 };
 
-export interface Step<Events extends Record<string, unknown> = Record<string, never>> {
+export interface Step<Events extends object = {}> {
 	do<T>(name: string, fn: () => Promise<T> | T, options?: StepDoOptions): Promise<T>;
 	sleep(name: string, duration: string): Promise<void>;
 	waitForEvent<K extends Extract<keyof Events, string>>(
@@ -38,11 +54,12 @@ export interface Step<Events extends Record<string, unknown> = Record<string, ne
 export interface WorkflowClass<
 	Payload = unknown,
 	Result = unknown,
-	Events extends Record<string, unknown> = Record<string, never>,
+	Events extends object = WorkflowEvents,
+	Type extends string = string,
 > {
-	type: string;
-	inputSchema?: import("zod").z.ZodType;
-	events?: Record<string, import("zod").z.ZodType>;
+	type: Type;
+	inputSchema: import("zod").z.ZodType<Payload>;
+	events: WorkflowEventSchemas<Events>;
 	defaults?: Partial<WorkflowDefaults>;
 	new (): WorkflowInstance<Payload, Result, Events>;
 }
@@ -50,7 +67,7 @@ export interface WorkflowClass<
 export interface WorkflowInstance<
 	Payload = unknown,
 	Result = unknown,
-	Events extends Record<string, unknown> = Record<string, never>,
+	Events extends object = {},
 > {
 	run(step: Step<Events>, payload: Payload): Promise<Result>;
 }
@@ -88,6 +105,16 @@ export interface WorkflowRunnerEventProps {
 	payload: unknown;
 }
 
+export type WorkflowStatusResponseFor<
+	Payload = unknown,
+	Result = unknown,
+	Type extends string = string,
+> = Omit<WorkflowStatusResponse, "type" | "payload" | "result"> & {
+	type: Type;
+	payload: Payload;
+	result: Result | null;
+};
+
 export interface WorkflowIndexEntry {
 	id: string;
 	status: string;
@@ -111,3 +138,13 @@ export interface WorkflowRunnerStub {
 	indexList(filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]>;
 	_expireTimers(): Promise<void>;
 }
+
+export type TypedWorkflowRunnerStub<
+	Payload,
+	Result,
+	Events extends object,
+	Type extends string = string,
+> = Omit<WorkflowRunnerStub, "getStatus" | "deliverEvent"> & {
+	getStatus(): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>;
+	deliverEvent(props: WorkflowEventProps<Events>): Promise<void>;
+};
