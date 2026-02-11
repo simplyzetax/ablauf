@@ -2,7 +2,7 @@ import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { eq } from "drizzle-orm";
 import { stepsTable } from "../db/schema";
 import { SleepInterrupt, WaitInterrupt } from "./interrupts";
-import { StepRetryExhaustedError } from "./errors";
+import { StepRetryExhaustedError, WorkflowError } from "./errors";
 import { parseDuration } from "./duration";
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
 import { DEFAULT_RETRY_CONFIG } from "./types";
@@ -148,7 +148,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		}
 
 		if (existing?.status === "failed") {
-			throw new Error(existing.error ?? `Event "${name as string}" failed`);
+			throw WorkflowError.fromSerialized(new Error(existing.error ?? `Event "${name as string}" failed`));
 		}
 
 		if (existing?.status === "waiting") {

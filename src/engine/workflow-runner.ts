@@ -14,6 +14,7 @@ import {
 	EventTimeoutError,
 	WorkflowNotRunningError,
 	WorkflowError,
+	extractZodIssues,
 } from "./errors";
 import { eq, or } from "drizzle-orm";
 import type {
@@ -120,7 +121,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 		try {
 			payload = schema.parse(props.payload);
 		} catch (e) {
-			const issues = e instanceof Error && "issues" in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
+			const issues = extractZodIssues(e);
 			throw new EventValidationError(props.event, issues);
 		}
 
@@ -208,7 +209,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 						.update(stepsTable)
 						.set({
 							status: "failed",
-							error: `Event "${step.name}" timed out`,
+							error: JSON.stringify(new EventTimeoutError(step.name).toJSON()),
 							completedAt: now,
 						})
 						.where(eq(stepsTable.name, step.name));
@@ -261,7 +262,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 			try {
 				payload = WorkflowClass.inputSchema.parse(wf.payload ? JSON.parse(wf.payload) : undefined);
 			} catch (e) {
-				const issues = e instanceof Error && "issues" in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
+				const issues = extractZodIssues(e);
 				throw new PayloadValidationError("Invalid workflow input", issues);
 			}
 			const result = await instance.run(stepCtx, payload);

@@ -218,3 +218,9 @@ export class WorkflowNotRunningError extends WorkflowError {
     });
   }
 }
+
+export function extractZodIssues(e: unknown): unknown[] {
+  return e instanceof Error && "issues" in e
+    ? (e as { issues: unknown[] }).issues
+    : [{ message: String(e) }];
+}

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { registry } from "./workflows/registry";
 import type { WorkflowRunnerStub } from "./engine/types";
-import { WorkflowError, WorkflowTypeUnknownError, PayloadValidationError } from "./engine/errors";
+import { WorkflowError, WorkflowTypeUnknownError, PayloadValidationError, extractZodIssues } from "./engine/errors";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -66,7 +66,7 @@ app.post("/workflows", async (c) => {
 	try {
 		parsed = WorkflowClass.inputSchema?.parse(payload) ?? payload;
 	} catch (e) {
-		const issues = e instanceof Error && "issues" in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
+		const issues = extractZodIssues(e);
 		throw new PayloadValidationError("Invalid workflow input", issues);
 	}
 

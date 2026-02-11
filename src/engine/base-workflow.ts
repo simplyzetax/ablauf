@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EventValidationError } from "./errors";
+import { EventValidationError, extractZodIssues } from "./errors";
 import type {
 	Step,
 	WorkflowClass,
@@ -62,7 +62,7 @@ export abstract class BaseWorkflow<
 		try {
 			payload = schema.parse(props.payload);
 		} catch (e) {
-			const issues = e instanceof Error && "issues" in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
+			const issues = extractZodIssues(e);
 			throw new EventValidationError(props.event, issues);
 		}
 		const stub = BaseWorkflow.getStub(env, props.id);
