@@ -3,9 +3,16 @@
 	"name": "durable-workflows",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-02-10",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"head_sampling_rate": 1,
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+		}
 	},
 	"durable_objects": {
 		"bindings": [
@@ -17,14 +24,18 @@
 	},
 	"migrations": [
 		{
-			"new_sqlite_classes": ["WorkflowRunner"],
+			"new_sqlite_classes": [
+				"WorkflowRunner"
+			],
 			"tag": "v1"
 		}
 	],
 	"rules": [
 		{
 			"type": "Text",
-			"globs": ["**/*.sql"],
+			"globs": [
+				"**/*.sql"
+			],
 			"fallthrough": true
 		}
 	]

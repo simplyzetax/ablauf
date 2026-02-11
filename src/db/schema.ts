@@ -1,15 +1,16 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import type { WorkflowStatus } from "../engine/types";
 
 // Per-workflow-instance tables (stored in each workflow DO)
 export const workflowTable = sqliteTable("workflow", {
 	id: integer("id").primaryKey().default(1),
 	workflowId: text("workflow_id").notNull(),
 	type: text("type").notNull(),
-	status: text("status").notNull().default("created"),
+	status: text("status").notNull().$type<WorkflowStatus>().default("created"),
 	payload: text("payload"),
 	result: text("result"),
 	error: text("error"),
-	paused: integer("paused").notNull().default(0),
+	paused: integer("paused", { mode: "boolean" }).notNull().default(false),
 	createdAt: integer("created_at").notNull(),
 	updatedAt: integer("updated_at").notNull(),
 });
