@@ -10,16 +10,15 @@ interface TestResult {
 	greeting: string;
 }
 
-type TestEvents = {
-	approval: { approved: boolean };
+const eventSchemas = {
+	approval: z.object({ approved: z.boolean() }),
 };
+type TestEvents = { [K in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[K]> };
 
 export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEvents> {
 	static type = "test" as const;
 	static inputSchema = inputSchema;
-	static events = {
-		approval: {} as { approved: boolean },
-	};
+	static events = eventSchemas;
 	static defaults = {
 		retries: { limit: 2, delay: "500ms", backoff: "exponential" as const },
 	};

@@ -15,7 +15,7 @@ export abstract class BaseWorkflow<
 > {
 	static type: string;
 	static inputSchema: z.ZodType = z.unknown();
-	static events: Record<string, unknown> = {};
+	static events: Record<string, z.ZodType> = {};
 	static defaults: Partial<WorkflowDefaults> = {};
 
 	abstract run(step: Step<Events>, payload: Payload): Promise<Result>;
@@ -33,8 +33,10 @@ export abstract class BaseWorkflow<
 	}
 
 	static async sendEvent(env: Env, props: { id: string; event: string; payload: unknown }) {
+		const schema = this.events[props.event];
+		const payload = schema ? schema.parse(props.payload) : props.payload;
 		const stub = this.getStub(env, props.id);
-		const eventProps: WorkflowRunnerEventProps = { event: props.event, payload: props.payload };
+		const eventProps: WorkflowRunnerEventProps = { event: props.event, payload };
 		await stub.deliverEvent(eventProps);
 	}
 

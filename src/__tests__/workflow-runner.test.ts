@@ -27,6 +27,7 @@ describe("WorkflowRunner", () => {
 			expect(status.status).toBe("waiting");
 
 			// Deliver approval
+			//TODO! We need to make event delivery type safe
 			await stub.deliverEvent({ event: "approval", payload: { approved: true } });
 
 			status = await stub.getStatus();

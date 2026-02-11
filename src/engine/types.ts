@@ -42,7 +42,7 @@ export interface WorkflowClass<
 > {
 	type: string;
 	inputSchema?: import("zod").z.ZodType;
-	events?: Events;
+	events?: Record<string, import("zod").z.ZodType>;
 	defaults?: Partial<WorkflowDefaults>;
 	new (): WorkflowInstance<Payload, Result, Events>;
 }
