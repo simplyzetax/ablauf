@@ -148,3 +148,16 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 export { WorkflowRunner } from "./engine/workflow-runner";
+export {
+	WorkflowError,
+	WorkflowNotFoundError,
+	WorkflowAlreadyExistsError,
+	WorkflowTypeUnknownError,
+	PayloadValidationError,
+	EventValidationError,
+	StepFailedError,
+	StepRetryExhaustedError,
+	EventTimeoutError,
+	WorkflowNotRunningError,
+} from "./engine/errors";
+export type { ErrorCode, ErrorSource } from "./engine/errors";
