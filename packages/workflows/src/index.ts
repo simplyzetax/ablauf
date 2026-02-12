@@ -49,6 +49,7 @@ export type { ErrorCode, ErrorSource } from "./errors";
 
 // SSE
 export { SSEContext } from "./engine/sse";
+export { createSSEStream } from "./sse-stream";
 
 // Engine internals (for advanced use)
 export { StepContext } from "./engine/step";
