@@ -95,6 +95,10 @@ export interface StepInfo {
 	result: unknown;
 	error: string | null;
 	completedAt: number | null;
+	startedAt: number | null;
+	duration: number | null;
+	errorStack: string | null;
+	retryHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> | null;
 }
 
 export interface WorkflowRunnerInitProps {
