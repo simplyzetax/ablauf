@@ -52,4 +52,4 @@ export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./en
 export { parseDuration } from "./engine/duration";
 
 // DB schema (for consumer migrations)
-export { workflowTable, stepsTable, instancesTable } from "./db/schema";
+export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";
