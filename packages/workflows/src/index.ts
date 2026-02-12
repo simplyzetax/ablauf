@@ -56,5 +56,9 @@ export { StepContext } from "./engine/step";
 export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./engine/interrupts";
 export { parseDuration } from "./engine/duration";
 
+// Dashboard
+export { createDashboardHandler } from "./dashboard";
+export type { DashboardHandlerOptions } from "./dashboard";
+
 // DB schema (for consumer migrations)
 export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";
