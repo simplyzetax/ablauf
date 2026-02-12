@@ -5,6 +5,7 @@ import { Ablauf, WorkflowError } from "@ablauf/workflows";
 import type { WorkflowRunnerStub, WorkflowStatus } from "@ablauf/workflows";
 import { TestWorkflow } from "../workflows/test-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
+import { EchoWorkflow } from "../workflows/echo-workflow";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -216,6 +217,54 @@ describe("WorkflowRunner", () => {
 			const status = await stub.getStatus();
 			expect(status.status).toBe("errored");
 			expect(status.error).toContain("nonexistent");
+		});
+	});
+
+	describe("observability", () => {
+		it("records startedAt and duration on completed steps", async () => {
+			const stub = await ablauf.create(EchoWorkflow, { id: "obs-timing-1", payload: { message: "hello" } });
+			const status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>("completed");
+
+			const echoStep = status.steps.find((s: { name: string }) => s.name === "echo");
+			expect(echoStep).toBeDefined();
+			expect(echoStep!.startedAt).toBeTypeOf("number");
+			expect(echoStep!.startedAt).toBeGreaterThan(0);
+			expect(echoStep!.duration).toBeTypeOf("number");
+			expect(echoStep!.duration).toBeGreaterThanOrEqual(0);
+		});
+
+		it("records errorStack on failed steps", async () => {
+			const stub = await ablauf.create(FailingStepWorkflow, { id: "obs-error-1", payload: { failCount: 5 } });
+
+			await advanceAlarm(stub);
+			await advanceAlarm(stub);
+
+			const status = await stub.getStatus();
+			const failStep = status.steps.find((s: { name: string }) => s.name === "unreliable");
+			expect(failStep).toBeDefined();
+			expect(failStep!.errorStack).toBeTypeOf("string");
+			expect(failStep!.errorStack!.length).toBeGreaterThan(0);
+		});
+
+		it("records retryHistory across attempts", async () => {
+			const stub = await ablauf.create(FailingStepWorkflow, { id: "obs-retry-1", payload: { failCount: 1 } });
+
+			await advanceAlarm(stub);
+
+			const status = await stub.getStatus();
+			expect(status.status).toBe("completed");
+
+			const failStep = status.steps.find((s: { name: string }) => s.name === "unreliable");
+			expect(failStep).toBeDefined();
+			expect(failStep!.retryHistory).toBeDefined();
+
+			const history = failStep!.retryHistory as Array<{ attempt: number; error: string; timestamp: number; duration: number }>;
+			expect(history).toHaveLength(1);
+			expect(history[0].attempt).toBe(1);
+			expect(history[0].error).toBeTruthy();
+			expect(history[0].timestamp).toBeGreaterThan(0);
+			expect(history[0].duration).toBeGreaterThanOrEqual(0);
 		});
 	});
 });

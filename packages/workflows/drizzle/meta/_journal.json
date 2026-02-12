@@ -29,6 +29,13 @@
       "when": 1770858251704,
       "tag": "0003_cultured_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1770864681477,
+      "tag": "0004_furry_meteorite",
+      "breakpoints": true
     }
   ]
 }

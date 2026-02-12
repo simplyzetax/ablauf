@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
 	Ablauf,
 	createSSEStream,
+	createDashboardHandler,
 	createWorkflowRunner,
 	WorkflowError,
 } from "@ablauf/workflows";
@@ -61,6 +62,15 @@ app.post("/echo", async (c) => {
 
 app.get("/workflows/:id/sse", (c) => {
 	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param("id"));
+});
+
+const dashboardHandler = createDashboardHandler({
+	binding: env.WORKFLOW_RUNNER,
+	workflows,
+});
+
+app.all("/__ablauf/*", async (c) => {
+	return dashboardHandler(c.req.raw, "/__ablauf");
 });
 
 export default {

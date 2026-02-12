@@ -24,6 +24,11 @@ export const stepsTable = sqliteTable("steps", {
 	attempts: integer("attempts").notNull().default(0),
 	wakeAt: integer("wake_at"),
 	completedAt: integer("completed_at"),
+	// Observability columns
+	startedAt: integer("started_at"),
+	duration: integer("duration"),
+	errorStack: text("error_stack"),
+	retryHistory: text("retry_history"),
 });
 
 export const sseMessagesTable = sqliteTable("sse_messages", {
