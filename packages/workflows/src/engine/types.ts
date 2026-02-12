@@ -62,7 +62,7 @@ export interface WorkflowClass<
 	inputSchema: import("zod").z.ZodType<Payload>;
 	events: WorkflowEventSchemas<Events>;
 	defaults?: Partial<WorkflowDefaults>;
-	sseUpdates?: import("zod").z.ZodType<SSEUpdates>;
+	sseUpdates?: import("zod").z.ZodType<unknown>;
 	new (): WorkflowInstance<Payload, Result, Events, SSEUpdates>;
 }
 

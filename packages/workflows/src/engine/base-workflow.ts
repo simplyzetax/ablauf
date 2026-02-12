@@ -11,7 +11,7 @@ export abstract class BaseWorkflow<
 	static inputSchema: z.ZodType<unknown> = z.unknown();
 	static events: Record<string, z.ZodType<unknown>> = {};
 	static defaults: Partial<WorkflowDefaults> = {};
-	static sseUpdates?: z.ZodType<never>;
+	static sseUpdates?: z.ZodType<unknown>;
 
 	abstract run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }

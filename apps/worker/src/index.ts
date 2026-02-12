@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
 	Ablauf,
+	createSSEStream,
 	createWorkflowRunner,
 	WorkflowError,
 } from "@ablauf/workflows";
@@ -56,6 +57,10 @@ app.post("/echo", async (c) => {
 		status = await workflow.getStatus();
 	}
 	return c.json(status.result);
+});
+
+app.get("/workflows/:id/sse", (c) => {
+	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param("id"));
 });
 
 export default {
