@@ -1,0 +1,65 @@
+import { env } from "cloudflare:test";
+import { describe, it, expect } from "vitest";
+
+import { Ablauf } from "@ablauf/workflows";
+import type { WorkflowRunnerStub } from "@ablauf/workflows";
+import { SSEWorkflow } from "../workflows/sse-workflow";
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
+
+describe("SSE", () => {
+	it("workflow completes and persists emit messages", async () => {
+		const stub = await ablauf.create(SSEWorkflow, {
+			id: "sse-1",
+			payload: { itemCount: 10 },
+		});
+
+		const status = await stub.getStatus();
+		expect(status.status).toBe("completed");
+		expect(status.result).toEqual({ processed: 10 });
+	});
+
+	it("connectSSE returns a readable stream with persisted messages", async () => {
+		await ablauf.create(SSEWorkflow, {
+			id: "sse-stream-1",
+			payload: { itemCount: 6 },
+		});
+
+		const rawStub = env.WORKFLOW_RUNNER.get(
+			env.WORKFLOW_RUNNER.idFromName("sse-stream-1"),
+		) as unknown as WorkflowRunnerStub;
+
+		const stream = await rawStub.connectSSE();
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+
+		const { value } = await reader.read();
+		const text = decoder.decode(value);
+		expect(text).toContain('"type":"done"');
+		expect(text).toContain("Processed 6 items");
+
+		reader.releaseLock();
+	});
+
+	it("broadcast messages are not persisted (fire-and-forget)", async () => {
+		await ablauf.create(SSEWorkflow, {
+			id: "sse-broadcast-1",
+			payload: { itemCount: 4 },
+		});
+
+		const rawStub = env.WORKFLOW_RUNNER.get(
+			env.WORKFLOW_RUNNER.idFromName("sse-broadcast-1"),
+		) as unknown as WorkflowRunnerStub;
+
+		const stream = await rawStub.connectSSE();
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+
+		const { value } = await reader.read();
+		const text = decoder.decode(value);
+		expect(text).toContain('"type":"done"');
+		expect(text).not.toContain('"type":"progress"');
+
+		reader.releaseLock();
+	});
+});
