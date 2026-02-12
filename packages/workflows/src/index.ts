@@ -7,6 +7,7 @@ export { BaseWorkflow } from "./engine/base-workflow";
 // Types
 export type {
 	Step,
+	SSE,
 	WorkflowClass,
 	WorkflowInstance,
 	WorkflowStatus,

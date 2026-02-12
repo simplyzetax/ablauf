@@ -56,20 +56,23 @@ export interface WorkflowClass<
 	Result = unknown,
 	Events extends object = WorkflowEvents,
 	Type extends string = string,
+	SSEUpdates = never,
 > {
 	type: Type;
 	inputSchema: import("zod").z.ZodType<Payload>;
 	events: WorkflowEventSchemas<Events>;
 	defaults?: Partial<WorkflowDefaults>;
-	new (): WorkflowInstance<Payload, Result, Events>;
+	sseUpdates?: import("zod").z.ZodType<SSEUpdates>;
+	new (): WorkflowInstance<Payload, Result, Events, SSEUpdates>;
 }
 
 export interface WorkflowInstance<
 	Payload = unknown,
 	Result = unknown,
 	Events extends object = {},
+	SSEUpdates = never,
 > {
-	run(step: Step<Events>, payload: Payload): Promise<Result>;
+	run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }
 
 export interface WorkflowStatusResponse {
@@ -148,3 +151,9 @@ export type TypedWorkflowRunnerStub<
 	getStatus(): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>;
 	deliverEvent(props: WorkflowEventProps<Events>): Promise<void>;
 };
+
+export interface SSE<T = never> {
+	broadcast(data: T): void;
+	emit(data: T): void;
+	close(): void;
+}
