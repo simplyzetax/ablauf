@@ -7,6 +7,7 @@ export { BaseWorkflow } from "./engine/base-workflow";
 // Types
 export type {
 	Step,
+	SSE,
 	WorkflowClass,
 	WorkflowInstance,
 	WorkflowStatus,
@@ -46,10 +47,14 @@ export {
 } from "./errors";
 export type { ErrorCode, ErrorSource } from "./errors";
 
+// SSE
+export { SSEContext } from "./engine/sse";
+export { createSSEStream } from "./sse-stream";
+
 // Engine internals (for advanced use)
 export { StepContext } from "./engine/step";
 export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./engine/interrupts";
 export { parseDuration } from "./engine/duration";
 
 // DB schema (for consumer migrations)
-export { workflowTable, stepsTable, instancesTable } from "./db/schema";
+export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";

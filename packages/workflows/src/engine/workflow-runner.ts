@@ -5,6 +5,7 @@ import migrations from "../../drizzle/migrations";
 import { workflowTable, stepsTable, instancesTable } from "../db/schema";
 import { StepContext } from "./step";
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./interrupts";
+import { SSEContext, NoOpSSEContext } from "./sse";
 import {
 	WorkflowNotFoundError,
 	WorkflowTypeUnknownError,
@@ -43,6 +44,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		private db: DrizzleSqliteDODatabase;
 		private workflowType: string | null = null;
 		private workflowId: string | null = null;
+		private sseCtx: SSEContext<unknown> | null = null;
 
 		constructor(ctx: DurableObjectState, env: Record<string, unknown>) {
 			super(ctx, env);
@@ -179,6 +181,31 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			await this.setStatus("terminated");
 		}
 
+		async connectSSE(): Promise<ReadableStream> {
+			const [wf] = await this.db.select().from(workflowTable);
+			if (!wf) {
+				throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+			}
+
+			const WorkflowCls = registry[wf.type];
+			const sseSchema = WorkflowCls?.sseUpdates ?? null;
+
+			if (!this.sseCtx) {
+				this.sseCtx = new SSEContext(this.db, sseSchema, true);
+			}
+
+			const { readable, writable } = new TransformStream();
+			const writer = writable.getWriter();
+
+			// Flush persisted emit messages to the new client
+			await this.sseCtx.flushPersistedMessages(writer);
+
+			// Register for live updates
+			this.sseCtx.addWriter(writer);
+
+			return readable;
+		}
+
 		// ─── Index Shard RPC Methods ───
 
 		async indexWrite(props: { id: string; status: string; createdAt: number; updatedAt: number }): Promise<void> {
@@ -269,6 +296,18 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const instance = new WorkflowCls();
 			const stepCtx = new StepContext(this.db, WorkflowCls.defaults);
 
+			// Create SSE context
+			const sseSchema = WorkflowCls.sseUpdates ?? null;
+			if (!this.sseCtx) {
+				this.sseCtx = new SSEContext(this.db, sseSchema, true);
+			}
+			// Start in replay mode - will be switched off after last completed step
+			this.sseCtx.setReplay(true);
+
+			stepCtx.onFirstExecution = () => {
+				this.sseCtx?.setReplay(false);
+			};
+
 			if (wf.paused) {
 				await this.setStatus("paused");
 				return;
@@ -282,7 +321,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					const issues = extractZodIssues(e);
 					throw new PayloadValidationError("Invalid workflow input", issues);
 				}
-				const result = await instance.run(stepCtx, payload);
+				const sseArg = this.sseCtx ?? new NoOpSSEContext();
+				const result = await instance.run(stepCtx, payload, sseArg);
 				await this.db.update(workflowTable).set({
 					status: "completed",
 					result: JSON.stringify(result),

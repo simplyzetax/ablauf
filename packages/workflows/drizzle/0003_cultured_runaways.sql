@@ -1,0 +1,5 @@
+CREATE TABLE `sse_messages` (
+	`seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`data` text NOT NULL,
+	`created_at` integer NOT NULL
+);

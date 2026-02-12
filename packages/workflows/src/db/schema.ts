@@ -26,6 +26,12 @@ export const stepsTable = sqliteTable("steps", {
 	completedAt: integer("completed_at"),
 });
 
+export const sseMessagesTable = sqliteTable("sse_messages", {
+	seq: integer("seq").primaryKey({ autoIncrement: true }),
+	data: text("data").notNull(),
+	createdAt: integer("created_at").notNull(),
+});
+
 // Index shard table (stored in __index:{type} DOs)
 export const instancesTable = sqliteTable("instances", {
 	id: text("id").primaryKey(),

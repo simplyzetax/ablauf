@@ -13,6 +13,7 @@
       "name": "@ablauf/worker",
       "version": "0.0.0",
       "dependencies": {
+        "@ablauf/client": "workspace:*",
         "@ablauf/workflows": "workspace:*",
         "hono": "^4.11.9",
         "zod": "^4.3.6",
@@ -22,6 +23,13 @@
         "@types/node": "^25.2.3",
         "vitest": "~3.2.0",
         "wrangler": "^4.64.0",
+      },
+    },
+    "packages/client": {
+      "name": "@ablauf/client",
+      "version": "0.0.1",
+      "dependencies": {
+        "zod": "^4.3.6",
       },
     },
     "packages/workflows": {
@@ -39,6 +47,8 @@
     },
   },
   "packages": {
+    "@ablauf/client": ["@ablauf/client@workspace:packages/client"],
+
     "@ablauf/worker": ["@ablauf/worker@workspace:apps/worker"],
 
     "@ablauf/workflows": ["@ablauf/workflows@workspace:packages/workflows"],

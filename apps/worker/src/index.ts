@@ -1,15 +1,17 @@
 import { Hono } from "hono";
 import {
 	Ablauf,
+	createSSEStream,
 	createWorkflowRunner,
 	WorkflowError,
 } from "@ablauf/workflows";
 import { TestWorkflow } from "./workflows/test-workflow";
 import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
 import { EchoWorkflow } from "./workflows/echo-workflow";
+import { SSEWorkflow } from "./workflows/sse-workflow";
 import { env } from "cloudflare:workers";
 
-const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow];
+const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -55,6 +57,10 @@ app.post("/echo", async (c) => {
 		status = await workflow.getStatus();
 	}
 	return c.json(status.result);
+});
+
+app.get("/workflows/:id/sse", (c) => {
+	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param("id"));
 });
 
 export default {

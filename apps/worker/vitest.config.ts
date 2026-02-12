@@ -6,7 +6,7 @@ export default defineWorkersConfig({
 			optimizer: {
 				ssr: {
 					enabled: true,
-					include: ["@ablauf/workflows"],
+					include: ["@ablauf/workflows", "@ablauf/client"],
 					esbuildOptions: {
 						loader: {
 							".sql": "text",
