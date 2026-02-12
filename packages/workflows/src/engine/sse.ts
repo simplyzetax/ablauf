@@ -6,6 +6,7 @@ import type { SSE } from "./types";
 export class SSEContext<T = never> implements SSE<T> {
 	private writers = new Set<WritableStreamDefaultWriter>();
 	private closed = false;
+	private encoder = new TextEncoder();
 
 	constructor(
 		private db: DrizzleSqliteDODatabase,
@@ -44,8 +45,6 @@ export class SSEContext<T = never> implements SSE<T> {
 		}
 		if (!this.isReplay) {
 			this.writeToClients(data);
-		}
-		if (!this.isReplay) {
 			this.db.insert(sseMessagesTable).values({
 				data: JSON.stringify(data),
 				createdAt: Date.now(),
@@ -56,8 +55,7 @@ export class SSEContext<T = never> implements SSE<T> {
 	close(): void {
 		if (this.closed) return;
 		this.closed = true;
-		const encoder = new TextEncoder();
-		const closeMsg = encoder.encode("event: close\ndata: {}\n\n");
+		const closeMsg = this.encoder.encode("event: close\ndata: {}\n\n");
 		for (const writer of this.writers) {
 			try {
 				writer.write(closeMsg);
@@ -71,10 +69,9 @@ export class SSEContext<T = never> implements SSE<T> {
 
 	async flushPersistedMessages(writer: WritableStreamDefaultWriter): Promise<void> {
 		const messages = await this.db.select().from(sseMessagesTable);
-		const encoder = new TextEncoder();
 		for (const msg of messages) {
 			try {
-				writer.write(encoder.encode(`data: ${msg.data}\n\n`));
+				writer.write(this.encoder.encode(`data: ${msg.data}\n\n`));
 			} catch {
 				break;
 			}
@@ -82,8 +79,7 @@ export class SSEContext<T = never> implements SSE<T> {
 	}
 
 	private writeToClients(data: T): void {
-		const encoder = new TextEncoder();
-		const message = encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+		const message = this.encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
 		for (const writer of this.writers) {
 			try {
 				writer.write(message);

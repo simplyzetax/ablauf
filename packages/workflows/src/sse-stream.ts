@@ -18,8 +18,13 @@ export function createSSEStream(
 		} catch {
 			try { writable.close(); } catch { /* already closed */ }
 		}
-	}).catch(() => {
-		try { writable.close(); } catch { /* already closed */ }
+	}).catch((e) => {
+		const writer = writable.getWriter();
+		const msg = `event: error\ndata: ${JSON.stringify({ message: e instanceof Error ? e.message : String(e) })}\n\n`;
+		try {
+			writer.write(new TextEncoder().encode(msg));
+			writer.close();
+		} catch { /* already closed */ }
 	});
 
 	return new Response(readable, {
