@@ -13,6 +13,7 @@
       "name": "@ablauf/worker",
       "version": "0.0.0",
       "dependencies": {
+        "@ablauf/client": "workspace:*",
         "@ablauf/workflows": "workspace:*",
         "hono": "^4.11.9",
         "zod": "^4.3.6",

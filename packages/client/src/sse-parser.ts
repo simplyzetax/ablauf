@@ -3,6 +3,11 @@ export interface SSEParserCallbacks {
 	onError(error: Error): void;
 }
 
+function isCancellation(e: unknown): boolean {
+	if (!(e instanceof Error)) return false;
+	return e.name === "AbortError" || e.message === "Stream was cancelled.";
+}
+
 export async function parseSSEStream(
 	reader: ReadableStreamDefaultReader<Uint8Array>,
 	callbacks: SSEParserCallbacks,
@@ -14,7 +19,10 @@ export async function parseSSEStream(
 
 	try {
 		while (true) {
-			const { done, value } = await reader.read();
+			const { done, value } = await reader.read().catch((e) => {
+				if (isCancellation(e)) return { done: true as const, value: undefined };
+				throw e;
+			});
 			if (done) break;
 
 			buffer += decoder.decode(value, { stream: true });
@@ -36,6 +44,7 @@ export async function parseSSEStream(
 			}
 		}
 	} catch (e) {
+		if (isCancellation(e)) return;
 		callbacks.onError(e instanceof Error ? e : new Error(String(e)));
 	}
 }

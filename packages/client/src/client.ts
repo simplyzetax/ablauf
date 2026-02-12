@@ -17,21 +17,25 @@ export function createAblaufClient(config: AblaufClientConfig) {
 			let errorHandler: ((error: Event | Error) => void) | null = null;
 			let closeHandler: (() => void) | null = null;
 			let shouldReconnect = true;
+			let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
 			const connect = async () => {
 				try {
-					const response = await fetch(`${config.url}/${workflowId}/sse`, {
+					const init: RequestInit = {
 						headers: config.headers,
-						credentials: config.withCredentials ? "include" : "same-origin",
 						signal: abortController.signal,
-					});
+					};
+					if (config.withCredentials) {
+						(init as Record<string, unknown>).credentials = "include";
+					}
+					const response = await fetch(`${config.url}/${workflowId}/sse`, init);
 
 					if (!response.ok || !response.body) {
 						throw new Error(`SSE connection failed: ${response.status}`);
 					}
 
-					const reader = response.body.getReader();
-					await parseSSEStream(reader, {
+					activeReader = response.body.getReader();
+					await parseSSEStream(activeReader, {
 						onMessage(data: string, event?: string) {
 							if (event === "close") {
 								shouldReconnect = false;
@@ -73,6 +77,8 @@ export function createAblaufClient(config: AblaufClientConfig) {
 				},
 				unsubscribe() {
 					shouldReconnect = false;
+					activeReader?.cancel().catch(() => {});
+					activeReader = null;
 					abortController.abort();
 				},
 			};
