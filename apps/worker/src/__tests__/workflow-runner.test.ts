@@ -1,11 +1,12 @@
 import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
-import type { WorkflowRunnerStub } from "../engine/types";
+import { Ablauf, WorkflowError } from "@ablauf/workflows";
+import type { WorkflowRunnerStub, WorkflowStatus } from "@ablauf/workflows";
 import { TestWorkflow } from "../workflows/test-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
-import type { WorkflowStatus } from "../engine/types";
-import { WorkflowError } from "../engine/errors";
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
 /** Expire all pending timers and fire the alarm handler. */
 async function advanceAlarm(stub: { _expireTimers(): Promise<void> }) {
@@ -16,7 +17,7 @@ async function advanceAlarm(stub: { _expireTimers(): Promise<void> }) {
 describe("WorkflowRunner", () => {
 	describe("happy path", () => {
 		it("runs a workflow to completion with approval", async () => {
-			const stub = await TestWorkflow.create(env, { id: "happy-1", payload: { name: "Alice" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "happy-1", payload: { name: "Alice" } });
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>("sleeping");
 			expect(status.steps).toContainEqual(
@@ -43,7 +44,7 @@ describe("WorkflowRunner", () => {
 
 	describe("rejection path", () => {
 		it("completes with rejection message when not approved", async () => {
-			const stub = await TestWorkflow.create(env, { id: "reject-1", payload: { name: "Bob" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "reject-1", payload: { name: "Bob" } });
 
 			// Advance past sleep
 			await advanceAlarm(stub);
@@ -61,7 +62,7 @@ describe("WorkflowRunner", () => {
 
 	describe("pause/resume", () => {
 		it("pauses and resumes a workflow", async () => {
-			const stub = await TestWorkflow.create(env, { id: "pause-1", payload: { name: "Charlie" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "pause-1", payload: { name: "Charlie" } });
 
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>("sleeping");
@@ -90,7 +91,7 @@ describe("WorkflowRunner", () => {
 
 	describe("terminate", () => {
 		it("terminates a running workflow", async () => {
-			const stub = await TestWorkflow.create(env, { id: "terminate-1", payload: { name: "Dave" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "terminate-1", payload: { name: "Dave" } });
 
 			await stub.terminate();
 
@@ -101,7 +102,7 @@ describe("WorkflowRunner", () => {
 
 	describe("event timeout", () => {
 		it("fails the wait step when timeout fires", async () => {
-			const stub = await TestWorkflow.create(env, { id: "timeout-1", payload: { name: "Eve" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "timeout-1", payload: { name: "Eve" } });
 
 			// Advance past sleep
 			await advanceAlarm(stub);
@@ -122,7 +123,7 @@ describe("WorkflowRunner", () => {
 
 	describe("step retry with backoff", () => {
 		it("retries a failing step via alarms and eventually succeeds", async () => {
-			const stub = await FailingStepWorkflow.create(env, { id: "retry-1", payload: { failCount: 2 } });
+			const stub = await ablauf.create(FailingStepWorkflow, { id: "retry-1", payload: { failCount: 2 } });
 
 			// First attempt fails, alarm scheduled for retry
 			let status = await stub.getStatus();
@@ -143,7 +144,7 @@ describe("WorkflowRunner", () => {
 
 	describe("idempotent initialize", () => {
 		it("calling initialize twice does not create duplicate state", async () => {
-			const stub = await TestWorkflow.create(env, { id: "idempotent-1", payload: { name: "Frank" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "idempotent-1", payload: { name: "Frank" } });
 
 			const status = await stub.getStatus();
 			expect(status.id).toBe("idempotent-1");
@@ -155,13 +156,13 @@ describe("WorkflowRunner", () => {
 
 	describe("type safety", () => {
 		it("enforces payload and event types at compile-time", async () => {
-			const stub = await TestWorkflow.create(env, { id: "typed-1", payload: { name: "Grace" } });
+			const stub = await ablauf.create(TestWorkflow, { id: "typed-1", payload: { name: "Grace" } });
 			const status = await stub.getStatus();
 			expect(status.payload.name).toBe("Grace");
 
 			if (false) {
 				// @ts-expect-error name must be a string
-				await TestWorkflow.create(env, { id: "typed-bad-1", payload: { name: 123 } });
+				await ablauf.create(TestWorkflow, { id: "typed-bad-1", payload: { name: 123 } });
 				// @ts-expect-error approval payload.approved must be a boolean
 				await stub.deliverEvent({ event: "approval", payload: { approved: "yes" } });
 				// @ts-expect-error unknown event key for TestWorkflow
@@ -171,13 +172,16 @@ describe("WorkflowRunner", () => {
 
 		it("rejects invalid payloads and events at runtime", async () => {
 			await expect(
-				TestWorkflow.create(env, {
+				ablauf.create(TestWorkflow, {
 					id: "typed-runtime-bad-create",
 					payload: { name: 123 as unknown as string },
 				}),
 			).rejects.toThrow();
 
-			const stub = await TestWorkflow.create(env, { id: "typed-runtime-bad-event", payload: { name: "Heidi" } });
+			const stub = await ablauf.create(TestWorkflow, {
+				id: "typed-runtime-bad-event",
+				payload: { name: "Heidi" },
+			});
 			await advanceAlarm(stub);
 
 			const rawStub = stub as unknown as WorkflowRunnerStub;

@@ -1,28 +1,15 @@
 {
-	"name": "durable-workflows",
-	"version": "0.0.0",
+	"name": "ablauf",
 	"private": true,
+	"workspaces": ["apps/*", "packages/*"],
 	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
-		"cf-typegen": "wrangler types",
-		"db:generate": "drizzle-kit generate",
-		"db:push": "drizzle-kit push",
-		"test": "vitest run",
-		"test:watch": "vitest"
+		"dev": "turbo dev",
+		"test": "turbo test",
+		"check-types": "turbo check-types"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.12.11",
-		"@types/node": "^25.2.3",
-		"drizzle-kit": "^0.31.9",
-		"typescript": "^5.5.2",
-		"vitest": "~3.2.0",
-		"wrangler": "^4.64.0"
+		"turbo": "^2.5.4",
+		"typescript": "^5.5.2"
 	},
-	"dependencies": {
-		"drizzle-orm": "^0.45.1",
-		"hono": "^4.11.9",
-		"zod": "^4.3.6"
-	}
+	"packageManager": "bun@1.2.4"
 }

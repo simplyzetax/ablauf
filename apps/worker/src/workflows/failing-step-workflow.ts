@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { BaseWorkflow } from "../engine/base-workflow";
-import type { Step } from "../engine/types";
+import { BaseWorkflow } from "@ablauf/workflows";
+import type { Step } from "@ablauf/workflows";
 
 const inputSchema = z.object({ failCount: z.number() });
 type FailingPayload = z.infer<typeof inputSchema>;

@@ -10,7 +10,7 @@ import {
   StepRetryExhaustedError,
   EventTimeoutError,
   WorkflowNotRunningError,
-} from "../engine/errors";
+} from "@ablauf/workflows";
 
 describe("WorkflowError", () => {
   it("has correct properties", () => {
