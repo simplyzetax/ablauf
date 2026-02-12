@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BaseWorkflow } from "@ablauf/workflows";
-import type { Step } from "@ablauf/workflows";
+import type { Step, SSE } from "@ablauf/workflows";
 
 const inputSchema = z.object({ failCount: z.number() });
 type FailingPayload = z.infer<typeof inputSchema>;
@@ -19,7 +19,7 @@ export class FailingStepWorkflow extends BaseWorkflow<FailingPayload, string> {
 		retries: { limit: 3, delay: "500ms", backoff: "exponential" as const },
 	};
 
-	async run(step: Step, payload: FailingPayload): Promise<string> {
+	async run(step: Step, payload: FailingPayload, _sse: SSE<never>): Promise<string> {
 		const key = `unreliable:${payload.failCount}`;
 		const result = await step.do("unreliable", async () => {
 			const count = (callCounts.get(key) ?? 0) + 1;

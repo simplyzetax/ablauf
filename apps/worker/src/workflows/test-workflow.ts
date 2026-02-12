@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BaseWorkflow } from "@ablauf/workflows";
-import type { Step } from "@ablauf/workflows";
+import type { Step, SSE } from "@ablauf/workflows";
 
 const inputSchema = z.object({ name: z.string() });
 type TestPayload = z.infer<typeof inputSchema>;
@@ -23,7 +23,7 @@ export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEven
 		retries: { limit: 2, delay: "500ms", backoff: "exponential" as const },
 	};
 
-	async run(step: Step<TestEvents>, payload: TestPayload): Promise<TestResult> {
+	async run(step: Step<TestEvents>, payload: TestPayload, _sse: SSE<never>): Promise<TestResult> {
 		const greeting = await step.do("greet", async () => {
 			return `Hello, ${payload.name}!`;
 		});
