@@ -95,6 +95,10 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				result: s.result ? JSON.parse(s.result) : null,
 				error: s.error,
 				completedAt: s.completedAt,
+				startedAt: s.startedAt ?? null,
+				duration: s.duration ?? null,
+				errorStack: s.errorStack ?? null,
+				retryHistory: s.retryHistory ? JSON.parse(s.retryHistory) : null,
 			}));
 			return {
 				id: wf.workflowId,

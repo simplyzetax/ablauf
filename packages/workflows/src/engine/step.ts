@@ -40,6 +40,8 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			throw new SleepInterrupt(name, existing.wakeAt);
 		}
 
+		const startedAt = Date.now();
+
 		try {
 			if (!this.hasExecuted) {
 				this.hasExecuted = true;
@@ -47,6 +49,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			}
 			const result = await fn();
 			const serialized = JSON.stringify(result);
+			const duration = Date.now() - startedAt;
 
 			if (existing) {
 				await this.db
@@ -56,6 +59,8 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 						result: serialized,
 						attempts: attempts + 1,
 						completedAt: Date.now(),
+						startedAt,
+						duration,
 					})
 					.where(eq(stepsTable.name, name));
 			} else {
@@ -66,19 +71,29 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 					result: serialized,
 					attempts: 1,
 					completedAt: Date.now(),
+					startedAt,
+					duration,
 				});
 			}
 
 			return result;
 		} catch (e) {
 			const errorMsg = e instanceof Error ? e.message : String(e);
+			const errorStack = e instanceof Error ? e.stack ?? null : null;
+			const duration = Date.now() - startedAt;
 			const newAttempts = attempts + 1;
+
+			// Build retry history
+			const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
+				existing?.retryHistory ? JSON.parse(existing.retryHistory) : [];
+			const updatedHistory = [...existingHistory, { attempt: newAttempts, error: errorMsg, errorStack, timestamp: startedAt, duration }];
+			const retryHistorySerialized = JSON.stringify(updatedHistory);
 
 			if (newAttempts >= retryConfig.limit) {
 				if (existing) {
 					await this.db
 						.update(stepsTable)
-						.set({ status: "failed", error: errorMsg, attempts: newAttempts, wakeAt: null })
+						.set({ status: "failed", error: errorMsg, attempts: newAttempts, wakeAt: null, startedAt, duration, errorStack, retryHistory: retryHistorySerialized })
 						.where(eq(stepsTable.name, name));
 				} else {
 					await this.db.insert(stepsTable).values({
@@ -87,6 +102,10 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 						status: "failed",
 						error: errorMsg,
 						attempts: newAttempts,
+						startedAt,
+						duration,
+						errorStack,
+						retryHistory: retryHistorySerialized,
 					});
 				}
 				const cause = e instanceof Error ? e.message : String(e);
@@ -101,7 +120,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			if (existing) {
 				await this.db
 					.update(stepsTable)
-					.set({ status: "failed", error: errorMsg, attempts: newAttempts, wakeAt })
+					.set({ status: "failed", error: errorMsg, attempts: newAttempts, wakeAt, startedAt, duration, errorStack, retryHistory: retryHistorySerialized })
 					.where(eq(stepsTable.name, name));
 			} else {
 				await this.db.insert(stepsTable).values({
@@ -111,6 +130,10 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 					error: errorMsg,
 					attempts: newAttempts,
 					wakeAt,
+					startedAt,
+					duration,
+					errorStack,
+					retryHistory: retryHistorySerialized,
 				});
 			}
 
