@@ -134,6 +134,11 @@ export interface WorkflowIndexListFilters {
 	limit?: number;
 }
 
+export interface WorkflowShardConfig {
+	shards?: number;
+	previousShards?: number;
+}
+
 export interface WorkflowRunnerStub {
 	initialize(props: WorkflowRunnerInitProps): Promise<void>;
 	getStatus(): Promise<WorkflowStatusResponse>;
