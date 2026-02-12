@@ -1,0 +1,24 @@
+{
+	"name": "@ablauf/worker",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"check-types": "tsc --noEmit",
+		"cf-typegen": "wrangler types",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@ablauf/workflows": "workspace:*",
+		"hono": "^4.11.9",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.12.11",
+		"@types/node": "^25.2.3",
+		"vitest": "~3.2.0",
+		"wrangler": "^4.64.0"
+	}
+}

@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "durable-workflows",
+	"name": "ablauf-worker",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-02-10",
 	"compatibility_flags": [

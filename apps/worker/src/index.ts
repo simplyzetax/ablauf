@@ -1,13 +1,25 @@
 import { Hono } from "hono";
-import { registry } from "./workflows/registry";
-import type { WorkflowRunnerStub } from "./engine/types";
-import { WorkflowError, WorkflowTypeUnknownError, PayloadValidationError, extractZodIssues } from "./engine/errors";
+import {
+	createWorkflowRunner,
+	Ablauf,
+	WorkflowError,
+	WorkflowTypeUnknownError,
+	PayloadValidationError,
+	extractZodIssues,
+} from "@ablauf/workflows";
+import type { WorkflowClass, WorkflowRunnerStub } from "@ablauf/workflows";
+import { TestWorkflow } from "./workflows/test-workflow";
+import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
+import { EchoWorkflow } from "./workflows/echo-workflow";
+
+const workflows: WorkflowClass[] = [TestWorkflow, FailingStepWorkflow, EchoWorkflow];
+
+const registry: Record<string, WorkflowClass> = {};
+for (const wf of workflows) {
+	registry[wf.type] = wf;
+}
 
 const app = new Hono<{ Bindings: Env }>();
-
-function getWorkflowRunnerStub(env: Env, id: string): WorkflowRunnerStub {
-	return env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName(id)) as unknown as WorkflowRunnerStub;
-}
 
 // Centralized error handler
 app.onError((err, c) => {
@@ -52,6 +64,19 @@ app.get("/", (c) => {
 	return c.json({ status: "ok", workflows: Object.keys(registry) });
 });
 
+// ─── Echo demo route ───
+
+app.post("/echo", async (c) => {
+	const body = await c.req.json<{ message: string }>();
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
+	const id = `echo-${crypto.randomUUID()}`;
+	const stub = await ablauf.create(EchoWorkflow, { id, payload: { message: body.message } });
+	const status = await stub.getStatus();
+	return c.json(status.result);
+});
+
+// ─── Generic workflow CRUD ───
+
 // Create a workflow instance
 app.post("/workflows", async (c) => {
 	const body = await c.req.json<{ type: string; id: string; payload: unknown }>();
@@ -70,8 +95,8 @@ app.post("/workflows", async (c) => {
 		throw new PayloadValidationError("Invalid workflow input", issues);
 	}
 
-	const stub = getWorkflowRunnerStub(c.env, id);
-	await stub.initialize({ type, id, payload: parsed });
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
+	await ablauf.create(WorkflowClass, { id, payload: parsed });
 
 	return c.json({ id, type, status: "running" }, 201);
 });
@@ -79,32 +104,32 @@ app.post("/workflows", async (c) => {
 // Get workflow status
 app.get("/workflows/:id", async (c) => {
 	const id = c.req.param("id");
-	const stub = getWorkflowRunnerStub(c.env, id);
-	const status = await stub.getStatus();
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
+	const status = await ablauf.status(id);
 	return c.json(status);
 });
 
 // Pause workflow
 app.post("/workflows/:id/pause", async (c) => {
 	const id = c.req.param("id");
-	const stub = getWorkflowRunnerStub(c.env, id);
-	await stub.pause();
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
+	await ablauf.pause(id);
 	return c.json({ id, status: "paused" });
 });
 
 // Resume workflow
 app.post("/workflows/:id/resume", async (c) => {
 	const id = c.req.param("id");
-	const stub = getWorkflowRunnerStub(c.env, id);
-	await stub.resume();
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
+	await ablauf.resume(id);
 	return c.json({ id, status: "running" });
 });
 
 // Terminate workflow
 app.post("/workflows/:id/terminate", async (c) => {
 	const id = c.req.param("id");
-	const stub = getWorkflowRunnerStub(c.env, id);
-	await stub.terminate();
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
+	await ablauf.terminate(id);
 	return c.json({ id, status: "terminated" });
 });
 
@@ -113,8 +138,10 @@ app.post("/workflows/:id/events/:event", async (c) => {
 	const id = c.req.param("id");
 	const event = c.req.param("event");
 	const body = await c.req.json();
-	const stub = getWorkflowRunnerStub(c.env, id);
-	await stub.deliverEvent({ event, payload: body });
+	const stub = new Ablauf(c.env.WORKFLOW_RUNNER) as unknown as { getStub(id: string): WorkflowRunnerStub };
+	// Use raw stub for untyped event delivery
+	const rawStub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id)) as unknown as WorkflowRunnerStub;
+	await rawStub.deliverEvent({ event, payload: body });
 	return c.json({ id, event, status: "delivered" });
 });
 
@@ -123,19 +150,16 @@ app.get("/workflows", async (c) => {
 	const type = c.req.query("type");
 	const status = c.req.query("status");
 	const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!) : 50;
+	const ablauf = new Ablauf(c.env.WORKFLOW_RUNNER);
 
 	if (type) {
-		const indexId = c.env.WORKFLOW_RUNNER.idFromName(`__index:${type}`);
-		const indexStub = c.env.WORKFLOW_RUNNER.get(indexId) as unknown as WorkflowRunnerStub;
-		const results = await indexStub.indexList({ status: status ?? undefined, limit });
+		const results = await ablauf.list(type, { status: status ?? undefined, limit });
 		return c.json({ type, instances: results });
 	}
 
 	const results = await Promise.all(
 		Object.keys(registry).map(async (wfType) => {
-			const indexId = c.env.WORKFLOW_RUNNER.idFromName(`__index:${wfType}`);
-			const indexStub = c.env.WORKFLOW_RUNNER.get(indexId) as unknown as WorkflowRunnerStub;
-			const instances = await indexStub.indexList({ status: status ?? undefined, limit });
+			const instances = await ablauf.list(wfType, { status: status ?? undefined, limit });
 			return { type: wfType, instances };
 		}),
 	);
@@ -147,17 +171,4 @@ export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
 
-export { WorkflowRunner } from "./engine/workflow-runner";
-export {
-	WorkflowError,
-	WorkflowNotFoundError,
-	WorkflowAlreadyExistsError,
-	WorkflowTypeUnknownError,
-	PayloadValidationError,
-	EventValidationError,
-	StepFailedError,
-	StepRetryExhaustedError,
-	EventTimeoutError,
-	WorkflowNotRunningError,
-} from "./engine/errors";
-export type { ErrorCode, ErrorSource } from "./engine/errors";
+export const WorkflowRunner = createWorkflowRunner({ workflows });

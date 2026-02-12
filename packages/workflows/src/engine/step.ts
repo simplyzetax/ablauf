@@ -2,7 +2,7 @@ import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { eq } from "drizzle-orm";
 import { stepsTable } from "../db/schema";
 import { SleepInterrupt, WaitInterrupt } from "./interrupts";
-import { StepRetryExhaustedError, WorkflowError } from "./errors";
+import { StepRetryExhaustedError, WorkflowError } from "../errors";
 import { parseDuration } from "./duration";
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
 import { DEFAULT_RETRY_CONFIG } from "./types";

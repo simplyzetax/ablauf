@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { BaseWorkflow } from "../engine/base-workflow";
-import type { Step } from "../engine/types";
+import { BaseWorkflow } from "@ablauf/workflows";
+import type { Step } from "@ablauf/workflows";
 
 const inputSchema = z.object({ name: z.string() });
 type TestPayload = z.infer<typeof inputSchema>;
