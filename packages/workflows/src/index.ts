@@ -47,6 +47,9 @@ export {
 } from "./errors";
 export type { ErrorCode, ErrorSource } from "./errors";
 
+// SSE
+export { SSEContext } from "./engine/sse";
+
 // Engine internals (for advanced use)
 export { StepContext } from "./engine/step";
 export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./engine/interrupts";
