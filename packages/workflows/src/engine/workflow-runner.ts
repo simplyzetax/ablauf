@@ -17,6 +17,7 @@ import {
 	extractZodIssues,
 } from "../errors";
 import { eq, or } from "drizzle-orm";
+import { shardIndex } from "./shard";
 import type {
 	WorkflowStatus,
 	WorkflowStatusResponse,
@@ -25,10 +26,13 @@ import type {
 	WorkflowRunnerEventProps,
 	WorkflowRunnerInitProps,
 	WorkflowClass,
+	WorkflowShardConfig,
 } from "./types";
 
+export type WorkflowRegistration = WorkflowClass | [WorkflowClass, WorkflowShardConfig];
+
 export interface CreateWorkflowRunnerConfig {
-	workflows: WorkflowClass[];
+	workflows: WorkflowRegistration[];
 	binding?: string;
 }
 
@@ -36,8 +40,11 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 	const bindingName = config.binding ?? "WORKFLOW_RUNNER";
 
 	const registry: Record<string, WorkflowClass> = {};
-	for (const wf of config.workflows) {
+	const shardConfigs: Record<string, WorkflowShardConfig> = {};
+	for (const entry of config.workflows) {
+		const [wf, shardConfig] = Array.isArray(entry) ? entry : [entry, {}];
 		registry[wf.type] = wf;
+		shardConfigs[wf.type] = shardConfig;
 	}
 
 	return class WorkflowRunner extends DurableObject<Record<string, unknown>> {
@@ -77,7 +84,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				createdAt: now,
 				updatedAt: now,
 			});
-			await this.updateIndex(props.type, props.id, "running", now);
+			this.updateIndex(props.type, props.id, "running", now);
 			await this.replay();
 		}
 
@@ -328,7 +335,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					result: JSON.stringify(result),
 					updatedAt: Date.now(),
 				});
-				await this.updateIndex(wf.type, wf.workflowId, "completed", Date.now());
+				this.updateIndex(wf.type, wf.workflowId, "completed", Date.now());
 			} catch (e) {
 				if (e instanceof SleepInterrupt) {
 					await this.ctx.storage.setAlarm(e.wakeAt);
@@ -352,7 +359,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 						error: errorMsg,
 						updatedAt: Date.now(),
 					});
-					await this.updateIndex(wf.type, wf.workflowId, "errored", Date.now());
+					this.updateIndex(wf.type, wf.workflowId, "errored", Date.now());
 				}
 			}
 		}
@@ -386,23 +393,25 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const type = this.workflowType;
 			const id = this.workflowId;
 			if (type && id) {
-				await this.updateIndex(type, id, status, now);
+				this.updateIndex(type, id, status, now);
 			} else {
 				const [wf] = await this.db.select().from(workflowTable);
 				if (wf) {
 					this.workflowType = wf.type;
 					this.workflowId = wf.workflowId;
-					await this.updateIndex(wf.type, wf.workflowId, status, now);
+					this.updateIndex(wf.type, wf.workflowId, status, now);
 				}
 			}
 		}
 
-		private async updateIndex(type: string, id: string, status: string, now: number): Promise<void> {
+		private updateIndex(type: string, id: string, status: string, now: number): void {
 			try {
 				const binding = this.getBinding();
-				const indexId = binding.idFromName(`__index:${type}`);
+				const shards = shardConfigs[type]?.shards ?? 1;
+				const shard = shardIndex(id, shards);
+				const indexId = binding.idFromName(`__index:${type}:${shard}`);
 				const indexStub = binding.get(indexId) as unknown as WorkflowRunnerStub;
-				await indexStub.indexWrite({ id, status, createdAt: now, updatedAt: now });
+				this.ctx.waitUntil(indexStub.indexWrite({ id, status, createdAt: now, updatedAt: now }));
 			} catch {
 				// Index update is best-effort
 			}

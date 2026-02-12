@@ -1,4 +1,5 @@
 import { EventValidationError, extractZodIssues } from "./errors";
+import { shardIndex } from "./engine/shard";
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
@@ -9,10 +10,16 @@ import type {
 	WorkflowEventProps,
 	WorkflowIndexListFilters,
 	WorkflowIndexEntry,
+	WorkflowShardConfig,
 } from "./engine/types";
 
 export class Ablauf {
-	constructor(private binding: DurableObjectNamespace) {}
+	private shardConfigs: Record<string, WorkflowShardConfig>;
+
+	constructor(binding: DurableObjectNamespace, shardConfigs?: Record<string, WorkflowShardConfig>);
+	constructor(private binding: DurableObjectNamespace, shardConfigs?: Record<string, WorkflowShardConfig>) {
+		this.shardConfigs = shardConfigs ?? {};
+	}
 
 	private getStub(id: string): WorkflowRunnerStub {
 		return this.binding.get(this.binding.idFromName(id)) as unknown as WorkflowRunnerStub;
@@ -77,8 +84,41 @@ export class Ablauf {
 	}
 
 	async list(type: string, filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]> {
-		const indexId = this.binding.idFromName(`__index:${type}`);
-		const indexStub = this.binding.get(indexId) as unknown as WorkflowRunnerStub;
-		return indexStub.indexList(filters);
+		const config = this.shardConfigs[type] ?? {};
+		const shardCount = config.shards ?? 1;
+		const prevShards = config.previousShards;
+
+		const shardNames = new Set<string>();
+		for (let i = 0; i < shardCount; i++) {
+			shardNames.add(`__index:${type}:${i}`);
+		}
+		if (prevShards) {
+			for (let i = 0; i < prevShards; i++) {
+				shardNames.add(`__index:${type}:${i}`);
+			}
+		}
+
+		const results = await Promise.all(
+			[...shardNames].map((name) => {
+				const stub = this.binding.get(this.binding.idFromName(name)) as unknown as WorkflowRunnerStub;
+				return stub.indexList(filters);
+			}),
+		);
+
+		// Deduplicate by workflow ID (same entry may exist in old + new shard during resize)
+		const seen = new Map<string, WorkflowIndexEntry>();
+		for (const entry of results.flat()) {
+			const existing = seen.get(entry.id);
+			if (!existing || entry.updatedAt > existing.updatedAt) {
+				seen.set(entry.id, entry);
+			}
+		}
+
+		let merged = [...seen.values()];
+		if (filters?.limit) {
+			merged.sort((a, b) => b.updatedAt - a.updatedAt);
+			merged = merged.slice(0, filters.limit);
+		}
+		return merged;
 	}
 }

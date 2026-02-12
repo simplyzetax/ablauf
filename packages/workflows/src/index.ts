@@ -1,6 +1,6 @@
 // Core API
 export { createWorkflowRunner } from "./engine/workflow-runner";
-export type { CreateWorkflowRunnerConfig } from "./engine/workflow-runner";
+export type { CreateWorkflowRunnerConfig, WorkflowRegistration } from "./engine/workflow-runner";
 export { Ablauf } from "./client";
 export { BaseWorkflow } from "./engine/base-workflow";
 
@@ -28,6 +28,7 @@ export type {
 	StepInfo,
 	WorkflowIndexEntry,
 	WorkflowIndexListFilters,
+	WorkflowShardConfig,
 } from "./engine/types";
 export { DEFAULT_RETRY_CONFIG } from "./engine/types";
 
@@ -52,6 +53,7 @@ export { SSEContext } from "./engine/sse";
 export { createSSEStream } from "./sse-stream";
 
 // Engine internals (for advanced use)
+export { shardIndex } from "./engine/shard";
 export { StepContext } from "./engine/step";
 export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./engine/interrupts";
 export { parseDuration } from "./engine/duration";
