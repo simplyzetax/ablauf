@@ -9,6 +9,8 @@ import { DEFAULT_RETRY_CONFIG } from "./types";
 
 export class StepContext<Events extends object = {}> implements Step<Events> {
 	private defaults: WorkflowDefaults;
+	public onFirstExecution: (() => void) | null = null;
+	private hasExecuted = false;
 
 	constructor(
 		private db: DrizzleSqliteDODatabase,
@@ -39,6 +41,10 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		}
 
 		try {
+			if (!this.hasExecuted) {
+				this.hasExecuted = true;
+				this.onFirstExecution?.();
+			}
 			const result = await fn();
 			const serialized = JSON.stringify(result);
 
