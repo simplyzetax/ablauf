@@ -11,8 +11,6 @@ import { EchoWorkflow } from "./workflows/echo-workflow";
 import { SSEWorkflow } from "./workflows/sse-workflow";
 import { env } from "cloudflare:workers";
 
-const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
-
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
 const app = new Hono<{ Bindings: Env }>();
@@ -67,4 +65,14 @@ export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
 
-export const WorkflowRunner = createWorkflowRunner({ workflows });
+export const WorkflowRunner = createWorkflowRunner({
+	workflows: [[TestWorkflow, {
+		shards: 8,
+	}], [FailingStepWorkflow, {
+		shards: 1,
+	}], [EchoWorkflow, {
+		shards: 4,
+	}], [SSEWorkflow, {
+		shards: 24,
+	}]]
+});
