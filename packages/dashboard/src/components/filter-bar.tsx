@@ -31,7 +31,7 @@ export function FilterBar({
           <button
             key={status}
             onClick={() => onStatusChange(status === "all" ? "" : status)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
               (status === "all" && !activeStatus) || activeStatus === status
                 ? "bg-zinc-900 text-white shadow-sm"
                 : "text-zinc-600 hover:text-zinc-900"
@@ -45,7 +45,8 @@ export function FilterBar({
       <select
         value={activeType}
         onChange={(e) => onTypeChange(e.target.value)}
-        className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 outline-none transition-colors hover:bg-zinc-50"
+        aria-label="Filter by workflow type"
+        className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 transition-colors hover:bg-zinc-50"
       >
         <option value="">All types</option>
         {types.map((type) => (

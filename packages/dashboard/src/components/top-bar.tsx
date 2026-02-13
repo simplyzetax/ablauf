@@ -13,18 +13,22 @@ export function TopBar() {
         {apiUrl}
       </code>
       <div className="flex items-center gap-2">
-        <span
-          className={`h-2 w-2 rounded-full transition-colors ${
-            connection.status === "connected"
-              ? "bg-emerald-500"
-              : connection.status === "error"
-                ? "bg-red-500"
-                : "bg-zinc-300"
-          }`}
-        />
+        <div aria-live="polite">
+          <span
+            role="status"
+            aria-label={`Connection: ${connection.status}`}
+            className={`inline-block h-2 w-2 rounded-full transition-colors ${
+              connection.status === "connected"
+                ? "bg-emerald-500"
+                : connection.status === "error"
+                  ? "bg-red-500"
+                  : "bg-zinc-300"
+            }`}
+          />
+        </div>
         <button
           onClick={() => queryClient.invalidateQueries()}
-          className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
+          className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
         >
           Refresh
         </button>

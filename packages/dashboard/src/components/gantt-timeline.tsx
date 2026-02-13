@@ -110,7 +110,7 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
                 return (
                   <div
                     key={retry.attempt}
-                    className={`absolute top-0 h-full rounded-sm ${color} opacity-30 transition-all duration-300`}
+                    className={`absolute top-0 h-full rounded-sm ${color} opacity-30 transition-opacity duration-300`}
                     style={{
                       left: `${Math.max(retryLeft, 0)}%`,
                       width: `${retryWidth}%`,
@@ -127,7 +127,7 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
                   width: `${barWidth}%`,
                 }}
               >
-                <div className={`h-full rounded-sm ${color} transition-all duration-300 hover:shadow-sm`} />
+                <div className={`h-full rounded-sm ${color} transition-shadow duration-300 hover:shadow-sm`} />
 
                 {/* Tooltip */}
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2.5 py-1.5 text-xs text-white shadow-lg opacity-0 transition-opacity group-hover:opacity-100">

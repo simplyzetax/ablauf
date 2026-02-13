@@ -37,7 +37,7 @@ export function WorkflowTable({ workflows }: WorkflowTableProps) {
       </thead>
       <tbody>
         {sorted.map((wf) => (
-          <tr key={wf.id} className="border-b border-zinc-100 transition-colors duration-150 even:bg-zinc-50/50 hover:bg-zinc-50">
+          <tr key={wf.id} className="border-b border-zinc-100 transition-colors duration-150 even:bg-zinc-50/50 hover:bg-zinc-50 focus-within:ring-2 focus-within:ring-zinc-400 focus-within:ring-offset-1">
             <td className="px-4 py-2">
               <Link to={DETAIL_ROUTE} params={{ id: wf.id } as any} className="block">
                 <StatusBadge status={wf.status} />
@@ -58,12 +58,12 @@ export function WorkflowTable({ workflows }: WorkflowTableProps) {
                 {wf.type}
               </Link>
             </td>
-            <td className="px-4 py-2 text-zinc-500">
+            <td className="px-4 py-2 tabular-nums text-zinc-500">
               <Link to={DETAIL_ROUTE} params={{ id: wf.id } as any} className="block">
                 {formatTimestamp(wf.createdAt)}
               </Link>
             </td>
-            <td className="px-4 py-2 text-zinc-500">
+            <td className="px-4 py-2 tabular-nums text-zinc-500">
               <Link to={DETAIL_ROUTE} params={{ id: wf.id } as any} className="block">
                 {formatTimestamp(wf.updatedAt)}
               </Link>

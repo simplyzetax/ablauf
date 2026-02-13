@@ -68,6 +68,7 @@ function HomePage() {
         />
       </div>
 
+      <div aria-live="polite">
       {isLoading ? (
         <div className="space-y-1">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -83,6 +84,7 @@ function HomePage() {
       ) : workflows.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24">
           <svg
+            aria-hidden="true"
             className="mb-4 h-10 w-10 text-zinc-300"
             fill="none"
             viewBox="0 0 24 24"
@@ -103,6 +105,7 @@ function HomePage() {
       ) : (
         <WorkflowTable workflows={workflows} />
       )}
+      </div>
     </div>
   );
 }

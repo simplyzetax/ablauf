@@ -1,5 +1,5 @@
 import type { StepInfo } from "~/lib/types";
-import { formatDuration } from "~/lib/format";
+import { formatDuration, formatTimestamp } from "~/lib/format";
 
 interface ErrorPanelProps {
   steps: StepInfo[];
@@ -44,7 +44,7 @@ export function ErrorPanel({ steps, workflowError }: ErrorPanelProps) {
             </div>
 
             {/* Error message */}
-            <p className="font-mono text-xs text-red-700">{step.error}</p>
+            <p className="break-words font-mono text-xs text-red-700">{step.error}</p>
 
             {/* Stack trace */}
             {step.errorStack && (
@@ -75,7 +75,7 @@ export function ErrorPanel({ steps, workflowError }: ErrorPanelProps) {
                     <span>{formatDuration(retry.duration)}</span>
                     {" — "}
                     <span className="text-zinc-400">
-                      {new Date(retry.timestamp).toLocaleTimeString()}
+                      {formatTimestamp(retry.timestamp)}
                     </span>
                   </div>
                 ))}

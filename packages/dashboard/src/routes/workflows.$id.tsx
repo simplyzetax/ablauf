@@ -34,8 +34,8 @@ function WorkflowDetailPage() {
   return (
     <div className="mx-auto max-w-6xl p-6">
       {/* Back link */}
-      <Link to="/" className="mb-4 inline-block text-sm text-zinc-500 hover:text-zinc-700">
-        &larr; Workflows
+      <Link to="/" className="mb-4 inline-block text-sm text-zinc-500 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 rounded">
+        <span aria-hidden="true">&larr;</span> Workflows
       </Link>
 
       {isLoading || !workflow ? (

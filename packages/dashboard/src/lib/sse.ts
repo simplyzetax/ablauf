@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { reportSuccess } from "./connection";
+import { reportSuccess, reportError } from "./connection";
 
 export function useWorkflowSSE(workflowId: string) {
   const queryClient = useQueryClient();
@@ -21,6 +21,7 @@ export function useWorkflowSSE(workflowId: string) {
     };
 
     source.onerror = () => {
+      reportError("SSE connection lost");
       source.close();
     };
 
