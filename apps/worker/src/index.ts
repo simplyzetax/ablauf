@@ -53,7 +53,7 @@ app.post("/workflows/:type", async (c) => {
 		return c.json({ error: "Workflow not found" }, 404);
 	}
 
-	const payload = await c.req.json<typeof workflowClass.inputSchema.shape>();
+	const payload = await c.req.json();
 
 	const workflow = await ablauf.create(workflowClass as WorkflowClass, {
 		id: crypto.randomUUID(),
