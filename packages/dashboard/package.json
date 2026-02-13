@@ -1,38 +1,39 @@
 {
-  "name": "@ablauf/dashboard",
-  "version": "0.0.1",
-  "type": "module",
-  "bin": {
-    "ablauf-dashboard": "./src/cli.ts"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "start": "node .output/server/index.mjs",
-    "check-types": "tsc --noEmit",
-    "compile": "bun run build.ts"
-  },
-  "dependencies": {
-    "@ablauf/workflows": "workspace:*",
-    "@orpc/client": "^1.13.5",
-    "@orpc/server": "^1.13.5",
-    "@orpc/tanstack-query": "^1.13.5",
-    "@tanstack/react-query": "^5.71.10",
-    "@tanstack/react-router": "^1.120.0",
-    "@tanstack/react-start": "^1.120.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250214.0",
-    "@tailwindcss/vite": "^4.1.0",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0",
-    "@vitejs/plugin-react": "^4.5.0",
-    "tailwindcss": "^4.1.0",
-    "typescript": "^5.5.2",
-    "vite": "^6.3.0",
-    "vite-tsconfig-paths": "^4.3.2"
-  }
+	"name": "@ablauf/dashboard",
+	"version": "0.0.1",
+	"type": "module",
+	"bin": {
+		"ablauf-dashboard": "./src/cli.ts"
+	},
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"start": "node .output/server/index.mjs",
+		"check-types": "tsc --noEmit",
+		"compile": "bun run build.ts"
+	},
+	"dependencies": {
+		"@ablauf/workflows": "workspace:*",
+		"@orpc/client": "^1.13.5",
+		"@orpc/server": "^1.13.5",
+		"@orpc/tanstack-query": "^1.13.5",
+		"@tanstack/react-query": "^5.71.10",
+		"@tanstack/react-router": "^1.120.0",
+		"@tanstack/react-start": "^1.120.0",
+		"react": "^19.1.0",
+		"react-dom": "^19.1.0"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"@cloudflare/workers-types": "^4.20250214.0",
+		"@tailwindcss/vite": "^4.1.0",
+		"@types/node": "^22.0.0",
+		"@types/react": "^19.1.0",
+		"@types/react-dom": "^19.1.0",
+		"@vitejs/plugin-react": "^4.5.0",
+		"tailwindcss": "^4.1.0",
+		"typescript": "^5.5.2",
+		"vite": "^6.3.0",
+		"vite-tsconfig-paths": "^4.3.2"
+	}
 }

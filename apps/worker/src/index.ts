@@ -45,9 +45,9 @@ app.onError((err, c) => {
 	);
 });
 
-app.post("/workflows/:name", async (c) => {
-	const { name } = c.req.param();
-	const workflowClass = workflows.find((w) => w.type === name);
+app.post("/workflows/:type", async (c) => {
+	const { type } = c.req.param();
+	const workflowClass = workflows.find((w) => w.type === type);
 	if (!workflowClass) {
 		return c.json({ error: "Workflow not found" }, 404);
 	}
