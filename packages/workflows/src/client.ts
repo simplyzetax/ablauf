@@ -14,6 +14,7 @@ import type {
 } from "./engine/types";
 import type { WorkflowRegistration } from "./engine/workflow-runner";
 import { createWorkflowRunner } from "./engine/workflow-runner";
+import { RPCHandler } from "@orpc/server/fetch";
 import { dashboardRouter } from "./dashboard";
 import type { DashboardContext } from "./dashboard";
 import { createSSEStream } from "./sse-stream";
@@ -177,6 +178,10 @@ export class Ablauf {
 
 	get router() {
 		return dashboardRouter;
+	}
+
+	createRPCHandler() {
+		return new RPCHandler(dashboardRouter);
 	}
 
 	sseStream(workflowId: string): Response {
