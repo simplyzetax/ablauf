@@ -6,6 +6,7 @@ import type { WorkflowRunnerStub, WorkflowStatus } from "@ablauf/workflows";
 import { TestWorkflow } from "../workflows/test-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
 import { EchoWorkflow } from "../workflows/echo-workflow";
+import { DuplicateStepWorkflow } from "../workflows/duplicate-step-workflow";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -217,6 +218,15 @@ describe("WorkflowRunner", () => {
 			const status = await stub.getStatus();
 			expect(status.status).toBe("errored");
 			expect(status.error).toContain("nonexistent");
+		});
+	});
+
+	describe("duplicate step names", () => {
+		it("throws an error when two steps share the same name", async () => {
+			const stub = await ablauf.create(DuplicateStepWorkflow, { id: "dup-1", payload: {} });
+			const status = await stub.getStatus();
+			expect(status.status).toBe("errored");
+			expect(status.error).toContain('Duplicate step name "fetch-data"');
 		});
 	});
 
