@@ -17,7 +17,6 @@ import { createWorkflowRunner } from "./engine/workflow-runner";
 import { RPCHandler } from "@orpc/server/fetch";
 import { dashboardRouter } from "./dashboard";
 import type { DashboardContext } from "./dashboard";
-import { createSSEStream } from "./sse-stream";
 
 export interface AblaufConfig {
 	workflows?: WorkflowRegistration[];
@@ -184,7 +183,4 @@ export class Ablauf {
 		return new RPCHandler(dashboardRouter);
 	}
 
-	sseStream(workflowId: string): Response {
-		return createSSEStream(this.binding, workflowId);
-	}
 }
