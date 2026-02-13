@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getWorkflow, getTimeline } from "~/lib/api";
+import { useWorkflowSSE } from "~/lib/sse";
 import { StatusBadge } from "~/components/status-badge";
 import { JsonViewer } from "~/components/json-viewer";
 import { GanttTimeline } from "~/components/gantt-timeline";
@@ -13,6 +14,8 @@ export const Route = createFileRoute("/workflows/$id")({
 
 function WorkflowDetailPage() {
   const { id } = Route.useParams();
+
+  useWorkflowSSE(id);
 
   const { data: workflow, isLoading: workflowLoading } = useQuery({
     queryKey: ["workflow", id],
