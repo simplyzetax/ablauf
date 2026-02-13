@@ -4,10 +4,11 @@ import { TestWorkflow } from "./workflows/test-workflow";
 import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
 import { EchoWorkflow } from "./workflows/echo-workflow";
 import { SSEWorkflow } from "./workflows/sse-workflow";
+import { DuplicateStepWorkflow } from "./workflows/duplicate-step-workflow";
 import { env } from "cloudflare:workers";
 import type { WorkflowClass } from "@ablauf/workflows";
 
-const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
+const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow, DuplicateStepWorkflow];
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,

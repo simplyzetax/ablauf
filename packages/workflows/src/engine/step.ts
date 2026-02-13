@@ -11,6 +11,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 	private defaults: WorkflowDefaults;
 	public onFirstExecution: (() => void) | null = null;
 	private hasExecuted = false;
+	private usedNames = new Set<string>();
 
 	constructor(
 		private db: DrizzleSqliteDODatabase,
@@ -21,7 +22,18 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		};
 	}
 
+	private checkDuplicateName(name: string, method: string): void {
+		if (this.usedNames.has(name)) {
+			throw new Error(
+				`Duplicate step name "${name}" in ${method}(). Each step must have a unique name. ` +
+				`A step named "${name}" was already used earlier in this workflow.`,
+			);
+		}
+		this.usedNames.add(name);
+	}
+
 	async do<T>(name: string, fn: () => Promise<T> | T, options?: StepDoOptions): Promise<T> {
+		this.checkDuplicateName(name, "step.do");
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
 
 		if (existing?.status === "completed") {
@@ -143,6 +155,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 	}
 
 	async sleep(name: string, duration: string): Promise<void> {
+		this.checkDuplicateName(name, "step.sleep");
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
 
 		if (existing?.status === "completed") {
@@ -170,6 +183,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		name: K,
 		options?: StepWaitOptions,
 	): Promise<Events[K]> {
+		this.checkDuplicateName(name as string, "step.waitForEvent");
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name as string));
 
 		if (existing?.status === "completed") {
