@@ -1,6 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { getWorkflow, getTimeline } from "~/lib/api";
-import { useWorkflowSSE } from "~/lib/sse";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { orpc, client } from "~/lib/orpc";
 import { StatusBadge } from "~/components/status-badge";
 import { JsonViewer } from "~/components/json-viewer";
 import { GanttTimeline } from "~/components/gantt-timeline";
@@ -41,20 +40,42 @@ export function DetailPanel({ workflowId }: DetailPanelProps) {
 
 function DetailPanelContent({ workflowId }: { workflowId: string }) {
   const [copied, setCopied] = useState(false);
+  const queryClient = useQueryClient();
 
-  useWorkflowSSE(workflowId);
+  useEffect(() => {
+    const abortController = new AbortController();
+    (async () => {
+      try {
+        const iterator = await client.workflows.subscribe(
+          { id: workflowId },
+          { signal: abortController.signal },
+        );
+        for await (const event of iterator) {
+          queryClient.setQueryData(
+            orpc.workflows.get.queryOptions({ input: { id: workflowId } }).queryKey,
+            event,
+          );
+        }
+      } catch {
+        // Connection closed or aborted
+      }
+    })();
+    return () => abortController.abort();
+  }, [workflowId, queryClient]);
 
-  const { data: workflow, isLoading: workflowLoading } = useQuery({
-    queryKey: ["workflow", workflowId],
-    queryFn: () => getWorkflow(workflowId),
-    refetchInterval: 3000,
-  });
+  const { data: workflow, isLoading: workflowLoading } = useQuery(
+    orpc.workflows.get.queryOptions({
+      input: { id: workflowId },
+      refetchInterval: 3000,
+    }),
+  );
 
-  const { data: timelineData, isLoading: timelineLoading } = useQuery({
-    queryKey: ["timeline", workflowId],
-    queryFn: () => getTimeline(workflowId),
-    refetchInterval: 3000,
-  });
+  const { data: timelineData, isLoading: timelineLoading } = useQuery(
+    orpc.workflows.timeline.queryOptions({
+      input: { id: workflowId },
+      refetchInterval: 3000,
+    }),
+  );
 
   const isLoading = workflowLoading || timelineLoading;
 

@@ -13,7 +13,9 @@
     "compile": "bun run build.ts"
   },
   "dependencies": {
+    "@ablauf/workflows": "workspace:*",
     "@orpc/client": "^1.13.5",
+    "@orpc/server": "^1.13.5",
     "@orpc/tanstack-query": "^1.13.5",
     "@tanstack/react-query": "^5.71.10",
     "@tanstack/react-router": "^1.120.0",
@@ -22,6 +24,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
     "@tailwindcss/vite": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",

@@ -63,8 +63,8 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
     );
   }
 
-  const minStart = Math.min(...timeline.map((t) => t.startedAt));
-  const maxEnd = Math.max(...timeline.map((t) => t.startedAt + t.duration));
+  const minStart = Math.min(...timeline.map((t) => t.startedAt ?? 0));
+  const maxEnd = Math.max(...timeline.map((t) => (t.startedAt ?? 0) + t.duration));
   const totalDuration = Math.max(maxEnd - minStart, 1);
   const ticks = generateTicks(totalDuration);
 
@@ -94,7 +94,7 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 
       {/* Rows */}
       {timeline.map((entry) => {
-        const barLeft = ((entry.startedAt - minStart) / totalDuration) * 100;
+        const barLeft = (((entry.startedAt ?? 0) - minStart) / totalDuration) * 100;
         const barWidth = Math.max((entry.duration / totalDuration) * 100, 0.5);
         const color = getBarColor(entry.status);
         const retryColor = getRetryBarColor(entry.status);

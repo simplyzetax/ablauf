@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { listWorkflows } from "~/lib/api";
+import { orpc } from "~/lib/orpc";
 import { TopBar } from "~/components/top-bar";
 import { StatFilterBar } from "~/components/filter-bar";
 import { WorkflowList } from "~/components/workflow-table";
@@ -25,15 +25,12 @@ function HomePage() {
   const { status, type, selected } = Route.useSearch();
   const navigate = useNavigate();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["workflows", { status, type }],
-    queryFn: () =>
-      listWorkflows({
-        status: status || undefined,
-        type: type || undefined,
-      }),
-    refetchInterval: 5000,
-  });
+  const { data, isLoading } = useQuery(
+    orpc.workflows.list.queryOptions({
+      input: { status: status || undefined, type: type || undefined },
+      refetchInterval: 5000,
+    }),
+  );
 
   const workflows = data?.workflows ?? [];
   const uniqueTypes = [...new Set(workflows.map((wf) => wf.type))].sort();
