@@ -54,7 +54,7 @@ export interface TimelineEntry {
   name: string;
   type: string;
   status: string;
-  startedAt: number;
+  startedAt: number | null;
   duration: number;
   attempts: number;
   error: string | null;

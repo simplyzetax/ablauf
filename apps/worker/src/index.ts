@@ -45,9 +45,9 @@ app.onError((err, c) => {
 	);
 });
 
-app.post("/workflows/:name", async (c) => {
-	const { name } = c.req.param();
-	const workflowClass = workflows.find((w) => w.type === name);
+app.post("/workflows/:type", async (c) => {
+	const { type } = c.req.param();
+	const workflowClass = workflows.find((w) => w.type === type);
 	if (!workflowClass) {
 		return c.json({ error: "Workflow not found" }, 404);
 	}
@@ -80,12 +80,19 @@ app.post("/workflows/:name", async (c) => {
 	}
 });
 
-app.get("/workflows/:id/sse", (c) => {
-	return ablauf.sseStream(c.req.param("id"));
-});
+const rpcHandler = ablauf.createRPCHandler();
 
-app.all("/__ablauf/*", (c) => {
-	return ablauf.handleDashboard(c.req.raw, "/__ablauf");
+app.use("/__ablauf/*", async (c, next) => {
+	const { matched, response } = await rpcHandler.handle(c.req.raw, {
+		prefix: "/__ablauf",
+		context: ablauf.getDashboardContext(),
+	});
+
+	if (matched) {
+		return c.newResponse(response.body, response);
+	}
+
+	await next();
 });
 
 export default {

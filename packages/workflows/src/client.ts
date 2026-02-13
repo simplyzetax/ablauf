@@ -14,8 +14,9 @@ import type {
 } from "./engine/types";
 import type { WorkflowRegistration } from "./engine/workflow-runner";
 import { createWorkflowRunner } from "./engine/workflow-runner";
-import { createDashboardHandler } from "./dashboard";
-import { createSSEStream } from "./sse-stream";
+import { RPCHandler } from "@orpc/server/fetch";
+import { dashboardRouter } from "./dashboard";
+import type { DashboardContext } from "./dashboard";
 
 export interface AblaufConfig {
 	workflows?: WorkflowRegistration[];
@@ -166,21 +167,20 @@ export class Ablauf {
 		});
 	}
 
-	async handleDashboard(
-		request: Request,
-		basePath: string,
-		options?: { authenticate?: (request: Request) => boolean | Promise<boolean> },
-	): Promise<Response> {
-		const handler = createDashboardHandler({
+	getDashboardContext(): DashboardContext {
+		return {
 			binding: this.binding,
 			workflows: this.workflows,
 			shardConfigs: this.shardConfigs,
-			authenticate: options?.authenticate,
-		});
-		return handler(request, basePath);
+		};
 	}
 
-	sseStream(workflowId: string): Response {
-		return createSSEStream(this.binding, workflowId);
+	get router() {
+		return dashboardRouter;
 	}
+
+	createRPCHandler() {
+		return new RPCHandler(dashboardRouter);
+	}
+
 }

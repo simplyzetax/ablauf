@@ -51,7 +51,6 @@ export type { ErrorCode, ErrorSource } from "./errors";
 
 // SSE
 export { SSEContext } from "./engine/sse";
-export { createSSEStream } from "./sse-stream";
 
 // Engine internals (for advanced use)
 export { shardIndex } from "./engine/shard";
@@ -60,8 +59,8 @@ export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./en
 export { parseDuration } from "./engine/duration";
 
 // Dashboard
-export { createDashboardHandler } from "./dashboard";
-export type { DashboardHandlerOptions } from "./dashboard";
+export { dashboardRouter } from "./dashboard";
+export type { DashboardContext } from "./dashboard";
 
 // DB schema (for consumer migrations)
 export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";
