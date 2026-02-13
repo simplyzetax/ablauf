@@ -7,7 +7,7 @@ export function TopBar() {
   const apiUrl = import.meta.env.VITE_ABLAUF_API_URL ?? "http://localhost:8787";
 
   return (
-    <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-2.5">
+    <header className="sticky top-0 z-50 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-2.5 backdrop-blur-sm">
       <span className="text-sm font-semibold tracking-tight">Ablauf</span>
       <code className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">
         {apiUrl}

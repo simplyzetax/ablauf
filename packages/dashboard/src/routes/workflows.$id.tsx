@@ -43,14 +43,14 @@ function WorkflowDetailPage() {
       ) : (
         <div className="space-y-4">
           {/* Header section */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <div className="rounded-lg border border-zinc-200 bg-white p-5 transition-shadow hover:shadow-sm">
             {/* Top row: ID + badges */}
             <div className="flex items-center gap-3">
               <span className="font-mono text-lg text-zinc-800">
                 {workflow.id}
               </span>
               <StatusBadge status={workflow.status} />
-              <span className="inline-block rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+              <span className="inline-block rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 transition-colors">
                 {workflow.type}
               </span>
             </div>
@@ -76,7 +76,7 @@ function WorkflowDetailPage() {
           </div>
 
           {/* Timeline section */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <div className="rounded-lg border border-zinc-200 bg-white p-5 transition-shadow hover:shadow-sm">
             <h2 className="mb-4 text-sm font-semibold text-zinc-700">
               Timeline
             </h2>

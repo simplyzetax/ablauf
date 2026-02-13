@@ -1,5 +1,6 @@
 interface StatusBadgeProps {
   status: string;
+  className?: string;
 }
 
 function getStatusClasses(status: string): string {
@@ -21,10 +22,10 @@ function getStatusClasses(status: string): string {
   }
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
+export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getStatusClasses(status)}`}
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${getStatusClasses(status)}${className ? ` ${className}` : ""}`}
     >
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>

@@ -37,7 +37,7 @@ export function WorkflowTable({ workflows }: WorkflowTableProps) {
       </thead>
       <tbody>
         {sorted.map((wf) => (
-          <tr key={wf.id} className="border-b border-zinc-100 transition-colors hover:bg-zinc-50">
+          <tr key={wf.id} className="border-b border-zinc-100 transition-colors duration-150 even:bg-zinc-50/50 hover:bg-zinc-50">
             <td className="px-4 py-2">
               <Link to={DETAIL_ROUTE} params={{ id: wf.id } as any} className="block">
                 <StatusBadge status={wf.status} />
