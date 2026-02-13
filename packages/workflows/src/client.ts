@@ -14,7 +14,8 @@ import type {
 } from "./engine/types";
 import type { WorkflowRegistration } from "./engine/workflow-runner";
 import { createWorkflowRunner } from "./engine/workflow-runner";
-import { createDashboardHandler } from "./dashboard";
+import { dashboardRouter } from "./dashboard";
+import type { DashboardContext } from "./dashboard";
 import { createSSEStream } from "./sse-stream";
 
 export interface AblaufConfig {
@@ -166,18 +167,16 @@ export class Ablauf {
 		});
 	}
 
-	async handleDashboard(
-		request: Request,
-		basePath: string,
-		options?: { authenticate?: (request: Request) => boolean | Promise<boolean> },
-	): Promise<Response> {
-		const handler = createDashboardHandler({
+	getDashboardContext(): DashboardContext {
+		return {
 			binding: this.binding,
 			workflows: this.workflows,
 			shardConfigs: this.shardConfigs,
-			authenticate: options?.authenticate,
-		});
-		return handler(request, basePath);
+		};
+	}
+
+	get router() {
+		return dashboardRouter;
 	}
 
 	sseStream(workflowId: string): Response {

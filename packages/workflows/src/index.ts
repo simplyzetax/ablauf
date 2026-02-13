@@ -60,8 +60,8 @@ export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./en
 export { parseDuration } from "./engine/duration";
 
 // Dashboard
-export { createDashboardHandler } from "./dashboard";
-export type { DashboardHandlerOptions } from "./dashboard";
+export { dashboardRouter } from "./dashboard";
+export type { DashboardContext } from "./dashboard";
 
 // DB schema (for consumer migrations)
 export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";
