@@ -7,7 +7,7 @@ import { GanttTimeline } from "~/components/gantt-timeline";
 import { StepList } from "~/components/step-list";
 import { ErrorPanel } from "~/components/error-panel";
 import { formatTimestamp } from "~/lib/format";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface DetailPanelProps {
   workflowId: string | null;
@@ -58,10 +58,15 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 
   const isLoading = workflowLoading || timelineLoading;
 
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
   function handleCopyId() {
-    navigator.clipboard.writeText(workflowId);
+    navigator.clipboard.writeText(workflowId).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
   }
 
   if (isLoading || !workflow) {
