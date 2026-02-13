@@ -1,3 +1,5 @@
+import { InvalidDurationError } from "../errors";
+
 const UNITS: Record<string, number> = {
 	ms: 1,
 	s: 1000,
@@ -9,7 +11,7 @@ const UNITS: Record<string, number> = {
 export function parseDuration(duration: string): number {
 	const match = duration.match(/^(\d+)\s*(ms|s|m|h|d)$/);
 	if (!match) {
-		throw new Error(`Invalid duration: "${duration}". Use format like "30s", "5m", "24h", "7d".`);
+		throw new InvalidDurationError(duration);
 	}
 	return parseInt(match[1], 10) * UNITS[match[2]];
 }

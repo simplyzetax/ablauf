@@ -1,6 +1,7 @@
 import { os } from "@orpc/server";
 import { z } from "zod";
-import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowIndexEntry, WorkflowShardConfig } from "./engine/types";
+import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from "./engine/types";
+import { listIndexEntries } from "./engine/index-listing";
 import { ObservabilityDisabledError } from "./errors";
 
 export interface DashboardContext {
@@ -14,43 +15,6 @@ const base = os.$context<DashboardContext>();
 
 function getStub(binding: DurableObjectNamespace, id: string): WorkflowRunnerStub {
 	return binding.get(binding.idFromName(id)) as unknown as WorkflowRunnerStub;
-}
-
-async function listIndexEntries(
-	binding: DurableObjectNamespace,
-	type: string,
-	shardConfigs: Record<string, WorkflowShardConfig>,
-	filters: WorkflowIndexListFilters,
-): Promise<WorkflowIndexEntry[]> {
-	const config = shardConfigs[type] ?? {};
-	const shardCount = config.shards ?? 1;
-	const prevShards = config.previousShards;
-
-	const shardNames = new Set<string>();
-	for (let i = 0; i < shardCount; i++) {
-		shardNames.add(`__index:${type}:${i}`);
-	}
-	if (prevShards) {
-		for (let i = 0; i < prevShards; i++) {
-			shardNames.add(`__index:${type}:${i}`);
-		}
-	}
-
-	const results = await Promise.all(
-		[...shardNames].map((name) => {
-			const stub = binding.get(binding.idFromName(name)) as unknown as WorkflowRunnerStub;
-			return stub.indexList(filters);
-		}),
-	);
-
-	const seen = new Map<string, WorkflowIndexEntry>();
-	for (const entry of results.flat()) {
-		const existing = seen.get(entry.id);
-		if (!existing || entry.updatedAt > existing.updatedAt) {
-			seen.set(entry.id, entry);
-		}
-	}
-	return [...seen.values()];
 }
 
 const list = base

@@ -221,6 +221,29 @@ export class WorkflowNotRunningError extends WorkflowError {
   }
 }
 
+export class DuplicateStepError extends WorkflowError {
+  constructor(stepName: string, method: string) {
+    super({
+      code: "VALIDATION_ERROR",
+      message: `Duplicate step name "${stepName}" in ${method}(). Each step must have a unique name.`,
+      status: 400,
+      source: "engine",
+      details: { step: stepName, method },
+    });
+  }
+}
+
+export class InvalidDurationError extends WorkflowError {
+  constructor(duration: string) {
+    super({
+      code: "VALIDATION_ERROR",
+      message: `Invalid duration: "${duration}". Use format like "30s", "5m", "24h", "7d".`,
+      status: 400,
+      source: "validation",
+    });
+  }
+}
+
 export class ObservabilityDisabledError extends WorkflowError {
   constructor() {
     super({

@@ -226,7 +226,8 @@ describe("WorkflowRunner", () => {
 			const stub = await ablauf.create(DuplicateStepWorkflow, { id: "dup-1", payload: {} });
 			const status = await stub.getStatus();
 			expect(status.status).toBe("errored");
-			expect(status.error).toContain('Duplicate step name "fetch-data"');
+			expect(status.error).toContain("Duplicate step name");
+		expect(status.error).toContain("fetch-data");
 		});
 	});
 
