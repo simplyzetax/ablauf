@@ -57,7 +57,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			super(ctx, env);
 			this.db = drizzle(ctx.storage, { logger: false });
 			ctx.blockConcurrencyWhile(async () => {
-				migrate(this.db, migrations);
+				await migrate(this.db, migrations);
 			});
 		}
 
