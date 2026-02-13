@@ -29,8 +29,12 @@
       "name": "@ablauf/client",
       "version": "0.0.1",
       "dependencies": {
+        "@ablauf/workflows": "workspace:*",
         "@orpc/client": "^1.13.5",
-        "zod": "^4.3.6",
+        "@orpc/server": "^1.13.5",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250214.0",
       },
     },
     "packages/dashboard": {
