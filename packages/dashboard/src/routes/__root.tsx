@@ -8,7 +8,6 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TopBar } from "~/components/top-bar";
 import appCss from "~/styles.css?url";
 
 export const Route = createRootRoute({
@@ -38,8 +37,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <RootDocument>
-        <div className="min-h-screen bg-white text-zinc-900">
-          <TopBar />
+        <div className="min-h-screen bg-surface-0 text-zinc-100">
           <Outlet />
         </div>
       </RootDocument>
