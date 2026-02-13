@@ -13,6 +13,7 @@ export type ErrorCode =
   | "EVENT_TIMEOUT"
   | "EVENT_INVALID"
   | "WORKFLOW_NOT_RUNNING"
+  | "OBSERVABILITY_DISABLED"
   | "INTERNAL_ERROR";
 
 export type ErrorSource = "api" | "engine" | "step" | "validation";
@@ -27,6 +28,7 @@ const VALID_ERROR_CODES: readonly ErrorCode[] = [
   "EVENT_TIMEOUT",
   "EVENT_INVALID",
   "WORKFLOW_NOT_RUNNING",
+  "OBSERVABILITY_DISABLED",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -215,6 +217,17 @@ export class WorkflowNotRunningError extends WorkflowError {
       status: 409,
       source: "engine",
       details: { workflowId, currentStatus },
+    });
+  }
+}
+
+export class ObservabilityDisabledError extends WorkflowError {
+  constructor() {
+    super({
+      code: "OBSERVABILITY_DISABLED",
+      message: "Observability is disabled. Enable it in AblaufConfig to use listing and indexing features.",
+      status: 400,
+      source: "api",
     });
   }
 }
