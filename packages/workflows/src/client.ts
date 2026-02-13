@@ -1,4 +1,4 @@
-import { EventValidationError, extractZodIssues } from "./errors";
+import { EventValidationError, ObservabilityDisabledError, extractZodIssues } from "./errors";
 import { shardIndex } from "./engine/shard";
 import type {
 	WorkflowClass,
@@ -21,6 +21,7 @@ import type { DashboardContext } from "./dashboard";
 export interface AblaufConfig {
 	workflows?: WorkflowRegistration[];
 	shards?: Record<string, WorkflowShardConfig>;
+	observability?: boolean;
 }
 
 export class Ablauf {
@@ -28,12 +29,14 @@ export class Ablauf {
 	private shardConfigs: Record<string, WorkflowShardConfig>;
 	private workflows: WorkflowClass[];
 	private registry: Record<string, WorkflowClass>;
+	private observability: boolean;
 
 	constructor(binding: DurableObjectNamespace, config?: AblaufConfig) {
 		this.binding = binding;
 		this.shardConfigs = {};
 		this.workflows = [];
 		this.registry = {};
+		this.observability = config?.observability ?? true;
 
 		if (config?.workflows) {
 			for (const entry of config.workflows) {
@@ -116,6 +119,9 @@ export class Ablauf {
 	}
 
 	async list(type: string, filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]> {
+		if (!this.observability) {
+			throw new ObservabilityDisabledError();
+		}
 		const config = this.shardConfigs[type] ?? {};
 		const shardCount = config.shards ?? 1;
 		const prevShards = config.previousShards;
@@ -164,6 +170,7 @@ export class Ablauf {
 		return createWorkflowRunner({
 			workflows: registrations,
 			binding: overrides?.binding,
+			observability: this.observability,
 		});
 	}
 
@@ -172,6 +179,7 @@ export class Ablauf {
 			binding: this.binding,
 			workflows: this.workflows,
 			shardConfigs: this.shardConfigs,
+			observability: this.observability,
 		};
 	}
 

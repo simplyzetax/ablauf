@@ -34,10 +34,12 @@ export type WorkflowRegistration = WorkflowClass | [WorkflowClass, WorkflowShard
 export interface CreateWorkflowRunnerConfig {
 	workflows: WorkflowRegistration[];
 	binding?: string;
+	observability?: boolean;
 }
 
 export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 	const bindingName = config.binding ?? "WORKFLOW_RUNNER";
+	const observability = config.observability ?? true;
 
 	const registry: Record<string, WorkflowClass> = {};
 	const shardConfigs: Record<string, WorkflowShardConfig> = {};
@@ -409,6 +411,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		}
 
 		private updateIndex(type: string, id: string, status: string, now: number): void {
+			if (!observability) return;
 			try {
 				const binding = this.getBinding();
 				const shards = shardConfigs[type]?.shards ?? 1;

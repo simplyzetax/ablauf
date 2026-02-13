@@ -1,11 +1,13 @@
 import { os } from "@orpc/server";
 import { z } from "zod";
 import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowIndexEntry, WorkflowShardConfig } from "./engine/types";
+import { ObservabilityDisabledError } from "./errors";
 
 export interface DashboardContext {
 	binding: DurableObjectNamespace;
 	workflows: WorkflowClass[];
 	shardConfigs: Record<string, WorkflowShardConfig>;
+	observability: boolean;
 }
 
 const base = os.$context<DashboardContext>();
@@ -60,6 +62,9 @@ const list = base
 		}),
 	)
 	.handler(async ({ input, context }) => {
+		if (!context.observability) {
+			throw new ObservabilityDisabledError();
+		}
 		const { binding, workflows, shardConfigs } = context;
 		const workflowTypes = workflows.map((w) => w.type);
 		const types = input.type ? [input.type] : workflowTypes;
