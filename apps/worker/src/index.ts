@@ -1,18 +1,15 @@
 import { Hono } from "hono";
-import {
-	Ablauf,
-	createSSEStream,
-	createDashboardHandler,
-	createWorkflowRunner,
-	WorkflowError,
-} from "@ablauf/workflows";
+import { Ablauf, WorkflowError } from "@ablauf/workflows";
 import { TestWorkflow } from "./workflows/test-workflow";
 import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
 import { EchoWorkflow } from "./workflows/echo-workflow";
 import { SSEWorkflow } from "./workflows/sse-workflow";
 import { env } from "cloudflare:workers";
+import type { WorkflowClass } from "@ablauf/workflows";
 
-const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow],
+});
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -46,43 +43,39 @@ app.onError((err, c) => {
 	);
 });
 
-app.post("/echo", async (c) => {
-	const { message } = await c.req.json<{ message: string }>();
-	const workflow = await ablauf.create(EchoWorkflow, { id: "echo-1", payload: { message } });
+app.post("/workflows/:name", async (c) => {
+	const { name } = c.req.param();
+	const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
+	const workflowClass = workflows.find((w) => w.type === name);
+	if (!workflowClass) {
+		return c.json({ error: "Workflow not found" }, 404);
+	}
+
+	const payload = await c.req.json<typeof workflowClass.inputSchema.shape>();
+
+	const workflow = await ablauf.create(workflowClass as WorkflowClass, {
+		id: crypto.randomUUID(),
+		payload,
+	});
 
 	let status = await workflow.getStatus();
 	while (status.status !== "completed") {
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 		status = await workflow.getStatus();
 	}
-	return c.json(status.result);
+	return c.json(status);
 });
 
 app.get("/workflows/:id/sse", (c) => {
-	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param("id"));
+	return ablauf.sseStream(c.req.param("id"));
 });
 
-const dashboardHandler = createDashboardHandler({
-	binding: env.WORKFLOW_RUNNER,
-	workflows,
-});
-
-app.all("/__ablauf/*", async (c) => {
-	return dashboardHandler(c.req.raw, "/__ablauf");
+app.all("/__ablauf/*", (c) => {
+	return ablauf.handleDashboard(c.req.raw, "/__ablauf");
 });
 
 export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
 
-export const WorkflowRunner = createWorkflowRunner({
-	workflows: [[TestWorkflow, {
-		shards: 8,
-	}], [FailingStepWorkflow, {
-		shards: 1,
-	}], [EchoWorkflow, {
-		shards: 4,
-	}], [SSEWorkflow, {
-		shards: 24,
-	}]]
-});
+export const WorkflowRunner = ablauf.createWorkflowRunner();
