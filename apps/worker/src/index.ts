@@ -80,12 +80,19 @@ app.post("/workflows/:name", async (c) => {
 	}
 });
 
-app.get("/workflows/:id/sse", (c) => {
-	return ablauf.sseStream(c.req.param("id"));
-});
+const rpcHandler = ablauf.createRPCHandler();
 
-app.all("/__ablauf/*", (c) => {
-	return ablauf.handleDashboard(c.req.raw, "/__ablauf");
+app.use("/__ablauf/*", async (c, next) => {
+	const { matched, response } = await rpcHandler.handle(c.req.raw, {
+		prefix: "/__ablauf",
+		context: ablauf.getDashboardContext(),
+	});
+
+	if (matched) {
+		return c.newResponse(response.body, response);
+	}
+
+	await next();
 });
 
 export default {
