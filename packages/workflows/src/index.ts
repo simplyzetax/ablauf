@@ -1,7 +1,8 @@
 // Core API
+export { Ablauf } from "./client";
+export type { AblaufConfig } from "./client";
 export { createWorkflowRunner } from "./engine/workflow-runner";
 export type { CreateWorkflowRunnerConfig, WorkflowRegistration } from "./engine/workflow-runner";
-export { Ablauf } from "./client";
 export { BaseWorkflow } from "./engine/base-workflow";
 
 // Types

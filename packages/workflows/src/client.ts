@@ -12,13 +12,44 @@ import type {
 	WorkflowIndexEntry,
 	WorkflowShardConfig,
 } from "./engine/types";
+import type { WorkflowRegistration } from "./engine/workflow-runner";
+import { createWorkflowRunner } from "./engine/workflow-runner";
+import { createDashboardHandler } from "./dashboard";
+import { createSSEStream } from "./sse-stream";
+
+export interface AblaufConfig {
+	workflows?: WorkflowRegistration[];
+	shards?: Record<string, WorkflowShardConfig>;
+}
 
 export class Ablauf {
+	private binding: DurableObjectNamespace;
 	private shardConfigs: Record<string, WorkflowShardConfig>;
+	private workflows: WorkflowClass[];
+	private registry: Record<string, WorkflowClass>;
 
-	constructor(binding: DurableObjectNamespace, shardConfigs?: Record<string, WorkflowShardConfig>);
-	constructor(private binding: DurableObjectNamespace, shardConfigs?: Record<string, WorkflowShardConfig>) {
-		this.shardConfigs = shardConfigs ?? {};
+	constructor(binding: DurableObjectNamespace, config?: AblaufConfig) {
+		this.binding = binding;
+		this.shardConfigs = {};
+		this.workflows = [];
+		this.registry = {};
+
+		if (config?.workflows) {
+			for (const entry of config.workflows) {
+				const [wf, shardConfig] = Array.isArray(entry) ? entry : [entry, undefined];
+				this.workflows.push(wf);
+				this.registry[wf.type] = wf;
+				if (shardConfig) {
+					this.shardConfigs[wf.type] = shardConfig;
+				}
+			}
+		}
+
+		if (config?.shards) {
+			for (const [type, shardConfig] of Object.entries(config.shards)) {
+				this.shardConfigs[type] = shardConfig;
+			}
+		}
 	}
 
 	private getStub(id: string): WorkflowRunnerStub {
@@ -120,5 +151,36 @@ export class Ablauf {
 			merged = merged.slice(0, filters.limit);
 		}
 		return merged;
+	}
+
+	// ─── Unified API Methods ───
+
+	createWorkflowRunner(overrides?: { binding?: string }) {
+		const registrations: WorkflowRegistration[] = this.workflows.map((wf) => {
+			const shardConfig = this.shardConfigs[wf.type];
+			return shardConfig ? [wf, shardConfig] : wf;
+		});
+		return createWorkflowRunner({
+			workflows: registrations,
+			binding: overrides?.binding,
+		});
+	}
+
+	async handleDashboard(
+		request: Request,
+		basePath: string,
+		options?: { authenticate?: (request: Request) => boolean | Promise<boolean> },
+	): Promise<Response> {
+		const handler = createDashboardHandler({
+			binding: this.binding,
+			workflows: this.workflows,
+			shardConfigs: this.shardConfigs,
+			authenticate: options?.authenticate,
+		});
+		return handler(request, basePath);
+	}
+
+	sseStream(workflowId: string): Response {
+		return createSSEStream(this.binding, workflowId);
 	}
 }
