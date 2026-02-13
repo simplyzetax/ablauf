@@ -1,13 +1,15 @@
-import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters } from "./engine/types";
+import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig, WorkflowIndexEntry } from "./engine/types";
+import { shardIndex } from "./engine/shard";
 
 export interface DashboardHandlerOptions {
 	binding: DurableObjectNamespace;
 	workflows: WorkflowClass[];
+	shardConfigs?: Record<string, WorkflowShardConfig>;
 	authenticate?: (request: Request) => boolean | Promise<boolean>;
 }
 
 export function createDashboardHandler(options: DashboardHandlerOptions) {
-	const { binding, workflows, authenticate } = options;
+	const { binding, workflows, authenticate, shardConfigs = {} } = options;
 
 	const workflowTypes = workflows.map((w) => w.type);
 
@@ -15,8 +17,36 @@ export function createDashboardHandler(options: DashboardHandlerOptions) {
 		return binding.get(binding.idFromName(id)) as unknown as WorkflowRunnerStub;
 	}
 
-	function getIndexStub(type: string): WorkflowRunnerStub {
-		return binding.get(binding.idFromName(`__index:${type}`)) as unknown as WorkflowRunnerStub;
+	async function listIndexEntries(type: string, filters: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]> {
+		const config = shardConfigs[type] ?? {};
+		const shardCount = config.shards ?? 1;
+		const prevShards = config.previousShards;
+
+		const shardNames = new Set<string>();
+		for (let i = 0; i < shardCount; i++) {
+			shardNames.add(`__index:${type}:${i}`);
+		}
+		if (prevShards) {
+			for (let i = 0; i < prevShards; i++) {
+				shardNames.add(`__index:${type}:${i}`);
+			}
+		}
+
+		const results = await Promise.all(
+			[...shardNames].map((name) => {
+				const stub = binding.get(binding.idFromName(name)) as unknown as WorkflowRunnerStub;
+				return stub.indexList(filters);
+			}),
+		);
+
+		const seen = new Map<string, WorkflowIndexEntry>();
+		for (const entry of results.flat()) {
+			const existing = seen.get(entry.id);
+			if (!existing || entry.updatedAt > existing.updatedAt) {
+				seen.set(entry.id, entry);
+			}
+		}
+		return [...seen.values()];
 	}
 
 	function json(data: unknown, status = 200): Response {
@@ -46,14 +76,20 @@ export function createDashboardHandler(options: DashboardHandlerOptions) {
 			const all = await Promise.all(
 				types.map(async (type) => {
 					try {
-						const entries = await getIndexStub(type).indexList(filters);
+						const entries = await listIndexEntries(type, filters);
 						return entries.map((e) => ({ ...e, type }));
 					} catch {
 						return [];
 					}
 				}),
 			);
-			return json({ workflows: all.flat() });
+
+			let workflows = all.flat();
+			if (limit) {
+				workflows.sort((a, b) => b.updatedAt - a.updatedAt);
+				workflows = workflows.slice(0, limit);
+			}
+			return json({ workflows });
 		}
 
 		// GET /workflows/:id/timeline
