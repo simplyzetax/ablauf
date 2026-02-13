@@ -4,6 +4,7 @@ export type { AblaufConfig } from "./client";
 export { createWorkflowRunner } from "./engine/workflow-runner";
 export type { CreateWorkflowRunnerConfig, WorkflowRegistration } from "./engine/workflow-runner";
 export { BaseWorkflow } from "./engine/base-workflow";
+export { defineWorkflow } from "./engine/define-workflow";
 
 // Types
 export type {
