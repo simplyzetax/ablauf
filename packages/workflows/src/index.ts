@@ -47,6 +47,8 @@ export {
 	EventTimeoutError,
 	WorkflowNotRunningError,
 	ObservabilityDisabledError,
+	DuplicateStepError,
+	InvalidDurationError,
 	extractZodIssues,
 } from "./errors";
 export type { ErrorCode, ErrorSource } from "./errors";

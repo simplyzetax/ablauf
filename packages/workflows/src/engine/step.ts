@@ -2,7 +2,7 @@ import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { eq } from "drizzle-orm";
 import { stepsTable } from "../db/schema";
 import { SleepInterrupt, WaitInterrupt } from "./interrupts";
-import { StepRetryExhaustedError, WorkflowError } from "../errors";
+import { StepRetryExhaustedError, DuplicateStepError, WorkflowError } from "../errors";
 import { parseDuration } from "./duration";
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
 import { DEFAULT_RETRY_CONFIG } from "./types";
@@ -24,10 +24,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 
 	private checkDuplicateName(name: string, method: string): void {
 		if (this.usedNames.has(name)) {
-			throw new Error(
-				`Duplicate step name "${name}" in ${method}(). Each step must have a unique name. ` +
-				`A step named "${name}" was already used earlier in this workflow.`,
-			);
+			throw new DuplicateStepError(name, method);
 		}
 		this.usedNames.add(name);
 	}

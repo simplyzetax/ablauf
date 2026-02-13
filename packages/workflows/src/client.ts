@@ -1,5 +1,5 @@
 import { EventValidationError, ObservabilityDisabledError, extractZodIssues } from "./errors";
-import { shardIndex } from "./engine/shard";
+import { listIndexEntries } from "./engine/index-listing";
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
@@ -122,42 +122,12 @@ export class Ablauf {
 		if (!this.observability) {
 			throw new ObservabilityDisabledError();
 		}
-		const config = this.shardConfigs[type] ?? {};
-		const shardCount = config.shards ?? 1;
-		const prevShards = config.previousShards;
-
-		const shardNames = new Set<string>();
-		for (let i = 0; i < shardCount; i++) {
-			shardNames.add(`__index:${type}:${i}`);
-		}
-		if (prevShards) {
-			for (let i = 0; i < prevShards; i++) {
-				shardNames.add(`__index:${type}:${i}`);
-			}
-		}
-
-		const results = await Promise.all(
-			[...shardNames].map((name) => {
-				const stub = this.binding.get(this.binding.idFromName(name)) as unknown as WorkflowRunnerStub;
-				return stub.indexList(filters);
-			}),
-		);
-
-		// Deduplicate by workflow ID (same entry may exist in old + new shard during resize)
-		const seen = new Map<string, WorkflowIndexEntry>();
-		for (const entry of results.flat()) {
-			const existing = seen.get(entry.id);
-			if (!existing || entry.updatedAt > existing.updatedAt) {
-				seen.set(entry.id, entry);
-			}
-		}
-
-		let merged = [...seen.values()];
+		const entries = await listIndexEntries(this.binding, type, this.shardConfigs, filters);
 		if (filters?.limit) {
-			merged.sort((a, b) => b.updatedAt - a.updatedAt);
-			merged = merged.slice(0, filters.limit);
+			entries.sort((a, b) => b.updatedAt - a.updatedAt);
+			return entries.slice(0, filters.limit);
 		}
-		return merged;
+		return entries;
 	}
 
 	// ─── Unified API Methods ───

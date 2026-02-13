@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Ablauf, WorkflowError } from "@ablauf/workflows";
+import { Ablauf, WorkflowError, WorkflowTypeUnknownError } from "@ablauf/workflows";
 import { TestWorkflow } from "./workflows/test-workflow";
 import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
 import { EchoWorkflow } from "./workflows/echo-workflow";
@@ -50,7 +50,7 @@ app.post("/workflows/:type", async (c) => {
 	const { type } = c.req.param();
 	const workflowClass = workflows.find((w) => w.type === type);
 	if (!workflowClass) {
-		return c.json({ error: "Workflow not found" }, 404);
+		throw new WorkflowTypeUnknownError(type);
 	}
 
 	const payload = await c.req.json();
