@@ -7,8 +7,10 @@ import { SSEWorkflow } from "./workflows/sse-workflow";
 import { env } from "cloudflare:workers";
 import type { WorkflowClass } from "@ablauf/workflows";
 
+const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
+
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-	workflows: [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow],
+	workflows,
 });
 
 const app = new Hono<{ Bindings: Env }>();
@@ -45,7 +47,6 @@ app.onError((err, c) => {
 
 app.post("/workflows/:name", async (c) => {
 	const { name } = c.req.param();
-	const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
 	const workflowClass = workflows.find((w) => w.type === name);
 	if (!workflowClass) {
 		return c.json({ error: "Workflow not found" }, 404);
@@ -58,12 +59,25 @@ app.post("/workflows/:name", async (c) => {
 		payload,
 	});
 
-	let status = await workflow.getStatus();
-	while (status.status !== "completed") {
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-		status = await workflow.getStatus();
+	while (true) {
+		const status = await workflow.getStatus();
+		switch (status.status) {
+			case "created":
+			case "running":
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+				continue;
+			case "completed":
+				return c.json(status);
+			case "sleeping":
+			case "waiting":
+			case "paused":
+			case "errored":
+			case "terminated":
+				return c.json(status, 202);
+			default:
+				return c.json(status, 202);
+		}
 	}
-	return c.json(status);
 });
 
 app.get("/workflows/:id/sse", (c) => {
