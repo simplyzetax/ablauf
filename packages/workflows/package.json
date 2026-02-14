@@ -27,6 +27,7 @@
 		"@orpc/server": "^1.13.5",
 		"drizzle-orm": "^0.45.1",
 		"hono": "^4.11.9",
+		"superjson": "^2.2.6",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
