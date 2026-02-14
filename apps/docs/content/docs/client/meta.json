@@ -1,0 +1,6 @@
+{
+	"title": "Client",
+	"description": "Browser client for consuming workflows",
+	"root": true,
+	"pages": ["index"]
+}

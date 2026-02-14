@@ -1,0 +1,6 @@
+{
+	"title": "Server",
+	"description": "Server-side workflow orchestration",
+	"root": true,
+	"pages": ["index", "api-reference"]
+}

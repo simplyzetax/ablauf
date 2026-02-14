@@ -1,0 +1,156 @@
+---
+title: Server
+description: Set up and use the Ablauf class to orchestrate workflows in your Cloudflare Worker.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Server
+
+The `Ablauf` class is the server-side API for creating, managing, and querying durable workflow instances. It connects to your Durable Object binding and provides type-safe methods for the full workflow lifecycle.
+
+## Installation
+
+```bash
+npm install @ablauf/workflows hono zod
+```
+
+## Setup
+
+Initialize the `Ablauf` class with your Durable Object binding and register your workflows:
+
+```ts title="src/index.ts"
+import { Hono } from "hono";
+import { Ablauf } from "@ablauf/workflows";
+import { OrderWorkflow } from "./workflows/order";
+import { PaymentWorkflow } from "./workflows/payment";
+
+const app = new Hono<{ Bindings: CloudflareBindings }>();
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+  workflows: [OrderWorkflow, PaymentWorkflow],
+});
+```
+
+### Exporting the Durable Object
+
+Your worker must export the `WorkflowRunner` Durable Object class:
+
+```ts title="src/index.ts"
+export const WorkflowRunner = ablauf.createWorkflowRunner();
+export default { fetch: app.fetch };
+```
+
+<Callout type="warn">
+The export name `WorkflowRunner` must match the `class_name` in your `wrangler.jsonc` Durable Object binding.
+</Callout>
+
+## Creating Workflows
+
+Start a new workflow instance with `create()`. The payload is validated against the workflow's Zod schema:
+
+```ts
+app.post("/orders", async (c) => {
+  const payload = await c.req.json();
+
+  const stub = await ablauf.create(OrderWorkflow, {
+    id: crypto.randomUUID(),
+    payload,
+  });
+
+  const status = await stub.getStatus();
+  return c.json(status);
+});
+```
+
+## Sending Events
+
+Send typed events to running workflows. The event name and payload are type-checked and validated:
+
+```ts
+await ablauf.sendEvent(OrderWorkflow, {
+  id: "order-123",
+  event: "payment-received",
+  payload: { amount: 99.99, transactionId: "tx-456" },
+});
+```
+
+## Querying Status
+
+Get the current status of any workflow instance:
+
+```ts
+// Untyped
+const status = await ablauf.status("order-123");
+
+// Typed — payload and result are inferred from the workflow class
+const status = await ablauf.status("order-123", OrderWorkflow);
+```
+
+## Lifecycle Control
+
+Pause, resume, or terminate workflows:
+
+```ts
+await ablauf.pause("order-123");   // Finish current step, then suspend
+await ablauf.resume("order-123");  // Replay and continue from where it paused
+await ablauf.terminate("order-123"); // Permanently stop (cannot be resumed)
+```
+
+## Waiting for SSE Updates
+
+Wait for a specific real-time update from a workflow. This is useful for request-response patterns where you need to wait for a workflow to reach a certain point:
+
+```ts
+const progress = await ablauf.waitForUpdate(OrderWorkflow, {
+  id: "order-123",
+  update: "progress",
+  timeout: "30s",
+});
+```
+
+## Setting Up the Dashboard API
+
+To enable the [Dashboard](/docs/dashboard), add the oRPC handlers to your worker:
+
+```ts
+const { rpcHandler, openApiHandler } = ablauf.createHandlers();
+
+app.use("/__ablauf/rpc/*", async (c, next) => {
+  const { matched, response } = await rpcHandler.handle(c.req.raw, {
+    prefix: "/__ablauf/rpc",
+    context: ablauf.getDashboardContext(),
+  });
+  if (matched) return c.newResponse(response.body, response);
+  await next();
+});
+
+app.use("/__ablauf/api/*", async (c, next) => {
+  const { matched, response } = await openApiHandler.handle(c.req.raw, {
+    prefix: "/__ablauf/api",
+    context: ablauf.getDashboardContext(),
+  });
+  if (matched) return c.newResponse(response.body, response);
+  await next();
+});
+```
+
+## Configuration
+
+The full `AblaufConfig` options:
+
+```ts
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+  // Register workflows (with optional shard config)
+  workflows: [
+    OrderWorkflow,
+    [HighVolumeWorkflow, { shards: 8 }],
+  ],
+  // Enable/disable observability indexing (default: true)
+  observability: true,
+  // CORS origins for the dashboard API
+  corsOrigins: ["https://dashboard.example.com"],
+});
+```
+
+See the [API Reference](/docs/server/api-reference) for the complete method signatures and type definitions.

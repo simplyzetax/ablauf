@@ -1,4 +1,19 @@
 {
-	"title": "Defining Workflows",
-	"pages": ["functional", "class-based"]
+	"title": "Workflows",
+	"description": "Define and compose durable workflows",
+	"root": true,
+	"pages": [
+		"index",
+		"getting-started",
+		"---Defining Workflows---",
+		"functional",
+		"class-based",
+		"---Steps---",
+		"steps",
+		"---Features---",
+		"events",
+		"retries",
+		"sse",
+		"lifecycle"
+	]
 }
