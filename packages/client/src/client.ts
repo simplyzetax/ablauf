@@ -1,10 +1,29 @@
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
-import type { dashboardRouter } from "@ablauf/workflows";
+import type { dashboardRouter, WorkflowClass } from "@ablauf/workflows";
 import type { AblaufClientConfig } from "./types";
 
-export type AblaufClient = RouterClient<typeof dashboardRouter>;
+type RawAblaufClient = RouterClient<typeof dashboardRouter>;
+
+export type InferSSEUpdates<W> = W extends WorkflowClass<
+	infer _Payload,
+	infer _Result,
+	infer _Events,
+	infer _Type,
+	infer SSEUpdates
+>
+	? {
+			[K in Extract<keyof SSEUpdates, string>]: { event: K; data: SSEUpdates[K] };
+		}[Extract<keyof SSEUpdates, string>]
+	: never;
+
+export interface AblaufClient extends RawAblaufClient {
+	subscribe<W extends WorkflowClass>(
+		id: string,
+		options?: { signal?: AbortSignal },
+	): AsyncGenerator<InferSSEUpdates<W>, void, unknown>;
+}
 
 export function createAblaufClient(config: AblaufClientConfig): AblaufClient {
 	const link = new RPCLink({
@@ -14,5 +33,22 @@ export function createAblaufClient(config: AblaufClientConfig): AblaufClient {
 			? (input, init) => fetch(input, { ...init, credentials: "include" })
 			: undefined,
 	});
-	return createORPCClient(link);
+	const rawClient = createORPCClient(link) as RawAblaufClient;
+
+	const client = Object.assign(rawClient, {
+		async *subscribe<W extends WorkflowClass>(
+			id: string,
+			options?: { signal?: AbortSignal },
+		): AsyncGenerator<InferSSEUpdates<W>, void, unknown> {
+			const iterator = await rawClient.workflows.subscribe(
+				{ id },
+				options ? { signal: options.signal } : undefined,
+			);
+			for await (const update of iterator as AsyncIterable<{ event: string; data: unknown }>) {
+				yield update as InferSSEUpdates<W>;
+			}
+		},
+	});
+
+	return client as AblaufClient;
 }

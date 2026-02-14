@@ -9,6 +9,7 @@ import {
   StepFailedError,
   StepRetryExhaustedError,
   EventTimeoutError,
+  UpdateTimeoutError,
   WorkflowNotRunningError,
 } from "@ablauf/workflows";
 
@@ -76,6 +77,14 @@ describe("WorkflowError", () => {
     expect(err.code).toBe("EVENT_TIMEOUT");
     expect(err.status).toBe(408);
     expect(err.source).toBe("engine");
+  });
+
+  it("UpdateTimeoutError has correct properties", () => {
+    const err = new UpdateTimeoutError("done", "10s");
+    expect(err.code).toBe("UPDATE_TIMEOUT");
+    expect(err.status).toBe(408);
+    expect(err.source).toBe("engine");
+    expect(err.details).toEqual({ update: "done", timeout: "10s" });
   });
 
   it("WorkflowNotRunningError includes current status", () => {

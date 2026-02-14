@@ -11,7 +11,7 @@ interface DefineWorkflowOptions<
 	Input extends z.ZodType,
 	Result,
 	Events extends Record<string, z.ZodType>,
-	SSEUpdates extends z.ZodType | undefined = undefined,
+	SSEUpdates extends Record<string, z.ZodType> | undefined = undefined,
 > {
 	type: Type;
 	input: Input;
@@ -21,7 +21,11 @@ interface DefineWorkflowOptions<
 	run: (
 		step: Step<{ [K in keyof Events]: z.infer<Events[K]> }>,
 		payload: z.infer<Input>,
-		sse: SSE<SSEUpdates extends z.ZodType ? z.infer<SSEUpdates> : never>,
+		sse: SSE<
+			SSEUpdates extends Record<string, z.ZodType>
+				? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> }
+				: never
+		>,
 	) => Promise<Result>;
 }
 
@@ -48,7 +52,7 @@ export function defineWorkflow<
 	Input extends z.ZodType,
 	Result,
 	Events extends Record<string, z.ZodType> = {},
-	SSEUpdates extends z.ZodType | undefined = undefined,
+	SSEUpdates extends Record<string, z.ZodType> | undefined = undefined,
 >(
 	options: DefineWorkflowOptions<Type, Input, Result, Events, SSEUpdates>,
 ): WorkflowClass<
@@ -56,18 +60,22 @@ export function defineWorkflow<
 	Result,
 	{ [K in keyof Events]: z.infer<Events[K]> },
 	Type,
-	SSEUpdates extends z.ZodType ? z.infer<SSEUpdates> : never
+	SSEUpdates extends Record<string, z.ZodType>
+		? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> }
+		: never
 > {
 	type InferredPayload = z.infer<Input>;
 	type InferredEvents = { [K in keyof Events]: z.infer<Events[K]> };
-	type InferredSSE = SSEUpdates extends z.ZodType ? z.infer<SSEUpdates> : never;
+	type InferredSSE = SSEUpdates extends Record<string, z.ZodType>
+		? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> }
+		: never;
 
 	const workflow = class extends BaseWorkflow<InferredPayload, Result, InferredEvents, InferredSSE> {
 		static type = options.type;
 		static inputSchema = options.input;
 		static events = (options.events ?? {}) as WorkflowEventSchemas<InferredEvents>;
 		static defaults = options.defaults ?? {};
-		static sseUpdates = options.sseUpdates as z.ZodType<unknown> | undefined;
+		static sseUpdates = options.sseUpdates as Record<string, z.ZodType<unknown>> | undefined;
 
 		async run(step: Step<InferredEvents>, payload: InferredPayload, sse: SSE<InferredSSE>): Promise<Result> {
 			return options.run(step, payload, sse);

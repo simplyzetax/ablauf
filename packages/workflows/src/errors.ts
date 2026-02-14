@@ -11,6 +11,7 @@ export type ErrorCode =
   | "STEP_FAILED"
   | "STEP_RETRY_EXHAUSTED"
   | "EVENT_TIMEOUT"
+  | "UPDATE_TIMEOUT"
   | "EVENT_INVALID"
   | "WORKFLOW_NOT_RUNNING"
   | "OBSERVABILITY_DISABLED"
@@ -26,6 +27,7 @@ const VALID_ERROR_CODES: readonly ErrorCode[] = [
   "STEP_FAILED",
   "STEP_RETRY_EXHAUSTED",
   "EVENT_TIMEOUT",
+  "UPDATE_TIMEOUT",
   "EVENT_INVALID",
   "WORKFLOW_NOT_RUNNING",
   "OBSERVABILITY_DISABLED",
@@ -205,6 +207,18 @@ export class EventTimeoutError extends WorkflowError {
       message: `Event "${eventName}" timed out`,
       status: 408,
       source: "engine",
+    });
+  }
+}
+
+export class UpdateTimeoutError extends WorkflowError {
+  constructor(updateName: string, timeout: string) {
+    super({
+      code: "UPDATE_TIMEOUT",
+      message: `Update "${updateName}" timed out after ${timeout}`,
+      status: 408,
+      source: "engine",
+      details: { update: updateName, timeout },
     });
   }
 }

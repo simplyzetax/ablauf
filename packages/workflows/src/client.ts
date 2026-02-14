@@ -1,5 +1,12 @@
-import { EventValidationError, ObservabilityDisabledError, extractZodIssues } from "./errors";
+import {
+	EventValidationError,
+	ObservabilityDisabledError,
+	UpdateTimeoutError,
+	WorkflowNotRunningError,
+	extractZodIssues,
+} from "./errors";
 import { listIndexEntries } from "./engine/index-listing";
+import { parseDuration } from "./engine/duration";
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
@@ -116,6 +123,115 @@ export class Ablauf {
 	async terminate(id: string): Promise<void> {
 		const stub = this.getStub(id);
 		await stub.terminate();
+	}
+
+	async waitForUpdate<
+		Payload,
+		Result,
+		Events extends object,
+		Type extends string,
+		SSEUpdates extends object,
+		K extends Extract<keyof SSEUpdates, string>,
+	>(
+		workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
+		props: { id: string; update: K; timeout?: string },
+	): Promise<SSEUpdates[K]> {
+		void workflow; // used only for type narrowing
+		const stub = this.getStub(props.id);
+		const stream = await stub.connectSSE();
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+
+		const timeoutMs = props.timeout ? parseDuration(props.timeout) : null;
+		let timeoutReached = false;
+		let timer: ReturnType<typeof setTimeout> | null = null;
+
+		let buffer = "";
+		let currentEvent = "message";
+
+		const readUntilMatch = async (): Promise<SSEUpdates[K]> => {
+			while (true) {
+				let done: boolean;
+				let value: Uint8Array | undefined;
+				try {
+					({ done, value } = await reader.read());
+				} catch (error) {
+					if (timeoutReached) {
+						throw new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs ?? 0}ms`);
+					}
+					throw error;
+				}
+
+				if (done) {
+					if (timeoutReached) {
+						throw new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs ?? 0}ms`);
+					}
+					const status = await stub.getStatus();
+					throw new WorkflowNotRunningError(props.id, status.status);
+				}
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split("\n");
+				buffer = lines.pop() ?? "";
+
+				for (const rawLine of lines) {
+					const line = rawLine.trim();
+					if (!line) continue;
+
+					if (line.startsWith("event: ")) {
+						currentEvent = line.slice(7).trim();
+						if (currentEvent === "close") {
+							const status = await stub.getStatus();
+							throw new WorkflowNotRunningError(props.id, status.status);
+						}
+						continue;
+					}
+
+					if (line.startsWith("data: ")) {
+						let data: unknown;
+						try {
+							data = JSON.parse(line.slice(6));
+						} catch {
+							continue;
+						}
+
+						if (currentEvent === props.update) {
+							return data as SSEUpdates[K];
+						}
+					}
+				}
+			}
+		};
+
+		const readPromise = readUntilMatch();
+		const readPromiseHandled = readPromise.catch(() => undefined);
+		const timeoutPromise =
+			timeoutMs === null
+				? null
+				: new Promise<never>((_, reject) => {
+						timer = setTimeout(() => {
+							timeoutReached = true;
+							reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
+						}, timeoutMs);
+					});
+
+		try {
+			if (!timeoutPromise) {
+				return await readPromise;
+			}
+			return await Promise.race([readPromise, timeoutPromise]);
+		} catch (error) {
+			if (error instanceof UpdateTimeoutError) {
+				await reader.cancel().catch(() => {});
+				await readPromiseHandled;
+			}
+			throw error;
+		} finally {
+			if (timer) {
+				clearTimeout(timer);
+			}
+			await reader.cancel().catch(() => {});
+		}
 	}
 
 	async list(type: string, filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]> {

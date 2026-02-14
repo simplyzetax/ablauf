@@ -89,6 +89,7 @@ const subscribe = base
 		const reader = stream.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
+		let currentEvent = "message";
 
 		try {
 			while (!signal?.aborted) {
@@ -99,14 +100,20 @@ const subscribe = base
 				const lines = buffer.split("\n");
 				buffer = lines.pop() ?? "";
 
-				for (const line of lines) {
-					if (line.startsWith("event: close")) {
-						return;
+				for (const rawLine of lines) {
+					const line = rawLine.trim();
+					if (!line) continue;
+					if (line.startsWith("event: ")) {
+						currentEvent = line.slice(7).trim();
+						continue;
 					}
 					if (line.startsWith("data: ")) {
 						try {
 							const data = JSON.parse(line.slice(6));
-							yield data;
+							if (currentEvent === "close") {
+								return;
+							}
+							yield { event: currentEvent, data };
 						} catch {
 							// skip malformed
 						}

@@ -7,6 +7,7 @@ import { TestWorkflow } from "../workflows/test-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
 import { EchoWorkflow } from "../workflows/echo-workflow";
 import { DuplicateStepWorkflow } from "../workflows/duplicate-step-workflow";
+import { SSEWorkflow } from "../workflows/sse-workflow";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -227,7 +228,7 @@ describe("WorkflowRunner", () => {
 			const status = await stub.getStatus();
 			expect(status.status).toBe("errored");
 			expect(status.error).toContain("Duplicate step name");
-		expect(status.error).toContain("fetch-data");
+			expect(status.error).toContain("fetch-data");
 		});
 	});
 
@@ -276,6 +277,14 @@ describe("WorkflowRunner", () => {
 			expect(history[0].error).toBeTruthy();
 			expect(history[0].timestamp).toBeGreaterThan(0);
 			expect(history[0].duration).toBeGreaterThanOrEqual(0);
+		});
+	});
+
+	describe("SSE", () => {
+		it("waits for SSE updates", async () => {
+			const stub = await ablauf.create(SSEWorkflow, { id: "sse-1", payload: { itemCount: 10 } });
+			const event = await ablauf.waitForUpdate(SSEWorkflow, { id: "sse-1", update: "done" });
+			expect(event).toEqual({ message: "Processed 10 items" });
 		});
 	});
 });

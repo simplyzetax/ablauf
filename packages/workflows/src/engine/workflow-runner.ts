@@ -53,7 +53,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		private db: DrizzleSqliteDODatabase;
 		private workflowType: string | null = null;
 		private workflowId: string | null = null;
-		private sseCtx: SSEContext<unknown> | null = null;
+		private sseCtx: SSEContext<Record<string, unknown>> | null = null;
 
 		constructor(ctx: DurableObjectState, env: Record<string, unknown>) {
 			super(ctx, env);
@@ -201,14 +201,19 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			}
 
 			const WorkflowCls = registry[wf.type];
-			const sseSchema = WorkflowCls?.sseUpdates ?? null;
-
-			if (!this.sseCtx) {
-				this.sseCtx = new SSEContext(this.db, sseSchema, true);
-			}
+			const sseSchemas = WorkflowCls?.sseUpdates ?? null;
 
 			const { readable, writable } = new TransformStream();
 			const writer = writable.getWriter();
+
+			if (!sseSchemas) {
+				writer.close();
+				return readable;
+			}
+
+			if (!this.sseCtx) {
+				this.sseCtx = new SSEContext(this.db, sseSchemas, true);
+			}
 
 			// Flush persisted emit messages to the new client
 			await this.sseCtx.flushPersistedMessages(writer);
@@ -309,17 +314,18 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const instance = new WorkflowCls();
 			const stepCtx = new StepContext(this.db, WorkflowCls.defaults);
 
-			// Create SSE context
-			const sseSchema = WorkflowCls.sseUpdates ?? null;
-			if (!this.sseCtx) {
-				this.sseCtx = new SSEContext(this.db, sseSchema, true);
+			const sseSchemas = WorkflowCls.sseUpdates ?? null;
+			if (sseSchemas) {
+				if (!this.sseCtx) {
+					this.sseCtx = new SSEContext(this.db, sseSchemas, true);
+				}
+				this.sseCtx.setReplay(true);
+				stepCtx.onFirstExecution = () => {
+					this.sseCtx?.setReplay(false);
+				};
+			} else {
+				this.sseCtx = null;
 			}
-			// Start in replay mode - will be switched off after last completed step
-			this.sseCtx.setReplay(true);
-
-			stepCtx.onFirstExecution = () => {
-				this.sseCtx?.setReplay(false);
-			};
 
 			if (wf.paused) {
 				await this.setStatus("paused");
@@ -342,6 +348,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					updatedAt: Date.now(),
 				});
 				this.updateIndex(wf.type, wf.workflowId, "completed", Date.now());
+				this.sseCtx?.close();
 			} catch (e) {
 				if (e instanceof SleepInterrupt) {
 					await this.ctx.storage.setAlarm(e.wakeAt);
@@ -366,6 +373,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 						updatedAt: Date.now(),
 					});
 					this.updateIndex(wf.type, wf.workflowId, "errored", Date.now());
+					this.sseCtx?.close();
 				}
 			}
 		}
@@ -407,6 +415,10 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					this.workflowId = wf.workflowId;
 					this.updateIndex(wf.type, wf.workflowId, status, now);
 				}
+			}
+
+			if (status === "completed" || status === "errored" || status === "terminated") {
+				this.sseCtx?.close();
 			}
 		}
 
