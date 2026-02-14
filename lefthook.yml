@@ -1,0 +1,20 @@
+# lefthook.yml
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      run: bunx oxlint {staged_files}
+      glob: '*.{ts,tsx}'
+
+    - name: format
+      run: bunx prettier --check {staged_files}
+      glob: '*.{ts,tsx,json,yml,yaml,css}'
+
+pre-push:
+  jobs:
+    - name: types
+      run: bun run check-types
+
+    - name: test
+      run: bun run test
