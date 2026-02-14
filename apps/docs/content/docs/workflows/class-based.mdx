@@ -138,13 +138,13 @@ static defaults = {
 
 ### `sseUpdates` (optional)
 
-A Zod schema for SSE message types your workflow can broadcast.
+A record of named Zod schemas for SSE updates your workflow can broadcast/emit.
 
 ```ts
-static sseUpdates = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("status"), message: z.string() }),
-	z.object({ type: z.literal("error"), error: z.string() }),
-]);
+static sseUpdates = {
+	status: z.object({ message: z.string() }),
+	error: z.object({ error: z.string() }),
+};
 ```
 
 ## The `run` Method
@@ -193,12 +193,16 @@ type Events = {
 	cancel: { reason: string };
 };
 
-const sseSchema = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("started"), url: z.string() }),
-	z.object({ type: z.literal("progress"), percent: z.number() }),
-	z.object({ type: z.literal("complete"), outputUrl: z.string() }),
-]);
-type SSEUpdates = z.infer<typeof sseSchema>;
+const sseSchema = {
+	started: z.object({ url: z.string() }),
+	progress: z.object({ percent: z.number() }),
+	complete: z.object({ outputUrl: z.string() }),
+};
+type SSEUpdates = {
+	started: z.infer<typeof sseSchema.started>;
+	progress: z.infer<typeof sseSchema.progress>;
+	complete: z.infer<typeof sseSchema.complete>;
+};
 
 interface Result {
 	success: boolean;
@@ -225,28 +229,28 @@ export class DocumentProcessingWorkflow extends BaseWorkflow<
 		payload: Payload,
 		sse: SSE<SSEUpdates>
 	): Promise<Result> {
-		sse.broadcast({ type: "started", url: payload.fileUrl });
+		sse.broadcast("started", { url: payload.fileUrl });
 
 		const downloaded = await step.do("download", async () => {
 			// Download file logic
 			return { path: "/tmp/file", size: 1024 };
 		});
 
-		sse.broadcast({ type: "progress", percent: 33 });
+		sse.broadcast("progress", { percent: 33 });
 
 		const converted = await step.do("convert", async () => {
 			// Conversion logic
 			return { outputPath: `/tmp/output.${payload.format}` };
 		});
 
-		sse.broadcast({ type: "progress", percent: 66 });
+		sse.broadcast("progress", { percent: 66 });
 
 		const uploaded = await step.do("upload", async () => {
 			// Upload to storage
 			return { url: "https://cdn.example.com/output.pdf" };
 		});
 
-		sse.broadcast({ type: "complete", outputUrl: uploaded.url });
+		sse.broadcast("complete", { outputUrl: uploaded.url });
 
 		return { success: true, outputUrl: uploaded.url };
 	}

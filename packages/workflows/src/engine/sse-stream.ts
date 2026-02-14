@@ -11,8 +11,15 @@ export async function* parseSSEStream(
 	const decoder = new TextDecoder();
 	let buffer = "";
 	let currentEvent = "message";
+	const signal = options?.signal;
 
-	const isAborted = () => options?.signal?.aborted ?? false;
+	const isAborted = () => signal?.aborted ?? false;
+
+	const abortHandler = () => {
+		reader.cancel().catch(() => {});
+	};
+
+	signal?.addEventListener("abort", abortHandler);
 
 	try {
 		while (!isAborted()) {
@@ -22,6 +29,10 @@ export async function* parseSSEStream(
 				({ done, value } = await reader.read());
 			} catch (error) {
 				if (isAborted()) {
+					return;
+				}
+				const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+				if (message.includes("cancel")) {
 					return;
 				}
 				throw error;
@@ -53,6 +64,7 @@ export async function* parseSSEStream(
 			}
 		}
 	} finally {
+		signal?.removeEventListener("abort", abortHandler);
 		await reader.cancel().catch(() => {});
 	}
 }

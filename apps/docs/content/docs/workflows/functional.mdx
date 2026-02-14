@@ -118,13 +118,13 @@ defaults: {
 
 ### `sseUpdates` (optional)
 
-A Zod schema defining the shape of SSE messages your workflow can broadcast. Use discriminated unions for multiple message types.
+A record of named Zod schemas defining the SSE updates your workflow can emit.
 
 ```ts
-sseUpdates: z.discriminatedUnion("type", [
-	z.object({ type: z.literal("progress"), percent: z.number() }),
-	z.object({ type: z.literal("complete"), result: z.string() }),
-])
+sseUpdates: {
+	progress: z.object({ percent: z.number() }),
+	complete: z.object({ result: z.string() }),
+}
 ```
 
 ## Advanced Example
@@ -147,10 +147,10 @@ const ApprovalWorkflow = defineWorkflow({
 			reviewer: z.string(),
 		}),
 	},
-	sseUpdates: z.discriminatedUnion("type", [
-		z.object({ type: z.literal("progress"), message: z.string() }),
-		z.object({ type: z.literal("complete"), approved: z.boolean() }),
-	]),
+	sseUpdates: {
+		progress: z.object({ message: z.string() }),
+		complete: z.object({ approved: z.boolean() }),
+	},
 	defaults: {
 		retries: {
 			limit: 5,
@@ -159,22 +159,21 @@ const ApprovalWorkflow = defineWorkflow({
 		},
 	},
 	run: async (step, payload, sse) => {
-		sse.broadcast({ type: "progress", message: "Processing request..." });
+		sse.broadcast("progress", { message: "Processing request..." });
 
 		const check = await step.do("validate", async () => {
 			return payload.amount < 10000;
 		});
 
 		if (!check) {
-			sse.broadcast({
-				type: "progress",
+			sse.broadcast("progress", {
 				message: "Request requires approval...",
 			});
 		}
 
 		const decision = await step.waitForEvent("decision", { timeout: "24h" });
 
-		sse.emit({ type: "complete", approved: decision.approved });
+		sse.emit("complete", { approved: decision.approved });
 
 		return {
 			approved: decision.approved,
@@ -186,7 +185,7 @@ const ApprovalWorkflow = defineWorkflow({
 
 ## Under the Hood
 
-The `defineWorkflow()` function is actually a convenience wrapper that creates a class extending `BaseWorkflow`. Both the functional and class-based APIs are functionally identical and compile to the same thing.
+`defineWorkflow()` is the recommended API and provides the best type inference with the least boilerplate.
 
 If you find yourself needing more structure or additional methods, you can always refactor to the [class-based API](/docs/workflows/class-based) without changing behavior.
 

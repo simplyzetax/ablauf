@@ -184,7 +184,7 @@ export class Ablauf {
 			return await Promise.race([readPromise, timeoutPromise]);
 		} catch (error) {
 			if (error instanceof UpdateTimeoutError) {
-				await readPromiseHandled;
+				void readPromiseHandled;
 			}
 			throw error;
 		} finally {

@@ -1,29 +1,20 @@
 import { z } from "zod";
-import { BaseWorkflow } from "@ablauf/workflows";
-import type { Step, SSE } from "@ablauf/workflows";
+import { defineWorkflow } from "@ablauf/workflows";
 
 const inputSchema = z.object({ name: z.string() });
-type TestPayload = z.infer<typeof inputSchema>;
-
-interface TestResult {
-	message: string;
-	greeting: string;
-}
 
 const eventSchemas = {
 	approval: z.object({ approved: z.boolean() }),
 };
-type TestEvents = { [K in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[K]> };
 
-export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEvents> {
-	static type = "test" as const;
-	static inputSchema = inputSchema;
-	static events = eventSchemas;
-	static defaults = {
+export const TestWorkflow = defineWorkflow({
+	type: "test",
+	input: inputSchema,
+	events: eventSchemas,
+	defaults: {
 		retries: { limit: 2, delay: "500ms", backoff: "exponential" as const },
-	};
-
-	async run(step: Step<TestEvents>, payload: TestPayload, _sse: SSE<never>): Promise<TestResult> {
+	},
+	run: async (step, payload) => {
 		const greeting = await step.do("greet", async () => {
 			return `Hello, ${payload.name}!`;
 		});
@@ -39,5 +30,5 @@ export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEven
 			: `${payload.name} was rejected`;
 
 		return { message, greeting };
-	}
-}
+	},
+});
