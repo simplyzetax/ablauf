@@ -144,6 +144,13 @@ Tell Cloudflare about your Durable Object. This is what makes your workflows dur
   "main": "src/index.ts",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.sql"],
+      "fallthrough": true
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
@@ -163,6 +170,7 @@ Tell Cloudflare about your Durable Object. This is what makes your workflows dur
 
 **Key fields:**
 
+- `rules` — Tells wrangler to bundle `.sql` files as text modules. Ablauf uses SQL migrations internally, and without this rule wrangler won't know how to handle them.
 - `durable_objects.bindings` — Registers the Durable Object class and binding name
 - `migrations` — Enables SQLite storage for the Durable Object (required for Ablauf)
 - `compatibility_flags` — Enables Node.js compatibility for crypto and other APIs
