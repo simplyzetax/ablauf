@@ -22,7 +22,8 @@
 	"dependencies": {
 		"@der-ablauf/workflows": "workspace:*",
 		"@orpc/client": "^1.13.5",
-		"@orpc/server": "^1.13.5"
+		"@orpc/server": "^1.13.5",
+		"superjson": "^2.2.6"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250214.0"
