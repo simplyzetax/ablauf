@@ -15,7 +15,10 @@ const spec = await generator.generate(dashboardRouter, {
 		version: '1.0.0',
 		description: 'REST API for managing and observing durable workflow instances powered by Ablauf.',
 	},
-	servers: [{ url: 'http://localhost:8787/__ablauf', description: 'Local dev server' }],
+	servers: [
+		{ url: 'https://ablauf-worker.zetax.workers.dev/__ablauf', description: 'Demo server' },
+		{ url: 'http://localhost:8787/__ablauf', description: 'Local dev server' },
+	],
 });
 
 const outPath = resolve(dirname(fileURLToPath(import.meta.url)), '../openapi.json');
