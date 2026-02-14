@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { CodeBlock, CodeBlockTab, CodeBlockTabs, CodeBlockTabsList, CodeBlockTabsTrigger, Pre } from 'fumadocs-ui/components/codeblock';
 
 export const Route = createFileRoute('/')({
 	component: HomePage,
@@ -33,7 +34,42 @@ function HomePage() {
 						Get Started
 					</Link>
 				</div>
-				<p className="mt-12 text-sm text-fd-muted-foreground">npm install @der-ablauf/workflows</p>
+				<CodeBlockTabs defaultValue="bun" className="mt-12 text-left" id="package-manager">
+					<CodeBlockTabsList>
+						<CodeBlockTabsTrigger value="bun">bun</CodeBlockTabsTrigger>
+						<CodeBlockTabsTrigger value="npm">npm</CodeBlockTabsTrigger>
+						<CodeBlockTabsTrigger value="pnpm">pnpm</CodeBlockTabsTrigger>
+						<CodeBlockTabsTrigger value="yarn">yarn</CodeBlockTabsTrigger>
+					</CodeBlockTabsList>
+					<CodeBlockTab value="bun">
+						<CodeBlock>
+							<Pre>
+								<code className="ml-4">bun add @der-ablauf/workflows</code>
+							</Pre>
+						</CodeBlock>
+					</CodeBlockTab>
+					<CodeBlockTab value="npm">
+						<CodeBlock>
+							<Pre>
+								<code className="ml-4">npm install @der-ablauf/workflows</code>
+							</Pre>
+						</CodeBlock>
+					</CodeBlockTab>
+					<CodeBlockTab value="pnpm">
+						<CodeBlock>
+							<Pre>
+								<code className="ml-4">pnpm add @der-ablauf/workflows</code>
+							</Pre>
+						</CodeBlock>
+					</CodeBlockTab>
+					<CodeBlockTab value="yarn">
+						<CodeBlock>
+							<Pre>
+								<code className="ml-4">yarn add @der-ablauf/workflows</code>
+							</Pre>
+						</CodeBlock>
+					</CodeBlockTab>
+				</CodeBlockTabs>
 			</div>
 		</main>
 	);
