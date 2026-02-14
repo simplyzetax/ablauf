@@ -1,3 +1,5 @@
+import superjson from 'superjson';
+
 /** A single parsed event from an SSE stream. */
 export interface SSEStreamEvent {
 	/** The event type (from `event:` lines, defaults to `"message"`). */
@@ -78,7 +80,7 @@ export async function* parseSSEStream(
 
 				if (line.startsWith('data: ')) {
 					try {
-						yield { event: currentEvent, data: JSON.parse(line.slice(6)) };
+						yield { event: currentEvent, data: superjson.parse(line.slice(6)) };
 					} catch {
 						// Ignore malformed payload frames.
 					}
