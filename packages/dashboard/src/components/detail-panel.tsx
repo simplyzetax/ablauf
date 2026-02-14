@@ -50,11 +50,10 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
           { id: workflowId },
           { signal: abortController.signal },
         );
-        for await (const event of iterator) {
-          queryClient.setQueryData(
-            orpc.workflows.get.queryOptions({ input: { id: workflowId } }).queryKey,
-            event,
-          );
+        for await (const _event of iterator) {
+          await queryClient.invalidateQueries({
+            queryKey: orpc.workflows.get.queryOptions({ input: { id: workflowId } }).queryKey,
+          });
         }
       } catch {
         // Connection closed or aborted

@@ -22,9 +22,14 @@ export interface WorkflowDefaults {
 
 export type WorkflowEvents = Record<string, unknown>;
 type EventKey<Events extends object> = Extract<keyof Events, string>;
+type SSEUpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
 export type WorkflowEventSchemas<Events extends object> = {
 	[K in EventKey<Events>]: import("zod").z.ZodType<Events[K]>;
+};
+
+export type WorkflowSSESchemas<Updates extends object> = {
+	[K in SSEUpdateKey<Updates>]: import("zod").z.ZodType<Updates[K]>;
 };
 
 export type WorkflowEventProps<Events extends object> = [EventKey<Events>] extends [never]
@@ -56,13 +61,13 @@ export interface WorkflowClass<
 	Result = unknown,
 	Events extends object = WorkflowEvents,
 	Type extends string = string,
-	SSEUpdates = never,
+	SSEUpdates extends object = {},
 > {
 	type: Type;
 	inputSchema: import("zod").z.ZodType<Payload>;
 	events: WorkflowEventSchemas<Events>;
 	defaults?: Partial<WorkflowDefaults>;
-	sseUpdates?: import("zod").z.ZodType<unknown>;
+	sseUpdates?: WorkflowSSESchemas<SSEUpdates>;
 	new (): WorkflowInstance<Payload, Result, Events, SSEUpdates>;
 }
 
@@ -70,7 +75,7 @@ export interface WorkflowInstance<
 	Payload = unknown,
 	Result = unknown,
 	Events extends object = {},
-	SSEUpdates = never,
+	SSEUpdates extends object = {},
 > {
 	run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }
@@ -162,8 +167,8 @@ export type TypedWorkflowRunnerStub<
 	deliverEvent(props: WorkflowEventProps<Events>): Promise<void>;
 };
 
-export interface SSE<T = never> {
-	broadcast(data: T): void;
-	emit(data: T): void;
+export interface SSE<Updates extends object = {}> {
+	broadcast<K extends SSEUpdateKey<Updates>>(name: K, data: Updates[K]): void;
+	emit<K extends SSEUpdateKey<Updates>>(name: K, data: Updates[K]): void;
 	close(): void;
 }

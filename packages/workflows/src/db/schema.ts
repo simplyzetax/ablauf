@@ -32,7 +32,8 @@ export const stepsTable = sqliteTable("steps", {
 });
 
 export const sseMessagesTable = sqliteTable("sse_messages", {
-	seq: integer("seq").primaryKey({ autoIncrement: true }),
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	event: text("event").notNull(),
 	data: text("data").notNull(),
 	createdAt: integer("created_at").notNull(),
 });

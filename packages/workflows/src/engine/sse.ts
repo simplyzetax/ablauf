@@ -3,14 +3,16 @@ import type { z } from "zod";
 import { sseMessagesTable } from "../db/schema";
 import type { SSE } from "./types";
 
-export class SSEContext<T = never> implements SSE<T> {
+type UpdateKey<Updates extends object> = Extract<keyof Updates, string>;
+
+export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 	private writers = new Set<WritableStreamDefaultWriter>();
 	private closed = false;
 	private encoder = new TextEncoder();
 
 	constructor(
 		private db: DrizzleSqliteDODatabase,
-		private schema: z.ZodType<T> | null,
+		private schemas: Record<string, z.ZodType<unknown>> | null,
 		private isReplay: boolean,
 	) {}
 
@@ -30,23 +32,20 @@ export class SSEContext<T = never> implements SSE<T> {
 		return this.writers.size;
 	}
 
-	broadcast(data: T): void {
+	broadcast<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
 		if (this.closed || this.isReplay) return;
-		if (this.schema) {
-			this.schema.parse(data);
-		}
-		this.writeToClients(data);
+		const parsed = this.validate(name, data);
+		this.writeToClients(name, parsed);
 	}
 
-	emit(data: T): void {
+	emit<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
 		if (this.closed) return;
-		if (this.schema) {
-			this.schema.parse(data);
-		}
+		const parsed = this.validate(name, data);
 		if (!this.isReplay) {
-			this.writeToClients(data);
+			this.writeToClients(name, parsed);
 			this.db.insert(sseMessagesTable).values({
-				data: JSON.stringify(data),
+				event: name,
+				data: JSON.stringify(parsed),
 				createdAt: Date.now(),
 			}).run();
 		}
@@ -71,15 +70,26 @@ export class SSEContext<T = never> implements SSE<T> {
 		const messages = await this.db.select().from(sseMessagesTable);
 		for (const msg of messages) {
 			try {
-				writer.write(this.encoder.encode(`data: ${msg.data}\n\n`));
+				writer.write(this.encoder.encode(`event: ${msg.event}\ndata: ${msg.data}\n\n`));
 			} catch {
 				break;
 			}
 		}
 	}
 
-	private writeToClients(data: T): void {
-		const message = this.encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+	private validate<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): Updates[K] {
+		if (!this.schemas) {
+			throw new Error(`Workflow does not define sseUpdates; cannot emit "${name}"`);
+		}
+		const schema = this.schemas[name];
+		if (!schema) {
+			throw new Error(`Unknown SSE update "${name}"`);
+		}
+		return schema.parse(data) as Updates[K];
+	}
+
+	private writeToClients<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
+		const message = this.encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
 		for (const writer of this.writers) {
 			try {
 				writer.write(message);
@@ -92,7 +102,7 @@ export class SSEContext<T = never> implements SSE<T> {
 
 /** No-op SSE context for workflows that don't define sseUpdates */
 export class NoOpSSEContext implements SSE<never> {
-	broadcast(_data: never): void {}
-	emit(_data: never): void {}
+	broadcast<K extends never>(_name: K, _data: never): void {}
+	emit<K extends never>(_name: K, _data: never): void {}
 	close(): void {}
 }

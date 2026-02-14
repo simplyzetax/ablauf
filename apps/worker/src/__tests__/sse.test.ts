@@ -35,7 +35,7 @@ describe("SSE", () => {
 
 		const { value } = await reader.read();
 		const text = decoder.decode(value);
-		expect(text).toContain('"type":"done"');
+		expect(text).toContain("event: done");
 		expect(text).toContain("Processed 6 items");
 
 		reader.releaseLock();
@@ -57,9 +57,24 @@ describe("SSE", () => {
 
 		const { value } = await reader.read();
 		const text = decoder.decode(value);
-		expect(text).toContain('"type":"done"');
-		expect(text).not.toContain('"type":"progress"');
+		expect(text).toContain("event: done");
+		expect(text).not.toContain("event: progress");
 
 		reader.releaseLock();
 	});
+
+	it("waitForUpdate resolves typed data for persisted emit updates", async () => {
+		await ablauf.create(SSEWorkflow, {
+			id: "sse-wait-update-1",
+			payload: { itemCount: 8 },
+		});
+
+		const done = await ablauf.waitForUpdate(SSEWorkflow, {
+			id: "sse-wait-update-1",
+			update: "done",
+		});
+
+		expect(done).toEqual({ message: "Processed 8 items" });
+	});
+
 });

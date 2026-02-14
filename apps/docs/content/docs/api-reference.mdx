@@ -57,13 +57,13 @@ const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 Create and start a new workflow instance.
 
 ```ts
-create<T extends BaseWorkflow>(
-  workflow: WorkflowConstructor<T>,
+create<Payload, Result, Events extends object, Type extends string>(
+  workflow: WorkflowClass<Payload, Result, Events, Type>,
   options: {
     id?: string;
-    payload: InferInput<T>;
+    payload: Payload;
   }
-): WorkflowStub<T>
+): TypedWorkflowRunnerStub<Payload, Result, Events, Type>
 ```
 
 **Parameters:**
@@ -74,7 +74,7 @@ create<T extends BaseWorkflow>(
 
 **Returns:**
 
-A typed `WorkflowStub` for interacting with the workflow instance.
+A typed `TypedWorkflowRunnerStub` for interacting with the workflow instance.
 
 **Throws:**
 
@@ -99,13 +99,9 @@ const status = await stub.getStatus();
 Send a typed event to a running workflow.
 
 ```ts
-sendEvent<T extends BaseWorkflow>(
-  workflow: WorkflowConstructor<T>,
-  options: {
-    id: string;
-    event: InferEventName<T>;
-    payload: InferEventPayload<T, InferEventName<T>>;
-  }
+sendEvent<Payload, Result, Events extends object, Type extends string>(
+  workflow: WorkflowClass<Payload, Result, Events, Type>,
+  options: { id: string } & WorkflowEventProps<Events>
 ): Promise<void>
 ```
 
@@ -142,10 +138,10 @@ Get the current status of a workflow instance.
 status(id: string): Promise<WorkflowStatusResponse>
 
 // Typed
-status<T extends BaseWorkflow>(
+status<Payload, Result, Events extends object, Type extends string>(
   id: string,
-  workflow: WorkflowConstructor<T>
-): Promise<WorkflowStatusResponseFor<T>>
+  workflow: WorkflowClass<Payload, Result, Events, Type>
+): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>
 ```
 
 **Parameters:**
@@ -382,12 +378,12 @@ interface WorkflowStatusResponse {
 A generic version of `WorkflowStatusResponse` with typed `payload` and `result`:
 
 ```ts
-type WorkflowStatusResponseFor<T extends BaseWorkflow> = {
+type WorkflowStatusResponseFor<Payload, Result, Type extends string> = {
   id: string;
-  type: string;
+  type: Type;
   status: WorkflowStatus;
-  payload: InferInput<T>;
-  result: InferResult<T> | null;
+  payload: Payload;
+  result: Result | null;
   error: string | null;
   steps: StepInfo[];
   createdAt: number;
