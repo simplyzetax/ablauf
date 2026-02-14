@@ -1,6 +1,13 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { Ablauf, WorkflowTypeUnknownError } from '@der-ablauf/workflows';
+import {
+	Ablauf,
+	WorkflowTypeUnknownError,
+	asWorkflowError,
+	createInternalWorkflowError,
+	toHonoError,
+	toWorkflowErrorResponse,
+} from '@der-ablauf/workflows';
 import { TestWorkflow } from './workflows/test-workflow';
 import { FailingStepWorkflow } from './workflows/failing-step-workflow';
 import { EchoWorkflow } from './workflows/echo-workflow';
@@ -19,6 +26,18 @@ const { openApiHandler, rpcHandler } = ablauf.createHandlers();
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('/__ablauf/*', cors({ origin: ['http://localhost:3000'] }));
+
+app.onError((error, c) => {
+	const wfError = asWorkflowError(error, { includeInternal: false });
+	if (wfError) {
+		const honoError = toHonoError(wfError);
+		return c.json(toWorkflowErrorResponse(wfError), honoError.status);
+	}
+
+	const internalError = createInternalWorkflowError();
+	const honoError = toHonoError(internalError);
+	return c.json(toWorkflowErrorResponse(internalError), honoError.status);
+});
 
 app.post('/workflows/:type', async (c) => {
 	const { type } = c.req.param();

@@ -1,10 +1,10 @@
 // Core API
-export { Ablauf } from "./client";
-export type { AblaufConfig } from "./client";
-export { createWorkflowRunner } from "./engine/workflow-runner";
-export type { CreateWorkflowRunnerConfig, WorkflowRegistration } from "./engine/workflow-runner";
-export { BaseWorkflow } from "./engine/base-workflow";
-export { defineWorkflow } from "./engine/define-workflow";
+export { Ablauf } from './client';
+export type { AblaufConfig } from './client';
+export { createWorkflowRunner } from './engine/workflow-runner';
+export type { CreateWorkflowRunnerConfig, WorkflowRegistration } from './engine/workflow-runner';
+export { BaseWorkflow } from './engine/base-workflow';
+export { defineWorkflow } from './engine/define-workflow';
 
 // Types
 export type {
@@ -32,12 +32,19 @@ export type {
 	WorkflowIndexEntry,
 	WorkflowIndexListFilters,
 	WorkflowShardConfig,
-} from "./engine/types";
-export { DEFAULT_RETRY_CONFIG, workflowStatusSchema, stepInfoSchema, workflowStatusResponseSchema, workflowIndexEntrySchema } from "./engine/types";
+} from './engine/types';
+export {
+	DEFAULT_RETRY_CONFIG,
+	workflowStatusSchema,
+	stepInfoSchema,
+	workflowStatusResponseSchema,
+	workflowIndexEntrySchema,
+} from './engine/types';
 
 // Errors
 export {
 	WorkflowError,
+	WORKFLOW_ERROR_CATALOG,
 	WorkflowNotFoundError,
 	ResourceNotFoundError,
 	WorkflowAlreadyExistsError,
@@ -52,22 +59,27 @@ export {
 	ObservabilityDisabledError,
 	DuplicateStepError,
 	InvalidDurationError,
+	asWorkflowError,
+	createInternalWorkflowError,
+	toHonoError,
+	toWorkflowErrorResponse,
+	pickORPCErrors,
 	extractZodIssues,
-} from "./errors";
-export type { ErrorCode, ErrorSource } from "./errors";
+} from './errors';
+export type { ErrorCode, ErrorSource, WorkflowErrorStatus, WorkflowErrorCatalogEntry } from './errors';
 
 // SSE
-export { SSEContext } from "./engine/sse";
+export { SSEContext } from './engine/sse';
 
 // Engine internals (for advanced use)
-export { shardIndex } from "./engine/shard";
-export { StepContext } from "./engine/step";
-export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./engine/interrupts";
-export { parseDuration } from "./engine/duration";
+export { shardIndex } from './engine/shard';
+export { StepContext } from './engine/step';
+export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from './engine/interrupts';
+export { parseDuration } from './engine/duration';
 
 // Dashboard
-export { dashboardRouter, timelineEntrySchema } from "./dashboard";
-export type { DashboardContext, TimelineEntry } from "./dashboard";
+export { dashboardRouter, timelineEntrySchema } from './dashboard';
+export type { DashboardContext, TimelineEntry } from './dashboard';
 
 // DB schema (for consumer migrations)
-export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";
+export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from './db/schema';

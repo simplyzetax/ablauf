@@ -1,10 +1,10 @@
-import { os } from "@orpc/server";
-import { z } from "zod";
-import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from "./engine/types";
-import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from "./engine/types";
-import { listIndexEntries } from "./engine/index-listing";
-import { parseSSEStream } from "./engine/sse-stream";
-import { ObservabilityDisabledError, WorkflowError } from "./errors";
+import { os } from '@orpc/server';
+import { z } from 'zod';
+import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from './engine/types';
+import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from './engine/types';
+import { listIndexEntries } from './engine/index-listing';
+import { parseSSEStream } from './engine/sse-stream';
+import { ObservabilityDisabledError, asWorkflowError, pickORPCErrors } from './errors';
 
 export interface DashboardContext {
 	binding: DurableObjectNamespace;
@@ -15,26 +15,12 @@ export interface DashboardContext {
 
 const base = os
 	.$context<DashboardContext>()
-	.errors({
-		WORKFLOW_NOT_FOUND: { status: 404, message: "Workflow not found" },
-		OBSERVABILITY_DISABLED: { status: 400, message: "Observability is disabled" },
-		WORKFLOW_NOT_RUNNING: { status: 409, message: "Workflow is not running" },
-		INTERNAL_ERROR: { status: 500, message: "Internal error" },
-	})
+	.errors(pickORPCErrors(['WORKFLOW_NOT_FOUND', 'OBSERVABILITY_DISABLED', 'WORKFLOW_NOT_RUNNING', 'INTERNAL_ERROR'] as const))
 	.use(async ({ next, errors }) => {
 		try {
 			return await next();
 		} catch (error) {
-			let wfError: WorkflowError | null = null;
-
-			if (error instanceof WorkflowError) {
-				wfError = error;
-			} else if (error instanceof Error) {
-				const deserialized = WorkflowError.fromSerialized(error);
-				if (deserialized.code !== "INTERNAL_ERROR") {
-					wfError = deserialized;
-				}
-			}
+			const wfError = asWorkflowError(error, { includeInternal: false });
 
 			if (wfError && wfError.code in errors) {
 				const factory = errors[wfError.code as keyof typeof errors];
@@ -74,11 +60,11 @@ const timelineOutputSchema = z.object({
 
 const list = base
 	.route({
-		method: "GET",
-		path: "/workflows",
-		summary: "List workflow instances",
-		description: "List workflow instances, optionally filtered by type, status, or limited to the most recent entries.",
-		tags: ["workflows"],
+		method: 'GET',
+		path: '/workflows',
+		summary: 'List workflow instances',
+		description: 'List workflow instances, optionally filtered by type, status, or limited to the most recent entries.',
+		tags: ['workflows'],
 	})
 	.input(
 		z.object({
@@ -118,11 +104,11 @@ const list = base
 
 const get = base
 	.route({
-		method: "GET",
-		path: "/workflows/{id}",
-		summary: "Get workflow status",
-		description: "Get the current status of a workflow instance including its steps, payload, and result.",
-		tags: ["workflows"],
+		method: 'GET',
+		path: '/workflows/{id}',
+		summary: 'Get workflow status',
+		description: 'Get the current status of a workflow instance including its steps, payload, and result.',
+		tags: ['workflows'],
 	})
 	.input(z.object({ id: z.string() }))
 	.output(workflowStatusResponseSchema)
@@ -133,11 +119,11 @@ const get = base
 
 const timeline = base
 	.route({
-		method: "GET",
-		path: "/workflows/{id}/timeline",
-		summary: "Get workflow timeline",
-		description: "Get a chronological timeline of all executed steps for a workflow instance, including durations and retry history.",
-		tags: ["workflows"],
+		method: 'GET',
+		path: '/workflows/{id}/timeline',
+		summary: 'Get workflow timeline',
+		description: 'Get a chronological timeline of all executed steps for a workflow instance, including durations and retry history.',
+		tags: ['workflows'],
 	})
 	.input(z.object({ id: z.string() }))
 	.output(timelineOutputSchema)
@@ -162,18 +148,18 @@ const timeline = base
 
 const subscribe = base
 	.route({
-		method: "GET",
-		path: "/workflows/{id}/subscribe",
-		summary: "Subscribe to workflow updates",
-		description: "Open an SSE stream to receive real-time updates from a running workflow instance.",
-		tags: ["workflows"],
+		method: 'GET',
+		path: '/workflows/{id}/subscribe',
+		summary: 'Subscribe to workflow updates',
+		description: 'Open an SSE stream to receive real-time updates from a running workflow instance.',
+		tags: ['workflows'],
 	})
 	.input(z.object({ id: z.string() }))
 	.handler(async function* ({ input, context, signal }) {
 		const stub = getStub(context.binding, input.id);
 		const stream = await stub.connectSSE();
 		for await (const update of parseSSEStream(stream, { signal })) {
-			if (update.event === "close") {
+			if (update.event === 'close') {
 				return;
 			}
 			yield update;
