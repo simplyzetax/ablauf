@@ -1,0 +1,190 @@
+---
+title: step.do()
+description: Execute and persist a unit of work
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+`step.do()` is the core primitive of Ablauf workflows. It executes a function, persists the result in SQLite, and returns it. On replay, it returns the cached result without re-executing the function. This is the magic that makes durable workflows possible.
+
+The function can be synchronous or asynchronous, but its return value must be JSON-serializable (it gets stored in SQLite).
+
+## Basic Usage
+
+```ts
+const result = await step.do("fetch-user", async () => {
+	const res = await fetch(`https://api.example.com/users/${userId}`);
+	return res.json();
+});
+
+console.log(result.name); // User data from the API
+```
+
+On the first execution, the function runs and the result is persisted. On every subsequent replay of the workflow, the cached result is returned instantly without calling the API again.
+
+<Callout type="info">
+**step.do() is idempotent by design.** If your workflow crashes mid-execution and replays, completed steps return their cached results instantly. Your flaky API only gets called once (unless it fails and retries are configured).
+</Callout>
+
+## Important Rules
+
+### Unique Step Names
+
+Step names must be unique within a workflow run. No two calls to `step.do()`, `step.sleep()`, or `step.waitForEvent()` can share a name.
+
+```ts
+// ❌ This will throw DuplicateStepError
+await step.do("fetch-data", async () => getUserData());
+await step.do("fetch-data", async () => getProductData());
+
+// ✅ This is fine
+await step.do("fetch-user-data", async () => getUserData());
+await step.do("fetch-product-data", async () => getProductData());
+```
+
+### JSON-Serializable Results
+
+The function's return value must be JSON-serializable. No functions, no `Date` objects, no class instances (unless they have custom `toJSON` methods).
+
+```ts
+// ❌ Not serializable
+await step.do("bad-step", () => ({
+	callback: () => console.log("nope"),
+	date: new Date(),
+}));
+
+// ✅ Serializable
+await step.do("good-step", () => ({
+	message: "Hello",
+	timestamp: Date.now(),
+	data: { nested: "objects are fine" },
+}));
+```
+
+### Side Effects Only Run Once
+
+Side effects in the function body only execute once, even if the workflow replays many times. This is exactly what you want for API calls, database writes, or sending emails.
+
+```ts
+await step.do("send-welcome-email", async () => {
+	// This email is sent exactly once, even if the workflow
+	// crashes and replays 100 times
+	await sendEmail({
+		to: user.email,
+		subject: "Welcome!",
+		body: "Thanks for signing up!",
+	});
+	return { sent: true, to: user.email };
+});
+```
+
+### Keep Non-Deterministic Logic Inside Steps
+
+Don't put non-deterministic logic like `Date.now()` or `Math.random()` outside of steps. On replay, the workflow re-executes from the beginning, and these values would change.
+
+```ts
+// ❌ Bad: timestamp changes on every replay
+const timestamp = Date.now();
+await step.do("save-with-timestamp", async () => {
+	await saveToDatabase({ timestamp }); // Different value each replay!
+});
+
+// ✅ Good: timestamp is captured inside the step
+const data = await step.do("save-with-timestamp", async () => {
+	const timestamp = Date.now();
+	await saveToDatabase({ timestamp });
+	return { timestamp };
+});
+```
+
+## Retry Configuration
+
+Steps can automatically retry on failure using Durable Object alarms. No blocking waits, no wasted resources.
+
+```ts
+const data = await step.do("call-flaky-api", async () => {
+	const res = await fetch("https://flaky.api/data");
+	if (!res.ok) throw new Error("API failed");
+	return res.json();
+}, {
+	retries: {
+		limit: 5,
+		delay: "2s",
+		backoff: "exponential",
+	},
+});
+```
+
+### Retry Options
+
+#### `limit`
+
+Maximum number of retry attempts (including the initial attempt). Default: `3`.
+
+```ts
+{ retries: { limit: 5 } } // Try up to 5 times total
+```
+
+#### `delay`
+
+Base delay between retries, specified as a duration string. Default: `"1s"`.
+
+Valid formats:
+- `"500ms"` — milliseconds
+- `"30s"` — seconds
+- `"5m"` — minutes
+- `"1h"` — hours
+- `"7d"` — days
+
+```ts
+{ retries: { delay: "5s" } } // Wait 5 seconds between retries
+```
+
+#### `backoff`
+
+Retry delay strategy. Default: `"exponential"`.
+
+- **`"fixed"`** — Same delay every time (`delay`)
+- **`"linear"`** — Delay increases linearly (`delay * attempt`)
+- **`"exponential"`** — Delay doubles each time (`delay * 2^(attempt-1)`)
+
+```ts
+// Fixed: 2s, 2s, 2s, 2s
+{ retries: { delay: "2s", backoff: "fixed" } }
+
+// Linear: 2s, 4s, 6s, 8s
+{ retries: { delay: "2s", backoff: "linear" } }
+
+// Exponential: 2s, 4s, 8s, 16s
+{ retries: { delay: "2s", backoff: "exponential" } }
+```
+
+### Retry Exhaustion
+
+When retries are exhausted, the step throws `StepRetryExhaustedError`. This error propagates to the workflow's `run()` function, marking the workflow as failed.
+
+```ts
+try {
+	await step.do("impossible-task", async () => {
+		throw new Error("Always fails");
+	}, {
+		retries: { limit: 3 },
+	});
+} catch (error) {
+	// This won't catch the error — retries happen across
+	// multiple workflow executions using DO alarms
+}
+```
+
+## How It Works
+
+Retries use Durable Object alarms, not blocking sleeps. When a step fails and has retries remaining:
+
+1. The step is marked as "pending retry" in SQLite with a `retryAt` timestamp
+2. The workflow throws a retry interrupt
+3. The Durable Object sets an alarm for the retry time
+4. When the alarm fires, the workflow replays and the step executes again
+
+The workflow doesn't sit in memory waiting. It hibernates and wakes up when it's time to retry. Sleep for a week between retries? No problem. Cloudflare doesn't charge you for patience.

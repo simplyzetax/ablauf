@@ -1,0 +1,133 @@
+---
+title: Workflow Lifecycle
+description: "Manage running workflows: pause, resume, terminate, and check status"
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Workflow Lifecycle
+
+Workflows in Ablauf move through various states as they execute. Understanding these states helps you manage and monitor your workflows effectively.
+
+## Status States
+
+A workflow can be in one of the following states:
+
+- **`"created"`** — Initialized, but not yet running
+- **`"running"`** — Actively executing steps
+- **`"completed"`** — Finished successfully with a result
+- **`"errored"`** — Failed with an unrecoverable error
+- **`"paused"`** — Manually paused (can be resumed)
+- **`"sleeping"`** — Waiting for a timer (`step.sleep()` or retry backoff)
+- **`"waiting"`** — Waiting for an external event
+- **`"terminated"`** — Manually terminated (permanent)
+
+## Getting Status
+
+Check a workflow's current state with the `status()` method:
+
+```ts
+// Untyped — returns WorkflowStatusResponse
+const status = await ablauf.status(workflowId);
+```
+
+For better TypeScript support, pass your workflow class as a second argument:
+
+```ts
+// Typed — narrows payload and result types
+const status = await ablauf.status(workflowId, OrderWorkflow);
+// status.payload is typed as OrderPayload
+// status.result is typed as OrderResult | null
+```
+
+### Status Response Shape
+
+The status response includes everything you need to understand a workflow's current state:
+
+```ts
+{
+  id: string;
+  type: string;
+  status: WorkflowStatus;
+  payload: unknown; // (typed with workflow class)
+  result: unknown;  // (typed with workflow class)
+  error: string | null;
+  steps: StepInfo[];
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+Each `StepInfo` entry provides:
+
+```ts
+{
+  name: string;
+  status: "completed" | "failed";
+  attempts: number;
+  result?: unknown;
+  error?: string;
+  startedAt: number;
+  completedAt?: number;
+}
+```
+
+## Pausing and Resuming
+
+Sometimes you need to temporarily halt a workflow — maybe you're debugging, or waiting for maintenance to complete. Ablauf makes this graceful:
+
+```ts
+await ablauf.pause(workflowId);
+// Workflow stops at the next step boundary
+```
+
+<Callout type="info">
+Pause is graceful — it doesn't interrupt a running step. The workflow finishes its current step, then pauses before the next one. Think of it as putting your workflow on a coffee break.
+</Callout>
+
+When you're ready to continue:
+
+```ts
+await ablauf.resume(workflowId);
+// Workflow replays and continues from where it left off
+```
+
+The workflow will replay its execution history (using cached results from completed steps) and resume at the point where it paused.
+
+## Terminating
+
+If a workflow needs to be permanently stopped, use `terminate()`:
+
+```ts
+await ablauf.terminate(workflowId);
+// Workflow is permanently stopped — cannot be resumed
+```
+
+Unlike pause, termination is **permanent**. The workflow moves to the `"terminated"` state and cannot be resumed. Its execution history and state remain stored, but it will never run again.
+
+### When to Terminate
+
+Termination is useful when:
+- A workflow was created with incorrect input and needs to be abandoned
+- Business logic determines the workflow is no longer needed
+- You need to cancel a long-running process
+
+## Status Transitions
+
+Here's how workflows typically move between states:
+
+```
+created → running → completed
+              ↓
+            errored
+              ↓
+         (paused) → (resumed) → running
+              ↓
+         (sleeping) → running
+              ↓
+         (waiting) → running
+              ↓
+        terminated
+```
+
+A workflow in `"paused"`, `"sleeping"`, or `"waiting"` is essentially suspended — it's not actively executing steps, but it will resume automatically (for sleep/wait) or manually (for pause).

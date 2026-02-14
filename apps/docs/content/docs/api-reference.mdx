@@ -1,0 +1,510 @@
+---
+title: API Reference
+description: Complete reference for the Ablauf class and related types
+---
+
+# API Reference
+
+Complete reference for the Ablauf class, its methods, and related types.
+
+## Ablauf Class
+
+The main API for creating and managing workflows.
+
+### Constructor
+
+```ts
+new Ablauf(binding: DurableObjectNamespace, config?: AblaufConfig)
+```
+
+**Parameters:**
+
+- `binding` — The `WORKFLOW_RUNNER` Durable Object namespace from your worker's `env`
+- `config` — Optional configuration object
+
+**Config Options:**
+
+```ts
+interface AblaufConfig {
+  workflows?: Array<WorkflowClass | [WorkflowClass, ShardConfig]>;
+  observability?: boolean; // default: true
+  shards?: number; // default shard count for all workflows
+}
+
+interface ShardConfig {
+  shards: number;
+}
+```
+
+**Example:**
+
+```ts
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+  workflows: [
+    OrderWorkflow,
+    [HighVolumeWorkflow, { shards: 8 }],
+  ],
+  observability: true,
+});
+```
+
+---
+
+### Methods
+
+#### `create()`
+
+Create and start a new workflow instance.
+
+```ts
+create<T extends BaseWorkflow>(
+  workflow: WorkflowConstructor<T>,
+  options: {
+    id?: string;
+    payload: InferInput<T>;
+  }
+): WorkflowStub<T>
+```
+
+**Parameters:**
+
+- `workflow` — The workflow class to instantiate
+- `options.id` — Optional workflow ID (auto-generated if omitted)
+- `options.payload` — Input payload (validated against workflow's `inputSchema`)
+
+**Returns:**
+
+A typed `WorkflowStub` for interacting with the workflow instance.
+
+**Throws:**
+
+- `PayloadValidationError` — If payload validation fails
+- `WorkflowAlreadyExistsError` — If a workflow with the given ID already exists
+
+**Example:**
+
+```ts
+const stub = await ablauf.create(OrderWorkflow, {
+  id: "order-123",
+  payload: { orderId: "123", items: [...] },
+});
+
+const status = await stub.getStatus();
+```
+
+---
+
+#### `sendEvent()`
+
+Send a typed event to a running workflow.
+
+```ts
+sendEvent<T extends BaseWorkflow>(
+  workflow: WorkflowConstructor<T>,
+  options: {
+    id: string;
+    event: InferEventName<T>;
+    payload: InferEventPayload<T, InferEventName<T>>;
+  }
+): Promise<void>
+```
+
+**Parameters:**
+
+- `workflow` — The workflow class (for type inference)
+- `options.id` — Workflow instance ID
+- `options.event` — Event name
+- `options.payload` — Event payload (validated against event schema)
+
+**Throws:**
+
+- `EventValidationError` — If event payload validation fails
+- `WorkflowNotFoundError` — If the workflow instance doesn't exist
+
+**Example:**
+
+```ts
+await ablauf.sendEvent(OrderWorkflow, {
+  id: "order-123",
+  event: "payment-received",
+  payload: { amount: 99.99, transactionId: "tx-456" },
+});
+```
+
+---
+
+#### `status()`
+
+Get the current status of a workflow instance.
+
+```ts
+// Untyped
+status(id: string): Promise<WorkflowStatusResponse>
+
+// Typed
+status<T extends BaseWorkflow>(
+  id: string,
+  workflow: WorkflowConstructor<T>
+): Promise<WorkflowStatusResponseFor<T>>
+```
+
+**Parameters:**
+
+- `id` — Workflow instance ID
+- `workflow` — Optional workflow class for type inference
+
+**Returns:**
+
+A `WorkflowStatusResponse` with the current state, payload, result, steps, and metadata.
+
+**Example:**
+
+```ts
+// Untyped
+const status = await ablauf.status("order-123");
+
+// Typed
+const status = await ablauf.status("order-123", OrderWorkflow);
+// status.payload is typed as OrderPayload
+// status.result is typed as OrderResult | null
+```
+
+---
+
+#### `pause()`
+
+Pause a running workflow.
+
+```ts
+pause(id: string): Promise<void>
+```
+
+**Parameters:**
+
+- `id` — Workflow instance ID
+
+**Behavior:**
+
+The workflow will finish its current step, then pause before the next one. It can be resumed with `resume()`.
+
+**Example:**
+
+```ts
+await ablauf.pause("order-123");
+```
+
+---
+
+#### `resume()`
+
+Resume a paused workflow.
+
+```ts
+resume(id: string): Promise<void>
+```
+
+**Parameters:**
+
+- `id` — Workflow instance ID
+
+**Behavior:**
+
+The workflow replays its execution history and continues from where it paused.
+
+**Example:**
+
+```ts
+await ablauf.resume("order-123");
+```
+
+---
+
+#### `terminate()`
+
+Permanently terminate a workflow.
+
+```ts
+terminate(id: string): Promise<void>
+```
+
+**Parameters:**
+
+- `id` — Workflow instance ID
+
+**Behavior:**
+
+The workflow is permanently stopped and cannot be resumed. Its state remains stored.
+
+**Example:**
+
+```ts
+await ablauf.terminate("order-123");
+```
+
+---
+
+#### `list()`
+
+List workflow instances of a specific type.
+
+```ts
+list(
+  type: string,
+  filters?: {
+    status?: WorkflowStatus;
+    limit?: number;
+  }
+): Promise<WorkflowIndexEntry[]>
+```
+
+**Parameters:**
+
+- `type` — Workflow type (e.g., `"process-order"`)
+- `filters.status` — Optional status filter
+- `filters.limit` — Optional result limit (sorted by `updatedAt`, newest first)
+
+**Returns:**
+
+An array of `WorkflowIndexEntry` objects.
+
+**Throws:**
+
+- `ObservabilityDisabledError` — If observability is disabled
+
+**Example:**
+
+```ts
+const running = await ablauf.list("process-order", { status: "running" });
+const recent = await ablauf.list("process-order", { limit: 10 });
+```
+
+---
+
+#### `createWorkflowRunner()`
+
+Returns the Durable Object class to export from your worker.
+
+```ts
+createWorkflowRunner(): typeof WorkflowRunner
+```
+
+**Example:**
+
+```ts
+export const WorkflowRunner = ablauf.createWorkflowRunner();
+
+export default {
+  async fetch(req, env) {
+    // ...
+  }
+}
+```
+
+---
+
+#### `createRPCHandler()`
+
+Returns an oRPC handler for the dashboard API.
+
+```ts
+createRPCHandler(): ORPCHandler
+```
+
+**Example:**
+
+```ts
+const rpcHandler = ablauf.createRPCHandler();
+
+app.use("/__ablauf/*", async (c, next) => {
+  const { matched, response } = await rpcHandler.handle(c.req.raw, {
+    prefix: "/__ablauf",
+    context: ablauf.getDashboardContext(),
+  });
+  if (matched) return c.newResponse(response.body, response);
+  await next();
+});
+```
+
+---
+
+#### `getDashboardContext()`
+
+Returns the context object needed by the dashboard router.
+
+```ts
+getDashboardContext(): DashboardContext
+```
+
+**Example:**
+
+See `createRPCHandler()` above.
+
+---
+
+## Types
+
+### WorkflowStatus
+
+```ts
+type WorkflowStatus =
+  | "created"
+  | "running"
+  | "completed"
+  | "errored"
+  | "paused"
+  | "sleeping"
+  | "waiting"
+  | "terminated";
+```
+
+---
+
+### WorkflowStatusResponse
+
+```ts
+interface WorkflowStatusResponse {
+  id: string;
+  type: string;
+  status: WorkflowStatus;
+  payload: unknown;
+  result: unknown;
+  error: string | null;
+  steps: StepInfo[];
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+---
+
+### WorkflowStatusResponseFor
+
+A generic version of `WorkflowStatusResponse` with typed `payload` and `result`:
+
+```ts
+type WorkflowStatusResponseFor<T extends BaseWorkflow> = {
+  id: string;
+  type: string;
+  status: WorkflowStatus;
+  payload: InferInput<T>;
+  result: InferResult<T> | null;
+  error: string | null;
+  steps: StepInfo[];
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+---
+
+### StepInfo
+
+```ts
+interface StepInfo {
+  name: string;
+  status: "completed" | "failed";
+  attempts: number;
+  result?: unknown;
+  error?: string;
+  startedAt: number;
+  completedAt?: number;
+}
+```
+
+---
+
+### WorkflowIndexEntry
+
+```ts
+interface WorkflowIndexEntry {
+  id: string;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+---
+
+### StepDoOptions
+
+Options for `step.do()`:
+
+```ts
+interface StepDoOptions {
+  retry?: RetryConfig;
+}
+
+interface RetryConfig {
+  maxAttempts?: number; // default: 3
+  initialDelayMs?: number; // default: 1000
+  maxDelayMs?: number; // default: 30000
+  backoff?: BackoffStrategy; // default: "exponential"
+}
+
+type BackoffStrategy = "constant" | "exponential";
+```
+
+---
+
+### StepWaitOptions
+
+Options for `step.waitForEvent()`:
+
+```ts
+interface StepWaitOptions {
+  timeout?: string; // duration string, e.g., "5m"
+}
+```
+
+---
+
+## Duration Strings
+
+Ablauf uses human-readable duration strings in several places (e.g., `step.sleep()`, `step.waitForEvent()` timeout).
+
+### Supported Formats
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| `Nms` | `"500ms"` | Milliseconds |
+| `Ns` | `"30s"` | Seconds |
+| `Nm` | `"5m"` | Minutes |
+| `Nh` | `"1h"` | Hours |
+| `Nd` | `"7d"` | Days |
+
+### Examples
+
+```ts
+await step.sleep("30s"); // 30 seconds
+await step.sleep("5m");  // 5 minutes
+await step.sleep("1h");  // 1 hour
+
+const result = await step.waitForEvent("payment-received", {
+  timeout: "10m", // 10 minutes
+});
+```
+
+**Throws:**
+
+`InvalidDurationError` if the duration string is malformed.
+
+---
+
+## Error Classes
+
+All errors thrown by Ablauf extend `WorkflowError`, which extends Hono's `HTTPException`. See the [Error Handling guide](/docs/error-handling) for details.
+
+Key error codes:
+
+- `WORKFLOW_NOT_FOUND` (404)
+- `WORKFLOW_ALREADY_EXISTS` (409)
+- `PAYLOAD_VALIDATION_FAILED` (400)
+- `EVENT_VALIDATION_FAILED` (400)
+- `STEP_FAILED` (500)
+- `STEP_RETRY_EXHAUSTED` (500)
+- `EVENT_TIMEOUT` (408)
+- `WORKFLOW_NOT_RUNNING` (409)
+- `DUPLICATE_STEP` (400)
+- `INVALID_DURATION` (400)
+- `OBSERVABILITY_DISABLED` (400)

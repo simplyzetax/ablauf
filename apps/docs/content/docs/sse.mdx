@@ -1,0 +1,218 @@
+---
+title: Real-time Updates (SSE)
+description: Stream live progress to clients with Server-Sent Events
+---
+
+# Real-time Updates (SSE)
+
+Ablauf supports Server-Sent Events (SSE) for real-time workflow progress updates. Stream progress bars, status messages, and completion notifications to your users as the workflow runs.
+
+Two methods: `broadcast()` for live-only updates, and `emit()` for persisted messages that new clients can replay.
+
+## Defining SSE Types
+
+SSE messages are typed with Zod schemas, just like events and payloads:
+
+```ts
+import { defineWorkflow } from "@ablauf/workflows";
+import { z } from "zod";
+
+const ImportWorkflow = defineWorkflow({
+	type: "data-import",
+	input: z.object({ fileUrl: z.string() }),
+	sseUpdates: z.discriminatedUnion("type", [
+		z.object({ type: z.literal("progress"), percent: z.number(), message: z.string() }),
+		z.object({ type: z.literal("error"), message: z.string() }),
+		z.object({ type: z.literal("complete"), recordCount: z.number() }),
+	]),
+	run: async (step, payload, sse) => {
+		sse.broadcast({ type: "progress", percent: 0, message: "Starting import..." });
+
+		const parsed = await step.do("parse-file", async () => {
+			// Parse the file
+			return { records: 1000 };
+		});
+
+		sse.broadcast({ type: "progress", percent: 50, message: "Importing records..." });
+
+		await step.do("import-records", async () => {
+			// Import to database
+		});
+
+		// emit() persists the message — new SSE clients will see it even after it was sent
+		sse.emit({ type: "complete", recordCount: parsed.records });
+
+		return { imported: parsed.records };
+	},
+});
+```
+
+TypeScript autocompletes the message types and validates the payload shape. You can't send an invalid SSE message.
+
+## `broadcast()` vs `emit()`
+
+| Method | Live clients | New clients | Persisted |
+|---|---|---|---|
+| `broadcast()` | ✓ Yes | ✗ No | ✗ No |
+| `emit()` | ✓ Yes | ✓ Yes | ✓ Yes |
+
+**Use `broadcast()`** for transient progress updates that don't need to be replayed. Perfect for progress bars, status messages, or "still working..." heartbeats.
+
+**Use `emit()`** for important milestones that new clients connecting later should see. Think "Step 1 complete", "Payment processed", or final results.
+
+### Example: Progress Updates
+
+```ts
+for (let i = 0; i < 100; i += 10) {
+	sse.broadcast({ type: "progress", percent: i, message: `Processing... ${i}%` });
+	await step.sleep("1s");
+}
+
+sse.emit({ type: "complete", message: "All done!" });
+```
+
+Live clients see all the progress updates. A client connecting after completion only sees the "All done!" message.
+
+## Connecting to SSE from a Client
+
+### Using the Browser's EventSource API
+
+```ts
+const source = new EventSource(`/workflows/${workflowId}/sse`);
+
+source.onmessage = (event) => {
+	const data = JSON.parse(event.data);
+	console.log(data); // typed SSE message
+
+	if (data.type === "progress") {
+		updateProgressBar(data.percent);
+	} else if (data.type === "complete") {
+		showSuccessMessage(data.recordCount);
+	}
+};
+
+source.onerror = (error) => {
+	console.error("SSE connection error:", error);
+	source.close();
+};
+```
+
+### Using the Ablauf Client Package
+
+The `@ablauf/client` package provides a type-safe oRPC client for the dashboard API, including SSE subscriptions:
+
+```ts
+import { createAblaufClient } from "@ablauf/client";
+
+const client = createAblaufClient({ url: "https://my-worker.example.com" });
+
+// Use the oRPC client to subscribe to SSE updates
+// (具体的な API は現在開発中)
+```
+
+## SSE During Workflow Replay
+
+<Callout type="info">
+	During workflow replay, `broadcast()` calls are automatically skipped — no duplicate progress messages for your users. `emit()` messages are persisted and replayed to new clients. Ablauf handles this for you.
+</Callout>
+
+When a workflow resumes after a sleep or event wait, it replays from the beginning to rebuild its execution state. Without special handling, `broadcast()` calls would fire again, spamming connected clients with duplicate messages.
+
+Ablauf detects replay and skips `broadcast()` automatically. Only new `broadcast()` calls (for steps executing for the first time) send messages to live clients.
+
+`emit()` messages are persisted in SQLite, so new clients connecting mid-workflow or after completion can see the full history.
+
+## Common Patterns
+
+### Progress Bar for Long Operations
+
+```ts
+const BatchJob = defineWorkflow({
+	type: "batch-job",
+	input: z.object({ itemIds: z.array(z.string()) }),
+	sseUpdates: z.object({ type: z.literal("progress"), percent: z.number() }),
+	run: async (step, payload, sse) => {
+		const total = payload.itemIds.length;
+
+		for (let i = 0; i < total; i++) {
+			await step.do(`process-item-${i}`, async () => {
+				await processItem(payload.itemIds[i]);
+			});
+
+			const percent = Math.round(((i + 1) / total) * 100);
+			sse.broadcast({ type: "progress", percent });
+		}
+
+		return { processed: total };
+	},
+});
+```
+
+### Multi-Stage Updates
+
+```ts
+const DeploymentWorkflow = defineWorkflow({
+	type: "deployment",
+	input: z.object({ appId: z.string() }),
+	sseUpdates: z.discriminatedUnion("stage", [
+		z.object({ stage: z.literal("build"), message: z.string() }),
+		z.object({ stage: z.literal("test"), message: z.string() }),
+		z.object({ stage: z.literal("deploy"), message: z.string() }),
+		z.object({ stage: z.literal("complete"), url: z.string() }),
+	]),
+	run: async (step, payload, sse) => {
+		sse.emit({ stage: "build", message: "Building application..." });
+		await step.do("build", async () => { /* ... */ });
+
+		sse.emit({ stage: "test", message: "Running tests..." });
+		await step.do("test", async () => { /* ... */ });
+
+		sse.emit({ stage: "deploy", message: "Deploying to production..." });
+		await step.do("deploy", async () => { /* ... */ });
+
+		sse.emit({ stage: "complete", url: "https://app.example.com" });
+
+		return { deployed: true };
+	},
+});
+```
+
+New clients connecting during the test stage will see the build and test messages, but not the deploy message (yet).
+
+## Error Messages via SSE
+
+You can use SSE to notify clients of errors without throwing:
+
+```ts
+const RobustWorkflow = defineWorkflow({
+	type: "robust",
+	input: z.object({ taskId: z.string() }),
+	sseUpdates: z.discriminatedUnion("type", [
+		z.object({ type: z.literal("info"), message: z.string() }),
+		z.object({ type: z.literal("error"), message: z.string() }),
+	]),
+	run: async (step, payload, sse) => {
+		try {
+			await step.do("risky-operation", async () => {
+				// Might fail...
+			});
+		} catch (err) {
+			sse.emit({ type: "error", message: "Operation failed, retrying..." });
+			throw err; // Still let retries happen
+		}
+	},
+});
+```
+
+Clients can show error toasts or warnings while the workflow continues retrying in the background.
+
+## Performance Notes
+
+- `broadcast()` is very cheap — just a write to an in-memory SSE writer
+- `emit()` writes to SQLite, so use it for milestones, not every iteration of a tight loop
+- SSE connections are long-lived HTTP connections — plan your Worker concurrency accordingly
+- Ablauf automatically closes stale SSE connections after workflow completion
+
+---
+
+SSE makes Ablauf workflows feel interactive and responsive. Your users see real-time progress instead of staring at a spinner. And you get to keep your long-running logic simple and durable.

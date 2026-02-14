@@ -1,0 +1,19 @@
+{
+	"title": "Ablauf",
+	"pages": [
+		"index",
+		"getting-started",
+		"---Workflows---",
+		"workflows",
+		"---Steps---",
+		"steps",
+		"---Features---",
+		"events",
+		"retries",
+		"sse",
+		"---Operations---",
+		"lifecycle",
+		"observability",
+		"api-reference"
+	]
+}

@@ -1,0 +1,209 @@
+---
+title: Retries & Error Handling
+description: Configure retry strategies and handle failures gracefully
+---
+
+# Retries & Error Handling
+
+Every `step.do()` has automatic retry support built-in. Network hiccup? API rate limit? Transient database error? Ablauf will retry the step automatically using Durable Object alarms (non-blocking, of course).
+
+## Default Behavior
+
+By default, every step gets **3 retry attempts** with **1 second delay** and **exponential backoff**:
+
+```ts
+// Uses defaults: { limit: 3, delay: "1s", backoff: "exponential" }
+const data = await step.do("fetch-data", async () => {
+	const res = await fetch("https://api.example.com/data");
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return res.json();
+});
+```
+
+If the step fails all 3 times, it throws `StepRetryExhaustedError` and the workflow stops.
+
+## Per-Step Overrides
+
+Need more retries for a critical operation? Override the defaults:
+
+```ts
+const data = await step.do("critical-operation", async () => {
+	// This step gets 10 attempts with 5s delay
+	return await somethingFragile();
+}, {
+	retries: {
+		limit: 10,
+		delay: "5s",
+		backoff: "exponential",
+	},
+});
+```
+
+## Workflow-Level Defaults
+
+Set default retry config for all steps in a workflow:
+
+```ts
+import { defineWorkflow } from "@ablauf/workflows";
+import { z } from "zod";
+
+const MyWorkflow = defineWorkflow({
+	type: "my-workflow",
+	input: z.object({ /* ... */ }),
+	defaults: {
+		retries: { limit: 5, delay: "2s", backoff: "linear" },
+	},
+	run: async (step, payload) => {
+		// All steps in this workflow default to 5 attempts with linear backoff
+		await step.do("step-1", async () => { /* ... */ });
+		await step.do("step-2", async () => { /* ... */ });
+	},
+});
+```
+
+Per-step overrides still work — they take precedence over workflow defaults.
+
+## Backoff Strategies
+
+Ablauf supports three backoff strategies:
+
+| Strategy | Formula | Example (1s base delay) |
+|---|---|---|
+| `"fixed"` | `delay` | 1s, 1s, 1s, 1s |
+| `"linear"` | `delay * attempt` | 1s, 2s, 3s, 4s |
+| `"exponential"` | `delay * 2^(attempt-1)` | 1s, 2s, 4s, 8s |
+
+Exponential backoff is usually the right choice — it gives temporary issues time to resolve without hammering a struggling service.
+
+## Duration Strings
+
+Retry delays use [duration strings](/docs/duration):
+
+- `"500ms"` — 500 milliseconds
+- `"1s"` — 1 second
+- `"30s"` — 30 seconds
+- `"5m"` — 5 minutes
+- `"1h"` — 1 hour
+
+## Error Hierarchy
+
+Ablauf has a centralized error system. All errors extend `WorkflowError`, which extends Hono's `HTTPException`, so they automatically get proper HTTP status codes.
+
+Here are the main errors you'll encounter:
+
+### `StepRetryExhaustedError`
+
+Thrown when a step fails all retry attempts. Contains the original error and retry history.
+
+```ts
+try {
+	await step.do("flaky-operation", async () => {
+		// This might fail...
+	});
+} catch (err) {
+	if (err instanceof StepRetryExhaustedError) {
+		// Log the failure, send an alert, etc.
+		console.error(`Step failed after ${err.attempts} attempts`);
+	}
+	throw err;
+}
+```
+
+### `EventTimeoutError`
+
+Thrown when `step.waitForEvent()` times out before receiving the expected event.
+
+```ts
+try {
+	const confirmation = await step.waitForEvent("payment-confirmed", {
+		timeout: "30m",
+	});
+} catch (err) {
+	if (err instanceof EventTimeoutError) {
+		// Send a reminder, cancel the order, etc.
+	}
+	throw err;
+}
+```
+
+### `PayloadValidationError`
+
+Thrown when creating a workflow with invalid input:
+
+```ts
+// If the payload doesn't match the input schema
+await ablauf.create(MyWorkflow, {
+	id: "wf-123",
+	payload: { invalid: "data" }, // Throws PayloadValidationError
+});
+```
+
+Contains detailed Zod validation issues to help you debug.
+
+### `EventValidationError`
+
+Thrown when sending an event with invalid payload or unknown event name:
+
+```ts
+// Unknown event name or invalid payload shape
+await ablauf.sendEvent(MyWorkflow, {
+	id: "wf-123",
+	event: "unknown-event", // Throws EventValidationError
+	payload: { /* ... */ },
+});
+```
+
+### `DuplicateStepError`
+
+Thrown when two steps in the same workflow have the same name. Step names must be unique within a workflow instance.
+
+```ts
+await step.do("fetch-data", async () => { /* ... */ });
+await step.do("fetch-data", async () => { /* ... */ }); // Throws DuplicateStepError
+```
+
+### `WorkflowNotFoundError`
+
+Thrown when trying to interact with a workflow instance that doesn't exist:
+
+```ts
+// Workflow with this ID doesn't exist
+await ablauf.sendEvent(MyWorkflow, {
+	id: "nonexistent-id", // Throws WorkflowNotFoundError
+	event: "some-event",
+	payload: { /* ... */ },
+});
+```
+
+### `WorkflowAlreadyExistsError`
+
+Thrown when trying to create a workflow with an ID that already exists:
+
+```ts
+await ablauf.create(MyWorkflow, { id: "wf-123", payload: { /* ... */ } });
+await ablauf.create(MyWorkflow, { id: "wf-123", payload: { /* ... */ } }); // Throws WorkflowAlreadyExistsError
+```
+
+Use `createIfNotExists()` if you want to safely ignore duplicates.
+
+## Best Practices
+
+**Set realistic retry limits.** If an API is down, 100 retries won't help. Use retries for transient issues, not systemic failures.
+
+**Use exponential backoff for external services.** Linear or fixed backoff can overwhelm a struggling service.
+
+**Handle specific errors.** Catch `StepRetryExhaustedError` and `EventTimeoutError` when you have a graceful fallback. Let other errors bubble up.
+
+**Don't retry non-idempotent operations blindly.** If retrying a step could cause duplicate charges, emails, or data corruption, add idempotency checks inside the step.
+
+```ts
+await step.do("send-email", async () => {
+	// Check if email was already sent before retrying
+	const alreadySent = await checkEmailLog(userId);
+	if (alreadySent) return;
+
+	await sendEmail(userId, "Welcome!");
+}, {
+	retries: { limit: 5 },
+});
+```
