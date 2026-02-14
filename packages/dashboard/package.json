@@ -8,7 +8,6 @@
 		"url": "https://github.com/der-ablauf/ablauf",
 		"directory": "packages/dashboard"
 	},
-	"type": "module",
 	"bin": {
 		"ablauf-dashboard": "./src/serve.ts"
 	},
@@ -18,6 +17,7 @@
 		"vite.config.ts",
 		"tsconfig.json"
 	],
+	"type": "module",
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
@@ -36,13 +36,13 @@
 		"react-dom": "^19.1.0"
 	},
 	"devDependencies": {
-		"bun-types": "latest",
 		"@cloudflare/workers-types": "^4.20250214.0",
 		"@tailwindcss/vite": "^4.1.0",
 		"@types/node": "^22.0.0",
 		"@types/react": "^19.1.0",
 		"@types/react-dom": "^19.1.0",
 		"@vitejs/plugin-react": "^4.5.0",
+		"bun-types": "latest",
 		"tailwindcss": "^4.1.0",
 		"typescript": "^5.5.2",
 		"vite": "^6.3.0",
