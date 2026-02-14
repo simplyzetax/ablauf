@@ -1,0 +1,43 @@
+---
+title: Dashboard
+description: Monitor, debug, and inspect your Ablauf workflows with the built-in dashboard and observability tools.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Dashboard
+
+Ablauf includes built-in observability and a React dashboard for monitoring your workflows. Whether you're debugging in development or monitoring production, you have full visibility into workflow state, step execution, and errors.
+
+## What You Get
+
+- **Workflow List** — Browse all instances with filtering by type and status
+- **Detail View** — Inspect payload, result, and error details for any workflow
+- **Step Timeline** — Visualize step execution with a Gantt chart
+- **Retry History** — See per-attempt details for steps with retry logic
+- **Live Updates** — Real-time SSE updates as workflows execute
+
+## Quick Start
+
+<Callout type="info">
+The dashboard connects to your worker's oRPC endpoint. Make sure you've [set up the API handlers](/docs/server#setting-up-the-dashboard-api) first.
+</Callout>
+
+### Install
+
+```bash
+npm install @ablauf/dashboard
+```
+
+### Run
+
+```bash
+npx ablauf-dashboard --url http://localhost:8787
+```
+
+The dashboard opens in your browser and connects to your worker's RPC endpoint automatically.
+
+## Next Steps
+
+- [Observability](/docs/dashboard/observability) — Learn about workflow listing, shard-based indexing, and configuration
+- [API Reference](/docs/dashboard) — Browse the full Dashboard API with OpenAPI docs

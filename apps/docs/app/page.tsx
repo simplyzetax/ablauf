@@ -22,7 +22,7 @@ export default function HomePage() {
 						Read the Docs
 					</Link>
 					<Link
-						href="/docs/getting-started"
+						href="/docs/workflows/getting-started"
 						className="rounded-lg border border-fd-border px-6 py-3 font-semibold transition-colors hover:bg-fd-accent"
 					>
 						Get Started
