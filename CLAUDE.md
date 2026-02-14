@@ -123,6 +123,7 @@ const MyWorkflow = defineWorkflow({
 - No `console.log` in library code (packages/workflows); acceptable in CLI tools (dashboard/cli.ts)
 - Empty catch blocks are OK only for best-effort operations (SSE writer cleanup, index updates) — always add a comment explaining why
 - Keep `packages/workflows/src/index.ts` as the single public API surface — if you add something, export it there
+- ALWAYS update the documentation in apps/docs when you make changes to the code and the code touches things mentioned in the documentation.
 
 ## Testing
 

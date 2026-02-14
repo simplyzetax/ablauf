@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { Ablauf, WorkflowError, WorkflowTypeUnknownError } from "@ablauf/workflows";
 import { TestWorkflow } from "./workflows/test-workflow";
 import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
@@ -12,6 +13,7 @@ const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow,
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
+	corsOrigins: ["http://localhost:3000"],
 });
 
 const app = new Hono<{ Bindings: Env }>();
@@ -82,6 +84,8 @@ app.post("/workflows/:type", async (c) => {
 });
 
 const rpcHandler = ablauf.createRPCHandler();
+
+app.use("/__ablauf/*", cors({ origin: ["http://localhost:3000"] }));
 
 app.use("/__ablauf/*", async (c, next) => {
 	const { matched, response } = await rpcHandler.handle(c.req.raw, {
