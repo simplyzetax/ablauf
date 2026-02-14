@@ -66,8 +66,8 @@ export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./en
 export { parseDuration } from "./engine/duration";
 
 // Dashboard
-export { dashboardRouter } from "./dashboard";
-export type { DashboardContext } from "./dashboard";
+export { dashboardRouter, timelineEntrySchema } from "./dashboard";
+export type { DashboardContext, TimelineEntry } from "./dashboard";
 
 // DB schema (for consumer migrations)
 export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";

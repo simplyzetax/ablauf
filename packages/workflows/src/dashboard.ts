@@ -53,7 +53,7 @@ const listOutputSchema = z.object({
 	workflows: z.array(workflowIndexEntrySchema.extend({ type: z.string() })),
 });
 
-const timelineEntrySchema = z.object({
+export const timelineEntrySchema = z.object({
 	name: z.string(),
 	type: z.string(),
 	status: z.string(),
@@ -63,6 +63,7 @@ const timelineEntrySchema = z.object({
 	error: z.string().nullable(),
 	retryHistory: stepInfoSchema.shape.retryHistory,
 });
+export type TimelineEntry = z.infer<typeof timelineEntrySchema>;
 
 const timelineOutputSchema = z.object({
 	id: z.string(),
