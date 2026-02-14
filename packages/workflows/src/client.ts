@@ -1,13 +1,7 @@
-import {
-	EventValidationError,
-	ObservabilityDisabledError,
-	UpdateTimeoutError,
-	WorkflowNotRunningError,
-	extractZodIssues,
-} from "./errors";
-import { listIndexEntries } from "./engine/index-listing";
-import { parseDuration } from "./engine/duration";
-import { parseSSEStream } from "./engine/sse-stream";
+import { EventValidationError, ObservabilityDisabledError, UpdateTimeoutError, WorkflowNotRunningError, extractZodIssues } from './errors';
+import { listIndexEntries } from './engine/index-listing';
+import { parseDuration } from './engine/duration';
+import { parseSSEStream } from './engine/sse-stream';
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
@@ -19,14 +13,14 @@ import type {
 	WorkflowIndexListFilters,
 	WorkflowIndexEntry,
 	WorkflowShardConfig,
-} from "./engine/types";
-import type { WorkflowRegistration } from "./engine/workflow-runner";
-import { createWorkflowRunner } from "./engine/workflow-runner";
-import { RPCHandler } from "@orpc/server/fetch";
-import { dashboardRouter } from "./dashboard";
-import type { DashboardContext } from "./dashboard";
-import { CORSPlugin } from "@orpc/server/plugins";
-import { OpenAPIHandler } from "@orpc/openapi/fetch";
+} from './engine/types';
+import type { WorkflowRegistration } from './engine/workflow-runner';
+import { createWorkflowRunner } from './engine/workflow-runner';
+import { RPCHandler } from '@orpc/server/fetch';
+import { dashboardRouter } from './dashboard';
+import type { DashboardContext } from './dashboard';
+import { CORSPlugin } from '@orpc/server/plugins';
+import { OpenAPIHandler } from '@orpc/openapi/fetch';
 
 /** Configuration for the Ablauf workflow engine. */
 export interface AblaufConfig {
@@ -55,7 +49,10 @@ export class Ablauf {
 	 * @param binding - The `WORKFLOW_RUNNER` Durable Object namespace from your worker's `env`.
 	 * @param config - Optional configuration for registered workflows, sharding, and observability.
 	 */
-	constructor(binding: DurableObjectNamespace, private config?: AblaufConfig) {
+	constructor(
+		binding: DurableObjectNamespace,
+		private config?: AblaufConfig,
+	) {
 		this.binding = binding;
 		this.shardConfigs = {};
 		this.workflows = [];
@@ -135,9 +132,7 @@ export class Ablauf {
 	): Promise<void> {
 		const schema = workflow.events[props.event];
 		if (!schema) {
-			throw new EventValidationError(props.event, [
-				{ message: `Unknown event "${props.event}" for workflow type "${workflow.type}"` },
-			]);
+			throw new EventValidationError(props.event, [{ message: `Unknown event "${props.event}" for workflow type "${workflow.type}"` }]);
 		}
 		let payload: unknown;
 		try {
@@ -249,7 +244,7 @@ export class Ablauf {
 
 		const readUntilMatch = async (): Promise<SSEUpdates[K]> => {
 			for await (const update of parseSSEStream(stream, { signal: abortController.signal })) {
-				if (update.event === "close") {
+				if (update.event === 'close') {
 					const status = await stub.getStatus();
 					throw new WorkflowNotRunningError(props.id, status.status);
 				}
@@ -273,11 +268,11 @@ export class Ablauf {
 			timeoutMs === null
 				? null
 				: new Promise<never>((_, reject) => {
-					timer = setTimeout(() => {
-						abortController.abort();
-						reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
-					}, timeoutMs);
-				});
+						timer = setTimeout(() => {
+							abortController.abort();
+							reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
+						}, timeoutMs);
+					});
 
 		try {
 			if (!timeoutPromise) {
@@ -361,21 +356,19 @@ export class Ablauf {
 	 * @returns An {@link RPCHandler} instance that can serve the dashboard API over HTTP.
 	 */
 	createHandlers() {
+		const corsPlugin = new CORSPlugin({
+			origin: this.config?.corsOrigins,
+			allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH'],
+		});
 		const openApiHandler = new OpenAPIHandler(dashboardRouter, {
-			plugins: [new CORSPlugin()],
+			plugins: [corsPlugin],
 		});
 		const rpcHandler = new RPCHandler(dashboardRouter, {
-			plugins: [
-				new CORSPlugin({
-					origin: this.config?.corsOrigins,
-					allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH'],
-				}),
-			],
+			plugins: [corsPlugin],
 		});
 		return {
 			openApiHandler,
 			rpcHandler,
-		}
+		};
 	}
-
 }

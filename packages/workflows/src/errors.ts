@@ -1,158 +1,226 @@
-import { HTTPException } from "hono/http-exception";
-import type {
-  ContentfulStatusCode
-} from "hono/utils/http-status";
+import { HTTPException } from 'hono/http-exception';
 
 /** Union of all recognized error codes for discriminating {@link WorkflowError} instances. */
 export type ErrorCode =
-  | "WORKFLOW_NOT_FOUND"
-  | "WORKFLOW_ALREADY_EXISTS"
-  | "WORKFLOW_TYPE_UNKNOWN"
-  | "VALIDATION_ERROR"
-  | "STEP_FAILED"
-  | "STEP_RETRY_EXHAUSTED"
-  | "EVENT_TIMEOUT"
-  | "UPDATE_TIMEOUT"
-  | "EVENT_INVALID"
-  | "WORKFLOW_NOT_RUNNING"
-  | "RESOURCE_NOT_FOUND"
-  | "OBSERVABILITY_DISABLED"
-  | "INTERNAL_ERROR";
+	| 'WORKFLOW_NOT_FOUND'
+	| 'WORKFLOW_ALREADY_EXISTS'
+	| 'WORKFLOW_TYPE_UNKNOWN'
+	| 'VALIDATION_ERROR'
+	| 'STEP_FAILED'
+	| 'STEP_RETRY_EXHAUSTED'
+	| 'EVENT_TIMEOUT'
+	| 'UPDATE_TIMEOUT'
+	| 'EVENT_INVALID'
+	| 'WORKFLOW_NOT_RUNNING'
+	| 'RESOURCE_NOT_FOUND'
+	| 'OBSERVABILITY_DISABLED'
+	| 'INTERNAL_ERROR';
 
 /**
  * Identifies where an error originated.
- *
- * - `"api"` — Request-level errors (bad input, not found).
- * - `"engine"` — Workflow lifecycle errors (already exists, not running, timeout).
- * - `"step"` — Step execution errors (failed, retries exhausted).
- * - `"validation"` — Schema validation errors (payload, event, duration).
  */
-export type ErrorSource = "api" | "engine" | "step" | "validation";
+export type ErrorSource = 'api' | 'engine' | 'step' | 'validation';
 
-const VALID_ERROR_CODES: readonly ErrorCode[] = [
-  "WORKFLOW_NOT_FOUND",
-  "WORKFLOW_ALREADY_EXISTS",
-  "WORKFLOW_TYPE_UNKNOWN",
-  "VALIDATION_ERROR",
-  "STEP_FAILED",
-  "STEP_RETRY_EXHAUSTED",
-  "EVENT_TIMEOUT",
-  "UPDATE_TIMEOUT",
-  "EVENT_INVALID",
-  "WORKFLOW_NOT_RUNNING",
-  "RESOURCE_NOT_FOUND",
-  "OBSERVABILITY_DISABLED",
-  "INTERNAL_ERROR",
-] as const;
+export type WorkflowErrorStatus = 400 | 401 | 403 | 404 | 408 | 409 | 422 | 500 | 502 | 503;
 
-const VALID_ERROR_SOURCES: readonly ErrorSource[] = [
-  "api",
-  "engine",
-  "step",
-  "validation",
-] as const;
-
-const VALID_HTTP_STATUSES = new Set([400, 401, 403, 404, 408, 409, 422, 500, 502, 503]);
+export type WorkflowErrorCatalogEntry = {
+	status: WorkflowErrorStatus;
+	message: string;
+};
 
 /**
- * Base error class for all Ablauf workflow errors.
+ * Canonical status/message catalog for all public error codes.
  *
- * Extends Hono's `HTTPException` so errors thrown in route handlers are
- * automatically formatted by the centralized `app.onError` handler.
- * Errors crossing DO RPC boundaries are serialized via `toJSON()` and
- * reconstructed via `fromSerialized()`.
+ * Use this as the single source of truth when wiring transport-layer handlers
+ * (oRPC, Hono, etc).
  */
-export class WorkflowError extends HTTPException {
-  public readonly code: ErrorCode;
-  public readonly source: ErrorSource;
-  public readonly details?: Record<string, unknown>;
+export const WORKFLOW_ERROR_CATALOG = {
+	WORKFLOW_NOT_FOUND: { status: 404, message: 'Workflow not found' },
+	WORKFLOW_ALREADY_EXISTS: { status: 409, message: 'Workflow already exists' },
+	WORKFLOW_TYPE_UNKNOWN: { status: 400, message: 'Workflow type is unknown' },
+	VALIDATION_ERROR: { status: 400, message: 'Validation failed' },
+	STEP_FAILED: { status: 500, message: 'Workflow step failed' },
+	STEP_RETRY_EXHAUSTED: { status: 500, message: 'Workflow step retries exhausted' },
+	EVENT_TIMEOUT: { status: 408, message: 'Workflow event timed out' },
+	UPDATE_TIMEOUT: { status: 408, message: 'Workflow update timed out' },
+	EVENT_INVALID: { status: 400, message: 'Workflow event is invalid' },
+	WORKFLOW_NOT_RUNNING: { status: 409, message: 'Workflow is not running' },
+	RESOURCE_NOT_FOUND: { status: 404, message: 'Resource not found' },
+	OBSERVABILITY_DISABLED: { status: 400, message: 'Observability is disabled' },
+	INTERNAL_ERROR: { status: 500, message: 'An unexpected error occurred' },
+} as const satisfies Record<ErrorCode, WorkflowErrorCatalogEntry>;
 
-  constructor(opts: {
-    code: ErrorCode;
-    message: string;
-    status: ContentfulStatusCode;
-    source: ErrorSource;
-    details?: Record<string, unknown>;
-  }) {
-    super(opts.status, { message: opts.message });
-    this.name = this.constructor.name;
-    this.code = opts.code;
-    this.source = opts.source;
-    this.details = opts.details;
-  }
+const VALID_ERROR_SOURCES: readonly ErrorSource[] = ['api', 'engine', 'step', 'validation'] as const;
 
-  /** Serialize to a plain object for JSON transport across DO RPC boundaries. */
-  toJSON() {
-    return {
-      __workflowError: true,
-      code: this.code,
-      message: this.message,
-      status: this.status,
-      source: this.source,
-      ...(this.details && { details: this.details }),
-    };
-  }
+function isErrorCode(value: unknown): value is ErrorCode {
+	return typeof value === 'string' && value in WORKFLOW_ERROR_CATALOG;
+}
 
-  /**
-   * Reconstruct a `WorkflowError` from an unknown thrown value (typically
-   * one that crossed a Durable Object RPC boundary as a serialized JSON
-   * string).
-   *
-   * **Important:** The returned instance is always the base `WorkflowError`
-   * class, never a subclass such as `WorkflowNotFoundError`. Consumers
-   * should therefore discriminate on `err.code` (e.g.
-   * `err.code === "WORKFLOW_NOT_FOUND"`) rather than using `instanceof`
-   * checks against subclass constructors.
-   */
-  static fromSerialized(e: unknown): WorkflowError {
-    if (e instanceof WorkflowError) return e;
+const VALID_WORKFLOW_STATUSES = new Set<WorkflowErrorStatus>(
+	Object.values(WORKFLOW_ERROR_CATALOG).map((entry) => entry.status) as WorkflowErrorStatus[],
+);
 
-    const message = e instanceof Error ? e.message : String(e);
+function isWorkflowErrorStatus(value: unknown): value is WorkflowErrorStatus {
+	return typeof value === 'number' && VALID_WORKFLOW_STATUSES.has(value as WorkflowErrorStatus);
+}
 
-    try {
-      const parsed = JSON.parse(message);
-      if (
-        parsed?.__workflowError &&
-        typeof parsed.message === "string" &&
-        (VALID_ERROR_CODES as readonly string[]).includes(parsed.code) &&
-        (VALID_ERROR_SOURCES as readonly string[]).includes(parsed.source) &&
-        VALID_HTTP_STATUSES.has(parsed.status)
-      ) {
-        return new WorkflowError({
-          code: parsed.code,
-          message: parsed.message,
-          status: parsed.status,
-          source: parsed.source,
-          details: parsed.details,
-        });
-      }
-    } catch {
-      // Not a serialized WorkflowError
-    }
-
-    return new WorkflowError({
-      code: "INTERNAL_ERROR",
-      message,
-      status: 500,
-      source: "api",
-    });
-  }
+function createErrorInit(code: ErrorCode, source: ErrorSource, message: string, details?: Record<string, unknown>) {
+	return {
+		code,
+		source,
+		message,
+		status: WORKFLOW_ERROR_CATALOG[code].status,
+		details,
+	};
 }
 
 /**
- * Thrown when a workflow with the given ID is not found.
- *
- * Error code: `WORKFLOW_NOT_FOUND` | HTTP status: `404`
+ * Framework-agnostic domain error for Ablauf.
  */
+export class WorkflowError extends Error {
+	public readonly code: ErrorCode;
+	public readonly status: WorkflowErrorStatus;
+	public readonly source: ErrorSource;
+	public readonly details?: Record<string, unknown>;
+
+	constructor(opts: {
+		code: ErrorCode;
+		message: string;
+		status: WorkflowErrorStatus;
+		source: ErrorSource;
+		details?: Record<string, unknown>;
+	}) {
+		super(opts.message);
+		this.name = this.constructor.name;
+		this.code = opts.code;
+		this.status = opts.status;
+		this.source = opts.source;
+		this.details = opts.details;
+	}
+
+	toJSON() {
+		return {
+			__workflowError: true,
+			code: this.code,
+			message: this.message,
+			status: this.status,
+			source: this.source,
+			...(this.details && { details: this.details }),
+		};
+	}
+
+	/**
+	 * Reconstruct a `WorkflowError` from unknown thrown values, including
+	 * serialized errors crossing Durable Object RPC boundaries.
+	 */
+	static fromSerialized(e: unknown): WorkflowError {
+		if (e instanceof WorkflowError) return e;
+
+		const message = e instanceof Error ? e.message : String(e);
+
+		try {
+			const parsed: unknown = JSON.parse(message);
+			if (typeof parsed !== 'object' || parsed === null) {
+				throw new Error('Invalid serialized WorkflowError payload');
+			}
+
+			const candidate = parsed as Record<string, unknown>;
+			const code = candidate.code;
+			const source = candidate.source;
+			const status = candidate.status;
+			const parsedMessage = candidate.message;
+			const detailsRaw = candidate.details;
+			if (
+				candidate.__workflowError &&
+				typeof parsedMessage === 'string' &&
+				isErrorCode(code) &&
+				(VALID_ERROR_SOURCES as readonly string[]).includes(String(source)) &&
+				isWorkflowErrorStatus(status) &&
+				status === WORKFLOW_ERROR_CATALOG[code].status
+			) {
+				const details = detailsRaw && typeof detailsRaw === 'object' ? (detailsRaw as Record<string, unknown>) : undefined;
+				return new WorkflowError({
+					code,
+					message: parsedMessage,
+					status,
+					source: source as ErrorSource,
+					details,
+				});
+			}
+		} catch {
+			// Not a serialized WorkflowError
+		}
+
+		return createInternalWorkflowError(message);
+	}
+}
+
+/**
+ * Normalize unknown throwables into a WorkflowError when possible.
+ *
+ * - WorkflowError instances pass through unchanged.
+ * - Serialized DO errors are reconstructed.
+ * - Unknown non-Error values return null.
+ */
+export function asWorkflowError(error: unknown, opts?: { includeInternal?: boolean }): WorkflowError | null {
+	const includeInternal = opts?.includeInternal ?? true;
+
+	if (error instanceof WorkflowError) {
+		if (!includeInternal && error.code === 'INTERNAL_ERROR') return null;
+		return error;
+	}
+
+	if (!(error instanceof Error)) {
+		return null;
+	}
+
+	const restored = WorkflowError.fromSerialized(error);
+	if (!includeInternal && restored.code === 'INTERNAL_ERROR') {
+		return null;
+	}
+	return restored;
+}
+
+/**
+ * Create a generic INTERNAL_ERROR WorkflowError.
+ */
+export function createInternalWorkflowError(message: string = WORKFLOW_ERROR_CATALOG.INTERNAL_ERROR.message): WorkflowError {
+	return new WorkflowError(createErrorInit('INTERNAL_ERROR', 'api', message));
+}
+
+/**
+ * Convert a domain WorkflowError into an HTTPException for Hono boundaries.
+ */
+export function toHonoError(error: WorkflowError): HTTPException {
+	return new HTTPException(error.status, { message: error.message, cause: error });
+}
+
+export function toWorkflowErrorResponse(error: WorkflowError) {
+	return {
+		error: error.toJSON(),
+	};
+}
+
+type ORPCErrorDef<K extends ErrorCode> = {
+	status: (typeof WORKFLOW_ERROR_CATALOG)[K]['status'];
+	message: (typeof WORKFLOW_ERROR_CATALOG)[K]['message'];
+};
+
+type ORPCErrorMap<Codes extends readonly ErrorCode[]> = {
+	[K in Codes[number]]: ORPCErrorDef<K>;
+};
+
+/**
+ * Select a typed oRPC error map from the canonical catalog.
+ */
+export function pickORPCErrors<const Codes extends readonly ErrorCode[]>(codes: Codes): ORPCErrorMap<Codes> {
+	return Object.fromEntries(codes.map((code) => [code, WORKFLOW_ERROR_CATALOG[code]])) as ORPCErrorMap<Codes>;
+}
+
 export class WorkflowNotFoundError extends WorkflowError {
-  constructor(workflowId: string) {
-    super({
-      code: "WORKFLOW_NOT_FOUND",
-      message: `Workflow "${workflowId}" not found`,
-      status: 404,
-      source: "api",
-    });
-  }
+	constructor(workflowId: string) {
+		super(createErrorInit('WORKFLOW_NOT_FOUND', 'api', `Workflow "${workflowId}" not found`));
+	}
 }
 
 /**
@@ -161,14 +229,9 @@ export class WorkflowNotFoundError extends WorkflowError {
  * Error code: `WORKFLOW_ALREADY_EXISTS` | HTTP status: `409`
  */
 export class WorkflowAlreadyExistsError extends WorkflowError {
-  constructor(workflowId: string) {
-    super({
-      code: "WORKFLOW_ALREADY_EXISTS",
-      message: `Workflow "${workflowId}" already exists`,
-      status: 409,
-      source: "engine",
-    });
-  }
+	constructor(workflowId: string) {
+		super(createErrorInit('WORKFLOW_ALREADY_EXISTS', 'engine', `Workflow "${workflowId}" already exists`));
+	}
 }
 
 /**
@@ -177,14 +240,9 @@ export class WorkflowAlreadyExistsError extends WorkflowError {
  * Error code: `WORKFLOW_TYPE_UNKNOWN` | HTTP status: `400`
  */
 export class WorkflowTypeUnknownError extends WorkflowError {
-  constructor(workflowType: string) {
-    super({
-      code: "WORKFLOW_TYPE_UNKNOWN",
-      message: `Unknown workflow type: "${workflowType}"`,
-      status: 400,
-      source: "api",
-    });
-  }
+	constructor(workflowType: string) {
+		super(createErrorInit('WORKFLOW_TYPE_UNKNOWN', 'api', `Unknown workflow type: "${workflowType}"`));
+	}
 }
 
 /**
@@ -193,15 +251,9 @@ export class WorkflowTypeUnknownError extends WorkflowError {
  * Error code: `VALIDATION_ERROR` | HTTP status: `400`
  */
 export class PayloadValidationError extends WorkflowError {
-  constructor(message: string, issues: unknown[]) {
-    super({
-      code: "VALIDATION_ERROR",
-      message,
-      status: 400,
-      source: "validation",
-      details: { issues },
-    });
-  }
+	constructor(message: string, issues: unknown[]) {
+		super(createErrorInit('VALIDATION_ERROR', 'validation', message, { issues }));
+	}
 }
 
 /**
@@ -210,15 +262,14 @@ export class PayloadValidationError extends WorkflowError {
  * Error code: `EVENT_INVALID` | HTTP status: `400`
  */
 export class EventValidationError extends WorkflowError {
-  constructor(eventName: string, issues: unknown[]) {
-    super({
-      code: "EVENT_INVALID",
-      message: `Invalid payload for event "${eventName}"`,
-      status: 400,
-      source: "validation",
-      details: { event: eventName, issues },
-    });
-  }
+	constructor(eventName: string, issues: unknown[]) {
+		super(
+			createErrorInit('EVENT_INVALID', 'validation', `Invalid payload for event "${eventName}"`, {
+				event: eventName,
+				issues,
+			}),
+		);
+	}
 }
 
 /**
@@ -227,15 +278,9 @@ export class EventValidationError extends WorkflowError {
  * Error code: `STEP_FAILED` | HTTP status: `500`
  */
 export class StepFailedError extends WorkflowError {
-  constructor(stepName: string, cause: string) {
-    super({
-      code: "STEP_FAILED",
-      message: `Step "${stepName}" failed: ${cause}`,
-      status: 500,
-      source: "step",
-      details: { step: stepName },
-    });
-  }
+	constructor(stepName: string, cause: string) {
+		super(createErrorInit('STEP_FAILED', 'step', `Step "${stepName}" failed: ${cause}`, { step: stepName }));
+	}
 }
 
 /**
@@ -244,15 +289,14 @@ export class StepFailedError extends WorkflowError {
  * Error code: `STEP_RETRY_EXHAUSTED` | HTTP status: `500`
  */
 export class StepRetryExhaustedError extends WorkflowError {
-  constructor(stepName: string, attempts: number, cause: string) {
-    super({
-      code: "STEP_RETRY_EXHAUSTED",
-      message: `Step "${stepName}" failed after ${attempts} attempts: ${cause}`,
-      status: 500,
-      source: "step",
-      details: { step: stepName, attempts },
-    });
-  }
+	constructor(stepName: string, attempts: number, cause: string) {
+		super(
+			createErrorInit('STEP_RETRY_EXHAUSTED', 'step', `Step "${stepName}" failed after ${attempts} attempts: ${cause}`, {
+				step: stepName,
+				attempts,
+			}),
+		);
+	}
 }
 
 /**
@@ -261,14 +305,9 @@ export class StepRetryExhaustedError extends WorkflowError {
  * Error code: `EVENT_TIMEOUT` | HTTP status: `408`
  */
 export class EventTimeoutError extends WorkflowError {
-  constructor(eventName: string) {
-    super({
-      code: "EVENT_TIMEOUT",
-      message: `Event "${eventName}" timed out`,
-      status: 408,
-      source: "engine",
-    });
-  }
+	constructor(eventName: string) {
+		super(createErrorInit('EVENT_TIMEOUT', 'engine', `Event "${eventName}" timed out`));
+	}
 }
 
 /**
@@ -277,15 +316,14 @@ export class EventTimeoutError extends WorkflowError {
  * Error code: `UPDATE_TIMEOUT` | HTTP status: `408`
  */
 export class UpdateTimeoutError extends WorkflowError {
-  constructor(updateName: string, timeout: string) {
-    super({
-      code: "UPDATE_TIMEOUT",
-      message: `Update "${updateName}" timed out after ${timeout}`,
-      status: 408,
-      source: "engine",
-      details: { update: updateName, timeout },
-    });
-  }
+	constructor(updateName: string, timeout: string) {
+		super(
+			createErrorInit('UPDATE_TIMEOUT', 'engine', `Update "${updateName}" timed out after ${timeout}`, {
+				update: updateName,
+				timeout,
+			}),
+		);
+	}
 }
 
 /**
@@ -294,15 +332,14 @@ export class UpdateTimeoutError extends WorkflowError {
  * Error code: `WORKFLOW_NOT_RUNNING` | HTTP status: `409`
  */
 export class WorkflowNotRunningError extends WorkflowError {
-  constructor(workflowId: string, currentStatus: string) {
-    super({
-      code: "WORKFLOW_NOT_RUNNING",
-      message: `Workflow "${workflowId}" is not running (status: ${currentStatus})`,
-      status: 409,
-      source: "engine",
-      details: { workflowId, currentStatus },
-    });
-  }
+	constructor(workflowId: string, currentStatus: string) {
+		super(
+			createErrorInit('WORKFLOW_NOT_RUNNING', 'engine', `Workflow "${workflowId}" is not running (status: ${currentStatus})`, {
+				workflowId,
+				currentStatus,
+			}),
+		);
+	}
 }
 
 /**
@@ -311,15 +348,16 @@ export class WorkflowNotRunningError extends WorkflowError {
  * Error code: `VALIDATION_ERROR` | HTTP status: `400`
  */
 export class DuplicateStepError extends WorkflowError {
-  constructor(stepName: string, method: string) {
-    super({
-      code: "VALIDATION_ERROR",
-      message: `Duplicate step name "${stepName}" in ${method}(). Each step must have a unique name.`,
-      status: 400,
-      source: "engine",
-      details: { step: stepName, method },
-    });
-  }
+	constructor(stepName: string, method: string) {
+		super(
+			createErrorInit(
+				'VALIDATION_ERROR',
+				'engine',
+				`Duplicate step name "${stepName}" in ${method}(). Each step must have a unique name.`,
+				{ step: stepName, method },
+			),
+		);
+	}
 }
 
 /**
@@ -328,14 +366,9 @@ export class DuplicateStepError extends WorkflowError {
  * Error code: `VALIDATION_ERROR` | HTTP status: `400`
  */
 export class InvalidDurationError extends WorkflowError {
-  constructor(duration: string) {
-    super({
-      code: "VALIDATION_ERROR",
-      message: `Invalid duration: "${duration}". Use format like "30s", "5m", "24h", "7d".`,
-      status: 400,
-      source: "validation",
-    });
-  }
+	constructor(duration: string) {
+		super(createErrorInit('VALIDATION_ERROR', 'validation', `Invalid duration: "${duration}". Use format like "30s", "5m", "24h", "7d".`));
+	}
 }
 
 /**
@@ -344,15 +377,16 @@ export class InvalidDurationError extends WorkflowError {
  * Error code: `RESOURCE_NOT_FOUND` | HTTP status: `404`
  */
 export class ResourceNotFoundError extends WorkflowError {
-  constructor(resource: string, id?: string) {
-    super({
-      code: "RESOURCE_NOT_FOUND",
-      message: id ? `${resource} "${id}" not found` : `${resource} not found`,
-      status: 404,
-      source: "api",
-      details: id ? { resource, id } : { resource },
-    });
-  }
+	constructor(resource: string, id?: string) {
+		super(
+			createErrorInit(
+				'RESOURCE_NOT_FOUND',
+				'api',
+				id ? `${resource} "${id}" not found` : `${resource} not found`,
+				id ? { resource, id } : { resource },
+			),
+		);
+	}
 }
 
 /**
@@ -361,14 +395,15 @@ export class ResourceNotFoundError extends WorkflowError {
  * Error code: `OBSERVABILITY_DISABLED` | HTTP status: `400`
  */
 export class ObservabilityDisabledError extends WorkflowError {
-  constructor() {
-    super({
-      code: "OBSERVABILITY_DISABLED",
-      message: "Observability is disabled. Enable it in AblaufConfig to use listing and indexing features.",
-      status: 400,
-      source: "api",
-    });
-  }
+	constructor() {
+		super(
+			createErrorInit(
+				'OBSERVABILITY_DISABLED',
+				'api',
+				'Observability is disabled. Enable it in AblaufConfig to use listing and indexing features.',
+			),
+		);
+	}
 }
 
 /**
@@ -376,7 +411,5 @@ export class ObservabilityDisabledError extends WorkflowError {
  * Returns the `issues` array from a `ZodError`, or a single synthetic issue otherwise.
  */
 export function extractZodIssues(e: unknown): unknown[] {
-  return e instanceof Error && "issues" in e
-    ? (e as { issues: unknown[] }).issues
-    : [{ message: String(e) }];
+	return e instanceof Error && 'issues' in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
 }
