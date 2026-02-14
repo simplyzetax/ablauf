@@ -33,12 +33,13 @@ export type {
 	WorkflowIndexListFilters,
 	WorkflowShardConfig,
 } from "./engine/types";
-export { DEFAULT_RETRY_CONFIG } from "./engine/types";
+export { DEFAULT_RETRY_CONFIG, workflowStatusSchema, stepInfoSchema, workflowStatusResponseSchema, workflowIndexEntrySchema } from "./engine/types";
 
 // Errors
 export {
 	WorkflowError,
 	WorkflowNotFoundError,
+	ResourceNotFoundError,
 	WorkflowAlreadyExistsError,
 	WorkflowTypeUnknownError,
 	PayloadValidationError,

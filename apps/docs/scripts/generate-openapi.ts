@@ -16,7 +16,7 @@ const spec = await generator.generate(dashboardRouter, {
 		description:
 			"REST API for managing and observing durable workflow instances powered by Ablauf.",
 	},
-	servers: [{ url: "http://localhost:8787", description: "Local dev server" }],
+	servers: [{ url: "http://localhost:8787/__ablauf", description: "Local dev server" }],
 });
 
 const outPath = resolve(dirname(fileURLToPath(import.meta.url)), "../openapi.json");
