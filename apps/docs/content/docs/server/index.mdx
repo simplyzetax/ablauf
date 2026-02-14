@@ -22,14 +22,15 @@ Initialize the `Ablauf` class with your Durable Object binding and register your
 ```ts title="src/index.ts"
 import { Hono } from 'hono';
 import { Ablauf } from '@der-ablauf/workflows';
+import { env } from 'cloudflare:workers';
 import { OrderWorkflow } from './workflows/order';
 import { PaymentWorkflow } from './workflows/payment';
-
-const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows: [OrderWorkflow, PaymentWorkflow],
 });
+
+const app = new Hono();
 ```
 
 ### Exporting the Durable Object
@@ -109,29 +110,29 @@ const progress = await ablauf.waitForUpdate(OrderWorkflow, {
 
 ## Setting Up the Dashboard API
 
-To enable the [Dashboard](/docs/dashboard), add the oRPC handlers to your worker:
+To enable the [Dashboard](/docs/dashboard), add the oRPC handlers to your worker using `createHandlers()`:
 
 ```ts
 const { rpcHandler, openApiHandler } = ablauf.createHandlers();
 
-app.use('/__ablauf/rpc/*', async (c, next) => {
-	const { matched, response } = await rpcHandler.handle(c.req.raw, {
-		prefix: '/__ablauf/rpc',
-		context: ablauf.getDashboardContext(),
-	});
-	if (matched) return c.newResponse(response.body, response);
-	await next();
-});
-
-app.use('/__ablauf/api/*', async (c, next) => {
+app.all('/__ablauf/*', async (c) => {
 	const { matched, response } = await openApiHandler.handle(c.req.raw, {
-		prefix: '/__ablauf/api',
+		prefix: '/__ablauf',
 		context: ablauf.getDashboardContext(),
 	});
 	if (matched) return c.newResponse(response.body, response);
-	await next();
+
+	const { matched: matchedRpc, response: rpcResponse } = await rpcHandler.handle(c.req.raw, {
+		prefix: '/__ablauf',
+		context: ablauf.getDashboardContext(),
+	});
+	if (matchedRpc) return c.newResponse(rpcResponse.body, rpcResponse);
+
+	return new Response('Not Found', { status: 404 });
 });
 ```
+
+For the full dashboard setup including installation, running, and configuration, see the [Dashboard](/docs/dashboard) docs.
 
 ## Configuration
 

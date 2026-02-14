@@ -3,6 +3,8 @@ title: Retries & Error Handling
 description: Configure retry strategies and handle failures gracefully
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout';
+
 # Retries & Error Handling
 
 Every `step.do()` has automatic retry support built-in. Network hiccup? API rate limit? Transient database error? Ablauf will retry the step automatically using Durable Object alarms (non-blocking, of course).
@@ -85,25 +87,11 @@ Ablauf supports three backoff strategies:
 
 Exponential backoff is usually the right choice — it gives temporary issues time to resolve without hammering a struggling service.
 
-## Duration Strings
+Retry delays use [duration strings](/docs/server/api-reference#duration-strings) like `"500ms"`, `"1s"`, `"30s"`, `"5m"`, or `"1h"`.
 
-Retry delays use [duration strings](/docs/server/api-reference#duration-strings):
+## When Retries Are Exhausted
 
-- `"500ms"` — 500 milliseconds
-- `"1s"` — 1 second
-- `"30s"` — 30 seconds
-- `"5m"` — 5 minutes
-- `"1h"` — 1 hour
-
-## Error Hierarchy
-
-Ablauf has a centralized error system. All errors extend `WorkflowError`, which extends Hono's `HTTPException`, so they automatically get proper HTTP status codes.
-
-Here are the main errors you'll encounter:
-
-### `StepRetryExhaustedError`
-
-Thrown when a step fails all retry attempts. Contains the original error and retry history.
+When all retry attempts fail, the step throws `StepRetryExhaustedError`. This propagates to the workflow's `run()` function, marking the workflow as errored.
 
 ```ts
 try {
@@ -119,108 +107,15 @@ try {
 }
 ```
 
-### `EventTimeoutError`
-
-Thrown when `step.waitForEvent()` times out before receiving the expected event.
-
-```ts
-try {
-	const confirmation = await step.waitForEvent('payment-confirmed', {
-		timeout: '30m',
-	});
-} catch (err) {
-	if (err instanceof EventTimeoutError) {
-		// Send a reminder, cancel the order, etc.
-	}
-	throw err;
-}
-```
-
-### `PayloadValidationError`
-
-Thrown when creating a workflow with invalid input:
-
-```ts
-// If the payload doesn't match the input schema
-await ablauf.create(MyWorkflow, {
-	id: 'wf-123',
-	payload: { invalid: 'data' }, // Throws PayloadValidationError
-});
-```
-
-Contains detailed Zod validation issues to help you debug.
-
-### `EventValidationError`
-
-Thrown when sending an event with invalid payload or unknown event name:
-
-```ts
-// Unknown event name or invalid payload shape
-await ablauf.sendEvent(MyWorkflow, {
-	id: 'wf-123',
-	event: 'unknown-event', // Throws EventValidationError
-	payload: {
-		/* ... */
-	},
-});
-```
-
-### `DuplicateStepError`
-
-Thrown when two steps in the same workflow have the same name. Step names must be unique within a workflow instance.
-
-```ts
-await step.do('fetch-data', async () => {
-	/* ... */
-});
-await step.do('fetch-data', async () => {
-	/* ... */
-}); // Throws DuplicateStepError
-```
-
-### `WorkflowNotFoundError`
-
-Thrown when trying to interact with a workflow instance that doesn't exist:
-
-```ts
-// Workflow with this ID doesn't exist
-await ablauf.sendEvent(MyWorkflow, {
-	id: 'nonexistent-id', // Throws WorkflowNotFoundError
-	event: 'some-event',
-	payload: {
-		/* ... */
-	},
-});
-```
-
-### `WorkflowAlreadyExistsError`
-
-Thrown when trying to create a workflow with an ID that already exists:
-
-```ts
-await ablauf.create(MyWorkflow, {
-	id: 'wf-123',
-	payload: {
-		/* ... */
-	},
-});
-await ablauf.create(MyWorkflow, {
-	id: 'wf-123',
-	payload: {
-		/* ... */
-	},
-}); // Throws WorkflowAlreadyExistsError
-```
-
-Use `createIfNotExists()` if you want to safely ignore duplicates.
+<Callout type="info">
+	For the complete list of error classes and their HTTP status codes, see the [API Reference](/docs/server/api-reference#error-classes).
+</Callout>
 
 ## Best Practices
 
 **Set realistic retry limits.** If an API is down, 100 retries won't help. Use retries for transient issues, not systemic failures.
 
 **Use exponential backoff for external services.** Linear or fixed backoff can overwhelm a struggling service.
-
-**Handle specific errors.** Catch `StepRetryExhaustedError` and `EventTimeoutError` when you have a graceful fallback. Let other errors bubble up.
 
 **Don't retry non-idempotent operations blindly.** If retrying a step could cause duplicate charges, emails, or data corruption, add idempotency checks inside the step.
 

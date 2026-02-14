@@ -40,37 +40,7 @@ const status = await ablauf.status(workflowId, OrderWorkflow);
 // status.result is typed as OrderResult | null
 ```
 
-### Status Response Shape
-
-The status response includes everything you need to understand a workflow's current state:
-
-```ts
-{
-  id: string;
-  type: string;
-  status: WorkflowStatus;
-  payload: unknown; // (typed with workflow class)
-  result: unknown;  // (typed with workflow class)
-  error: string | null;
-  steps: StepInfo[];
-  createdAt: number;
-  updatedAt: number;
-}
-```
-
-Each `StepInfo` entry provides:
-
-```ts
-{
-  name: string;
-  status: "completed" | "failed";
-  attempts: number;
-  result?: unknown;
-  error?: string;
-  startedAt: number;
-  completedAt?: number;
-}
-```
+For the full shape of the status response including `StepInfo` details, see the [API Reference](/docs/server/api-reference#workflowstatusresponse).
 
 ## Pausing and Resuming
 
@@ -116,20 +86,20 @@ Termination is useful when:
 
 ## Status Transitions
 
-Here's how workflows typically move between states:
+Here's how workflows move between states:
 
 ```
 created → running → completed
-              ↓
-            errored
-              ↓
-         (paused) → (resumed) → running
-              ↓
-         (sleeping) → running
-              ↓
-         (waiting) → running
-              ↓
-        terminated
+              │
+              ├─→ sleeping ─→ running  (alarm fires)
+              ├─→ waiting  ─→ running  (event arrives)
+              ├─→ paused   ─→ running  (manually resumed)
+              ├─→ errored
+              └─→ terminated
 ```
 
-A workflow in `"paused"`, `"sleeping"`, or `"waiting"` is essentially suspended — it's not actively executing steps, but it will resume automatically (for sleep/wait) or manually (for pause).
+- **`sleeping`**, **`waiting`**, and **`paused`** are all suspended states — the workflow isn't actively executing steps.
+- `sleeping` and `waiting` resume automatically (when the alarm fires or the event arrives).
+- `paused` requires a manual `resume()` call.
+- `terminated` is permanent — the workflow cannot be resumed.
+- Any running or suspended workflow can be terminated at any time.
