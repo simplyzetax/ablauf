@@ -2,14 +2,14 @@
 
 ## Overview
 
-Convert the single-package project into a Turborepo monorepo called `ablauf`. Extract the workflow engine into a publishable package (`@ablauf/workflows`), keep the Cloudflare Worker as a thin HTTP demo app (`@ablauf/worker`), and add an echo workflow demo.
+Convert the single-package project into a Turborepo monorepo called `ablauf`. Extract the workflow engine into a publishable package (`@der-ablauf/workflows`), keep the Cloudflare Worker as a thin HTTP demo app (`@der-ablauf/worker`), and add an echo workflow demo.
 
 ## Structure
 
 ```
 ablauf/
 ├── apps/
-│   └── worker/                    # @ablauf/worker (demo app)
+│   └── worker/                    # @der-ablauf/worker (demo app)
 │       ├── src/
 │       │   ├── __tests__/         # Integration tests (vitest-pool-workers)
 │       │   │   ├── errors.test.ts
@@ -24,7 +24,7 @@ ablauf/
 │       ├── tsconfig.json
 │       └── package.json
 ├── packages/
-│   └── workflows/                 # @ablauf/workflows (published to npm)
+│   └── workflows/                 # @der-ablauf/workflows (published to npm)
 │       ├── src/
 │       │   ├── engine/
 │       │   │   ├── base-workflow.ts
@@ -54,7 +54,7 @@ The package is designed for Cloudflare Workers users. Two main exports:
 Factory that returns a Durable Object class with the given workflows baked into its registry. Consumers re-export this from their worker entry point (required by Cloudflare for DO bindings).
 
 ```typescript
-import { createWorkflowRunner } from '@ablauf/workflows';
+import { createWorkflowRunner } from '@der-ablauf/workflows';
 import { MyWorkflow } from './workflows/my-workflow';
 
 // Create and export the DO class
@@ -66,7 +66,7 @@ export const WorkflowRunner = createWorkflowRunner([MyWorkflow]);
 Client that wraps a DO namespace binding to provide type-safe workflow operations. Consumers pass their DO binding to the constructor.
 
 ```typescript
-import { Ablauf } from '@ablauf/workflows';
+import { Ablauf } from '@der-ablauf/workflows';
 
 export default {
   async fetch(req: Request, env: Env) {
@@ -101,7 +101,7 @@ export default {
 
 ## Package Boundaries
 
-### @ablauf/workflows (packages/workflows)
+### @der-ablauf/workflows (packages/workflows)
 
 Exports:
 - `createWorkflowRunner(workflows)` — DO class factory
@@ -116,7 +116,7 @@ Dependencies: `hono`, `drizzle-orm`, `zod`
 
 Ships TypeScript source directly (no build step) since all consumers use wrangler/esbuild.
 
-### @ablauf/worker (apps/worker)
+### @der-ablauf/worker (apps/worker)
 
 Owns:
 - Hono HTTP routes
@@ -127,7 +127,7 @@ Owns:
 - Integration tests (vitest-pool-workers)
 - worker-configuration.d.ts
 
-Dependencies: `@ablauf/workflows` (workspace), plus dev deps for wrangler, vitest, drizzle-kit
+Dependencies: `@der-ablauf/workflows` (workspace), plus dev deps for wrangler, vitest, drizzle-kit
 
 ## Echo Workflow
 
@@ -159,13 +159,13 @@ No `build` task needed — wrangler bundles TS source at deploy time.
 
 ### Package configs
 
-**@ablauf/workflows package.json**:
+**@der-ablauf/workflows package.json**:
 - `exports`: points to `./src/index.ts`
 - `types`: points to `./src/index.ts`
 - `scripts.check-types`: `tsc --noEmit`
 - No build script
 
-**@ablauf/worker package.json**:
+**@der-ablauf/worker package.json**:
 - `scripts.dev`: `wrangler dev`
 - `scripts.deploy`: `wrangler deploy`
 - `scripts.test`: `vitest run`
@@ -179,14 +179,14 @@ No `build` task needed — wrangler bundles TS source at deploy time.
 
 All references to "durable-workflows" renamed to "ablauf":
 - Root package name: `ablauf`
-- Package names: `@ablauf/workflows`, `@ablauf/worker`
+- Package names: `@der-ablauf/workflows`, `@der-ablauf/worker`
 - README, AGENTS.md, any internal references
 
 ## Test Strategy
 
 - Integration tests stay in `apps/worker` (need vitest-pool-workers + wrangler)
 - Error unit tests stay in `apps/worker` (they also use the pool-workers setup)
-- Tests import from `@ablauf/workflows` like any consumer would
+- Tests import from `@der-ablauf/workflows` like any consumer would
 - Tests updated to use new `Ablauf` client + `createWorkflowRunner` API
 - Existing test behavior preserved
 
@@ -196,10 +196,10 @@ Root:
 - `turbo` (devDep)
 - `typescript` (devDep)
 
-@ablauf/workflows:
+@der-ablauf/workflows:
 - `hono`, `drizzle-orm`, `zod` (deps)
 
-@ablauf/worker:
-- `@ablauf/workflows` (workspace dep)
+@der-ablauf/worker:
+- `@der-ablauf/workflows` (workspace dep)
 - `@cloudflare/vitest-pool-workers`, `wrangler`, `vitest`, `drizzle-kit` (devDeps)
 - `@types/node` (devDep)

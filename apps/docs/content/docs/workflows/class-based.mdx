@@ -18,8 +18,8 @@ The class-based API allows you to define workflows by extending `BaseWorkflow`. 
 Here's a workflow that handles user onboarding with email verification:
 
 ```ts
-import { BaseWorkflow } from "@ablauf/workflows";
-import type { Step, SSE } from "@ablauf/workflows";
+import { BaseWorkflow } from "@der-ablauf/workflows";
+import type { Step, SSE } from "@der-ablauf/workflows";
 import { z } from "zod";
 
 const inputSchema = z.object({
@@ -174,8 +174,8 @@ Unlike the functional API, you'll need to manually annotate parameter types:
 Here's a more complex workflow with SSE updates and multiple event types:
 
 ```ts
-import { BaseWorkflow } from "@ablauf/workflows";
-import type { Step, SSE } from "@ablauf/workflows";
+import { BaseWorkflow } from "@der-ablauf/workflows";
+import type { Step, SSE } from "@der-ablauf/workflows";
 import { z } from "zod";
 
 const inputSchema = z.object({

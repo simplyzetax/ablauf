@@ -12,7 +12,7 @@ The `Ablauf` class is the server-side API for creating, managing, and querying d
 ## Installation
 
 ```bash
-npm install @ablauf/workflows hono zod
+npm install @der-ablauf/workflows hono zod
 ```
 
 ## Setup
@@ -21,7 +21,7 @@ Initialize the `Ablauf` class with your Durable Object binding and register your
 
 ```ts title="src/index.ts"
 import { Hono } from "hono";
-import { Ablauf } from "@ablauf/workflows";
+import { Ablauf } from "@der-ablauf/workflows";
 import { OrderWorkflow } from "./workflows/order";
 import { PaymentWorkflow } from "./workflows/payment";
 

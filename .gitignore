@@ -167,6 +167,9 @@ dist
 .source/
 openapi.json
 
+# compiled binaries
+ablauf-dashboard
+
 # wrangler project
 .dev.vars*
 !.dev.vars.example

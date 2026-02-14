@@ -4,8 +4,8 @@ Durable workflow engine for Cloudflare Workers, powered by Durable Objects.
 
 ## Packages
 
-- **`@ablauf/workflows`** — Core engine: workflow runner, step context, error handling, types
-- **`@ablauf/worker`** — Demo Cloudflare Worker with example workflows
+- **`@der-ablauf/workflows`** — Core engine: workflow runner, step context, error handling, types
+- **`@der-ablauf/worker`** — Demo Cloudflare Worker with example workflows
 
 ## Development
 

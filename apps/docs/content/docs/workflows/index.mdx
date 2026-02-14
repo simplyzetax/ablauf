@@ -30,7 +30,7 @@ Ablauf is built on Cloudflare Durable Objects, which give you consistent SQLite 
 Here's a workflow that processes a payment with retries, waits for confirmation, and sends a receipt:
 
 ```ts
-import { defineWorkflow } from "@ablauf/workflows";
+import { defineWorkflow } from "@der-ablauf/workflows";
 import { z } from "zod";
 
 const PaymentWorkflow = defineWorkflow({

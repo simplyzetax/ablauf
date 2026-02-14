@@ -18,7 +18,7 @@ The functional API using `defineWorkflow()` is the recommended way to define wor
 Here's a simple workflow that processes an order with validation, a cool-down period, and shipping:
 
 ```ts
-import { defineWorkflow } from "@ablauf/workflows";
+import { defineWorkflow } from "@der-ablauf/workflows";
 import { z } from "zod";
 
 const OrderWorkflow = defineWorkflow({
@@ -132,7 +132,7 @@ sseUpdates: {
 Here's a more complex workflow demonstrating events, SSE updates, and retry configuration:
 
 ```ts
-import { defineWorkflow } from "@ablauf/workflows";
+import { defineWorkflow } from "@der-ablauf/workflows";
 import { z } from "zod";
 
 const ApprovalWorkflow = defineWorkflow({

@@ -4,7 +4,7 @@
 
 **Goal:** Add step lifecycle tracking (timing, error stacks, retry history) to the workflow engine, expose it via a dashboard helper, and serve it from a standalone dashboard CLI app.
 
-**Architecture:** Extend `stepsTable` with 4 new columns for observability data. Instrument `StepContext.do()` to record timing and error details. Add a `createDashboardHandler()` helper that serves JSON from the DO's SQLite via 3 REST endpoints. Create `@ablauf/dashboard` package with TanStack Router + Vite + Tailwind + shadcn for the CLI dashboard app.
+**Architecture:** Extend `stepsTable` with 4 new columns for observability data. Instrument `StepContext.do()` to record timing and error details. Add a `createDashboardHandler()` helper that serves JSON from the DO's SQLite via 3 REST endpoints. Create `@der-ablauf/dashboard` package with TanStack Router + Vite + Tailwind + shadcn for the CLI dashboard app.
 
 **Tech Stack:** Drizzle ORM (migrations + schema), Vitest (cloudflare pool-workers), Hono (helper routing), React 19, TanStack Router, Vite, Tailwind CSS 4, shadcn/ui
 
@@ -341,7 +341,7 @@ Create `apps/worker/src/__tests__/dashboard.test.ts`:
 ```typescript
 import { env } from "cloudflare:test";
 import { describe, it, expect, beforeAll } from "vitest";
-import { Ablauf, createDashboardHandler } from "@ablauf/workflows";
+import { Ablauf, createDashboardHandler } from "@der-ablauf/workflows";
 import { EchoWorkflow } from "../workflows/echo-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
 
@@ -544,7 +544,7 @@ git commit -m "feat(dashboard): add createDashboardHandler helper with REST endp
 In `apps/worker/src/index.ts`, add after the existing imports:
 
 ```typescript
-import { createDashboardHandler } from "@ablauf/workflows";
+import { createDashboardHandler } from "@der-ablauf/workflows";
 ```
 
 And add a route before the `export default`:
@@ -592,7 +592,7 @@ git commit -m "feat(worker): mount dashboard handler on /__ablauf routes"
 
 ```json
 {
-  "name": "@ablauf/dashboard",
+  "name": "@der-ablauf/dashboard",
   "version": "0.0.1",
   "private": true,
   "type": "module",

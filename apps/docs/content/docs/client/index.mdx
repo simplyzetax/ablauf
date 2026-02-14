@@ -7,12 +7,12 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 # Client
 
-`@ablauf/client` is a lightweight browser client for consuming Ablauf workflows from your frontend. It provides type-safe access to the dashboard API and real-time SSE subscriptions.
+`@der-ablauf/client` is a lightweight browser client for consuming Ablauf workflows from your frontend. It provides type-safe access to the dashboard API and real-time SSE subscriptions.
 
 ## Installation
 
 ```bash
-npm install @ablauf/client
+npm install @der-ablauf/client
 ```
 
 <Callout type="info">
@@ -22,7 +22,7 @@ The client connects to the oRPC endpoint exposed by your worker. Make sure you'v
 ## Creating the Client
 
 ```ts
-import { createAblaufClient } from "@ablauf/client";
+import { createAblaufClient } from "@der-ablauf/client";
 
 const client = createAblaufClient({
   url: "https://your-worker.example.com/__ablauf/rpc",
@@ -86,7 +86,7 @@ const timeline = await client.workflows.timeline({ id: "order-123" });
 Subscribe to live updates from a running workflow using Server-Sent Events:
 
 ```ts
-import type { InferSSEUpdates } from "@ablauf/client";
+import type { InferSSEUpdates } from "@der-ablauf/client";
 import type { OrderWorkflow } from "./workflows/order";
 
 // Type-safe SSE subscription
@@ -124,7 +124,7 @@ controller.abort();
 Use `InferSSEUpdates` to extract the SSE event types from a workflow class:
 
 ```ts
-import type { InferSSEUpdates } from "@ablauf/client";
+import type { InferSSEUpdates } from "@der-ablauf/client";
 import type { OrderWorkflow } from "./workflows/order";
 
 type OrderUpdates = InferSSEUpdates<typeof OrderWorkflow>;
@@ -137,7 +137,7 @@ Here's how you might use the client in a React component:
 
 ```tsx
 import { useEffect, useState } from "react";
-import { createAblaufClient } from "@ablauf/client";
+import { createAblaufClient } from "@der-ablauf/client";
 
 const client = createAblaufClient({
   url: "/__ablauf/rpc",

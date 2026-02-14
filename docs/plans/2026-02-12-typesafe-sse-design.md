@@ -2,7 +2,7 @@
 
 ## Overview
 
-Real-time, type-safe Server-Sent Events (SSE) from Durable Object workflows to browser clients. Workflows push updates via an `sse` parameter in `run()`, and clients consume them through a typed `@ablauf/client` package.
+Real-time, type-safe Server-Sent Events (SSE) from Durable Object workflows to browser clients. Workflows push updates via an `sse` parameter in `run()`, and clients consume them through a typed `@der-ablauf/client` package.
 
 ## Workflow Definition
 
@@ -79,7 +79,7 @@ CREATE TABLE sse_messages (
 The package exports a helper that returns a raw `Response`. Users mount it on whatever route they want:
 
 ```ts
-import { createSSEStream } from '@ablauf/workflows'
+import { createSSEStream } from '@der-ablauf/workflows'
 
 app.get('/workflows/:id/sse', async (c) => {
   const user = await getUser(c.req)
@@ -116,15 +116,15 @@ event: close
 data: {}
 ```
 
-## Client-Side: `@ablauf/client` Package
+## Client-Side: `@der-ablauf/client` Package
 
-Lightweight, framework-agnostic TypeScript package. Zero dependency on `@ablauf/workflows`.
+Lightweight, framework-agnostic TypeScript package. Zero dependency on `@der-ablauf/workflows`.
 
 ### Singleton Client
 
 ```ts
 // lib/ablauf.ts
-import { createAblaufClient } from '@ablauf/client'
+import { createAblaufClient } from '@der-ablauf/client'
 
 export const ablaufClient = createAblaufClient({
   url: '/api/workflows',
@@ -168,7 +168,7 @@ WorkflowClass.sseUpdates (Zod schema)
   subscribe<typeof OrderWorkflow>()  ->  callback data is typed
 ```
 
-Type extraction helper in `@ablauf/client`:
+Type extraction helper in `@der-ablauf/client`:
 
 ```ts
 type InferSSEUpdates<W> = W extends { sseUpdates: z.ZodType<infer T> } ? T : never
@@ -179,11 +179,11 @@ subscribe<W extends { sseUpdates?: z.ZodType<any> }>(
 ): Subscription<InferSSEUpdates<W>>
 ```
 
-Client-side uses `import type` which TypeScript erases at build time - no server code leaks into the browser bundle. Users import workflow types from their own codebase, not from `@ablauf/workflows`.
+Client-side uses `import type` which TypeScript erases at build time - no server code leaks into the browser bundle. Users import workflow types from their own codebase, not from `@der-ablauf/workflows`.
 
 ## Package Boundaries
 
-### `@ablauf/workflows` (existing, server-side)
+### `@der-ablauf/workflows` (existing, server-side)
 
 - New: `SSE<T>` type and `SSEContext` implementation
 - New: `sse_messages` table + migration
@@ -193,9 +193,9 @@ Client-side uses `import type` which TypeScript erases at build time - no server
 - Modified: `sseUpdates` optional static field on `BaseWorkflow`
 - Modified: `createWorkflowRunner()` wires up SSE context + replay logic
 
-### `@ablauf/client` (new, browser-safe)
+### `@der-ablauf/client` (new, browser-safe)
 
 - `createAblaufClient(config)` - factory for the singleton
 - `InferSSEUpdates<W>` - type helper
 - `Subscription<T>` - return type with `.on()` / `.unsubscribe()`
-- Zero dependency on `@ablauf/workflows` - only imports `zod` for type-level extraction
+- Zero dependency on `@der-ablauf/workflows` - only imports `zod` for type-level extraction

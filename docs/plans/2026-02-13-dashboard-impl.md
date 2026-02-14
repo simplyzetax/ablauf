@@ -21,7 +21,7 @@
 
 ```json
 {
-  "name": "@ablauf/dashboard",
+  "name": "@der-ablauf/dashboard",
   "version": "0.0.1",
   "type": "module",
   "bin": {

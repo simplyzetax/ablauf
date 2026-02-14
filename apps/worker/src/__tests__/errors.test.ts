@@ -11,7 +11,7 @@ import {
   EventTimeoutError,
   UpdateTimeoutError,
   WorkflowNotRunningError,
-} from "@ablauf/workflows";
+} from "@der-ablauf/workflows";
 
 describe("WorkflowError", () => {
   it("has correct properties", () => {

@@ -18,7 +18,7 @@ Tests run via `vitest` with `@cloudflare/vitest-pool-workers` (executes inside w
 Turborepo monorepo with bun workspaces:
 
 ```
-packages/workflows/     # @ablauf/workflows — core engine (the library)
+packages/workflows/     # @der-ablauf/workflows — core engine (the library)
   src/
     client.ts           # Ablauf class — main API for consumers
     dashboard.ts        # oRPC router for dashboard API
@@ -37,9 +37,9 @@ packages/workflows/     # @ablauf/workflows — core engine (the library)
       types.ts            # all TypeScript types/interfaces
     db/schema.ts        # Drizzle ORM schema (SQLite in DO storage)
 
-packages/client/        # @ablauf/client — oRPC browser client
-packages/dashboard/     # @ablauf/dashboard — React dashboard UI (TanStack Router + React Query)
-apps/worker/            # @ablauf/worker — demo Cloudflare Worker with example workflows
+packages/client/        # @der-ablauf/client — oRPC browser client
+packages/dashboard/     # @der-ablauf/dashboard — React dashboard UI (TanStack Router + React Query)
+apps/worker/            # @der-ablauf/worker — demo Cloudflare Worker with example workflows
   src/
     index.ts            # Hono app with centralized error handler
     workflows/          # example workflow definitions

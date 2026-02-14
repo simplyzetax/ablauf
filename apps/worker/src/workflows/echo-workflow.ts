@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineWorkflow } from "@ablauf/workflows";
+import { defineWorkflow } from "@der-ablauf/workflows";
 
 export const EchoWorkflow = defineWorkflow({
 	type: "echo",

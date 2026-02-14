@@ -29,7 +29,7 @@ export default function HomePage() {
 					</Link>
 				</div>
 				<p className="mt-12 text-sm text-fd-muted-foreground">
-					npm install @ablauf/workflows
+					npm install @der-ablauf/workflows
 				</p>
 			</div>
 		</main>

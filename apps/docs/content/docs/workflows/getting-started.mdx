@@ -27,10 +27,10 @@ New to Cloudflare Workers? Check out their [getting started guide](https://devel
 Install Ablauf alongside Hono and Zod:
 
 ```bash
-npm install @ablauf/workflows hono zod
+npm install @der-ablauf/workflows hono zod
 ```
 
-- **`@ablauf/workflows`** — The workflow engine
+- **`@der-ablauf/workflows`** — The workflow engine
 - **`hono`** — Lightweight web framework for Workers
 - **`zod`** — Runtime validation for workflow inputs and events
 
@@ -45,7 +45,7 @@ npm install @ablauf/workflows hono zod
 Create a simple greeting workflow using the `defineWorkflow()` API. This is the recommended way to define workflows—less boilerplate than classes, full type safety.
 
 ```ts title="src/workflows/greeting.ts"
-import { defineWorkflow } from "@ablauf/workflows";
+import { defineWorkflow } from "@der-ablauf/workflows";
 import { z } from "zod";
 
 export const GreetingWorkflow = defineWorkflow({
@@ -80,7 +80,7 @@ Create a Hono app and initialize Ablauf with your workflow. The `Ablauf` class c
 
 ```ts title="src/index.ts"
 import { Hono } from "hono";
-import { Ablauf } from "@ablauf/workflows";
+import { Ablauf } from "@der-ablauf/workflows";
 import { GreetingWorkflow } from "./workflows/greeting";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();

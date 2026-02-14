@@ -1,11 +1,19 @@
 {
-	"name": "@ablauf/workflows",
+	"name": "@der-ablauf/workflows",
 	"version": "0.0.1",
+	"description": "Durable workflow engine for Cloudflare Workers",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/der-ablauf/ablauf",
+		"directory": "packages/workflows"
+	},
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts"
 	},
 	"types": "./src/index.ts",
+	"files": ["src/", "drizzle/"],
 	"scripts": {
 		"check-types": "tsc --noEmit",
 		"db:generate": "drizzle-kit generate"
