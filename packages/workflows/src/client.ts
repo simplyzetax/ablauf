@@ -16,11 +16,13 @@ import type {
 } from './engine/types';
 import type { WorkflowRegistration } from './engine/workflow-runner';
 import { createWorkflowRunner } from './engine/workflow-runner';
-import { RPCHandler } from '@orpc/server/fetch';
+import { FetchHandler } from '@orpc/server/fetch';
+import { StandardHandler, StandardRPCCodec, StandardRPCMatcher } from '@orpc/server/standard';
 import { dashboardRouter } from './dashboard';
 import type { DashboardContext } from './dashboard';
-import { CORSPlugin } from '@orpc/server/plugins';
+import { CORSPlugin, StrictGetMethodPlugin } from '@orpc/server/plugins';
 import { OpenAPIHandler } from '@orpc/openapi/fetch';
+import SuperJSON from 'superjson';
 
 /** Configuration for the Ablauf workflow engine. */
 export interface AblaufConfig {
@@ -363,9 +365,20 @@ export class Ablauf {
 		const openApiHandler = new OpenAPIHandler(dashboardRouter, {
 			plugins: [corsPlugin],
 		});
-		const rpcHandler = new RPCHandler(dashboardRouter, {
-			plugins: [corsPlugin],
-		});
+		const serializer = {
+			serialize: (data: unknown) => SuperJSON.serialize(data),
+			deserialize: (data: any) => SuperJSON.deserialize(data),
+		};
+		const plugins = [corsPlugin, new StrictGetMethodPlugin()];
+		const rpcHandler = new FetchHandler(
+			new StandardHandler(
+				dashboardRouter,
+				new StandardRPCMatcher(),
+				new StandardRPCCodec(serializer as any), // NEEDED ACCORDING TO ORPC DOCS https://orpc.dev/docs/advanced/superjson#superjson-serializer
+				{ plugins },
+			),
+			{ plugins },
+		);
 		return {
 			openApiHandler,
 			rpcHandler,

@@ -18,6 +18,7 @@ import {
 } from '../errors';
 import { eq, or } from 'drizzle-orm';
 import { shardIndex } from './shard';
+import superjson from 'superjson';
 import type {
 	WorkflowStatus,
 	WorkflowStatusResponse,
@@ -108,7 +109,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				workflowId: props.id,
 				type: props.type,
 				status: 'running',
-				payload: JSON.stringify(props.payload),
+				payload: superjson.stringify(props.payload),
 				createdAt: now,
 				updatedAt: now,
 			});
@@ -128,7 +129,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					type: s.type,
 					status: s.status,
 					attempts: s.attempts,
-					result: s.result ? JSON.parse(s.result) : null,
+					result: s.result ? superjson.parse(s.result) : null,
 					error: s.error,
 					completedAt: s.completedAt,
 					startedAt: s.startedAt ?? null,
@@ -140,8 +141,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					id: wf.workflowId,
 					type: wf.type,
 					status: wf.status as WorkflowStatus,
-					payload: wf.payload ? JSON.parse(wf.payload) : null,
-					result: wf.result ? JSON.parse(wf.result) : null,
+					payload: wf.payload ? superjson.parse(wf.payload) : null,
+					result: wf.result ? superjson.parse(wf.result) : null,
 					error: wf.error,
 					steps,
 					createdAt: wf.createdAt,
@@ -199,7 +200,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				.update(stepsTable)
 				.set({
 					status: 'completed',
-					result: JSON.stringify(payload),
+					result: superjson.stringify(payload),
 					completedAt: Date.now(),
 				})
 				.where(eq(stepsTable.name, props.event));
@@ -366,7 +367,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			try {
 				let payload: unknown;
 				try {
-					payload = WorkflowCls.inputSchema.parse(wf.payload ? JSON.parse(wf.payload) : undefined);
+					payload = WorkflowCls.inputSchema.parse(wf.payload ? superjson.parse(wf.payload) : undefined);
 				} catch (e) {
 					const issues = extractZodIssues(e);
 					throw new PayloadValidationError('Invalid workflow input', issues);
@@ -375,7 +376,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				const result = await instance.run(stepCtx, payload, sseArg);
 				await this.db.update(workflowTable).set({
 					status: 'completed',
-					result: JSON.stringify(result),
+					result: superjson.stringify(result),
 					updatedAt: Date.now(),
 				});
 				this.updateIndex(wf.type, wf.workflowId, 'completed', Date.now());

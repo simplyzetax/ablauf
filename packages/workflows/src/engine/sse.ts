@@ -2,6 +2,7 @@ import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
 import type { z } from 'zod';
 import { sseMessagesTable } from '../db/schema';
 import type { SSE } from './types';
+import superjson from 'superjson';
 
 type UpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
@@ -58,7 +59,7 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 				.insert(sseMessagesTable)
 				.values({
 					event: name,
-					data: JSON.stringify(parsed),
+					data: superjson.stringify(parsed),
 					createdAt: Date.now(),
 				})
 				.run();
@@ -103,7 +104,7 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 	}
 
 	private writeToClients<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
-		const message = this.encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+		const message = this.encoder.encode(`event: ${name}\ndata: ${superjson.stringify(data)}\n\n`);
 		for (const writer of this.writers) {
 			try {
 				writer.write(message);

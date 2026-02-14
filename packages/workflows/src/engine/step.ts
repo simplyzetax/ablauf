@@ -6,6 +6,7 @@ import { StepRetryExhaustedError, DuplicateStepError, WorkflowError } from '../e
 import { parseDuration } from './duration';
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from './types';
 import { DEFAULT_RETRY_CONFIG } from './types';
+import superjson from 'superjson';
 
 /**
  * Concrete implementation of the {@link Step} interface backed by SQLite.
@@ -47,7 +48,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
 
 		if (existing?.status === 'completed') {
-			return (existing.result ? JSON.parse(existing.result) : null) as T;
+			return (existing.result ? superjson.parse(existing.result) : null) as T;
 		}
 
 		const retryConfig: RetryConfig = {
@@ -70,7 +71,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 				this.onFirstExecution?.();
 			}
 			const result = await fn();
-			const serialized = JSON.stringify(result);
+			const serialized = superjson.stringify(result);
 			const duration = Date.now() - startedAt;
 
 			if (existing) {
@@ -215,7 +216,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			.where(eq(stepsTable.name, name as string));
 
 		if (existing?.status === 'completed') {
-			return (existing.result ? JSON.parse(existing.result) : null) as Events[K];
+			return (existing.result ? superjson.parse(existing.result) : null) as Events[K];
 		}
 
 		if (existing?.status === 'failed') {
