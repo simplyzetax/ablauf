@@ -1,9 +1,13 @@
-import Link from 'next/link';
+import { createFileRoute, Link } from '@tanstack/react-router';
 
-export default function HomePage() {
+export const Route = createFileRoute('/')({
+	component: HomePage,
+});
+
+function HomePage() {
 	return (
 		<main className="flex min-h-screen flex-col items-center justify-center bg-fd-background text-fd-foreground">
-			<div className="mx-auto max-w-2xl text-center px-6">
+			<div className="mx-auto max-w-2xl px-6 text-center">
 				<h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl">
 					<span className="text-fd-primary">Ablauf</span>
 				</h1>
@@ -14,15 +18,16 @@ export default function HomePage() {
 					<br />
 					Events that wait patiently. All on the edge.
 				</p>
-				<div className="mt-8 flex gap-4 justify-center">
+				<div className="mt-8 flex justify-center gap-4">
 					<Link
-						href="/docs"
+						to="/docs"
 						className="rounded-lg bg-fd-primary px-6 py-3 font-semibold text-fd-primary-foreground transition-colors hover:opacity-90"
 					>
 						Read the Docs
 					</Link>
 					<Link
-						href="/docs/workflows/getting-started"
+						to="/docs/$"
+						params={{ _splat: 'workflows/getting-started' }}
 						className="rounded-lg border border-fd-border px-6 py-3 font-semibold transition-colors hover:bg-fd-accent"
 					>
 						Get Started
