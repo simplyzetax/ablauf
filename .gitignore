@@ -170,6 +170,9 @@ openapi.json
 # compiled binaries
 ablauf-dashboard
 
+# opennext build output
+.open-next/
+
 # wrangler project
 .dev.vars*
 !.dev.vars.example
