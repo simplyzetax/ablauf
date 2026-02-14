@@ -17,12 +17,7 @@ Ablauf includes built-in observability and a React dashboard for monitoring your
 - **Retry History** — See per-attempt details for steps with retry logic
 - **Live Updates** — Real-time SSE updates as workflows execute
 
-## Quick Start
-
-<Callout type="info">
-	The dashboard connects to your worker's oRPC endpoint. Make sure you've [set up the API
-	handlers](/docs/server#setting-up-the-dashboard-api) first.
-</Callout>
+## Setup
 
 ### Install
 
@@ -30,7 +25,46 @@ Ablauf includes built-in observability and a React dashboard for monitoring your
 npm install @der-ablauf/dashboard
 ```
 
-### Run
+### Add the API Handlers
+
+The dashboard needs an RPC endpoint to communicate with your worker. Add this to your worker:
+
+```ts
+import { Ablauf } from '@der-ablauf/workflows';
+import { Hono } from 'hono';
+import { env } from 'cloudflare:workers';
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [OrderWorkflow, PaymentWorkflow],
+});
+
+const { rpcHandler, openApiHandler } = ablauf.createHandlers();
+
+app.all('/__ablauf/*', async (c) => {
+	const { matched, response } = await openApiHandler.handle(c.req.raw, {
+		prefix: '/__ablauf',
+		context: ablauf.getDashboardContext(),
+	});
+	if (matched) return c.newResponse(response.body, response);
+
+	const { matched: matchedRpc, response: rpcResponse } = await rpcHandler.handle(c.req.raw, {
+		prefix: '/__ablauf',
+		context: ablauf.getDashboardContext(),
+	});
+	if (matchedRpc) return c.newResponse(rpcResponse.body, rpcResponse);
+
+	return new Response('Not Found', { status: 404 });
+});
+```
+
+<Callout type="warn">
+	The `/__ablauf` prefix can be anything you want, but make sure it matches when you run the dashboard CLI. Also, **don't expose this in
+	production** without adding authentication — it provides full read access to all workflow data.
+</Callout>
+
+### Run the Dashboard
+
+Once your worker is running, start the dashboard:
 
 ```bash
 npx ablauf-dashboard --url http://localhost:8787
@@ -38,7 +72,76 @@ npx ablauf-dashboard --url http://localhost:8787
 
 The dashboard opens in your browser and connects to your worker's RPC endpoint automatically.
 
-## Next Steps
+## Listing Workflows
 
-- [Observability](/docs/dashboard/observability) — Learn about workflow listing, shard-based indexing, and configuration
-- [API Reference](/docs/dashboard) — Browse the full Dashboard API with OpenAPI docs
+Ablauf tracks all workflow instances by type, allowing you to query and filter them programmatically:
+
+```ts
+// List all instances of a workflow type
+const orders = await ablauf.list('process-order');
+
+// Filter by status
+const running = await ablauf.list('process-order', { status: 'running' });
+
+// Limit results (sorted by updatedAt, newest first)
+const recent = await ablauf.list('process-order', { limit: 10 });
+```
+
+Each entry in the list is a `WorkflowIndexEntry`:
+
+```ts
+{
+	id: string;
+	status: string;
+	createdAt: number;
+	updatedAt: number;
+}
+```
+
+For full details about a specific workflow, use `ablauf.status(id)`.
+
+## Shard Configuration
+
+Under the hood, Ablauf uses **shard-based indexing** with dedicated Durable Objects for index storage. When observability is enabled, every workflow state change is recorded in one or more index shards.
+
+By default, Ablauf uses a single shard per workflow type. For high-volume workflows (thousands of instances), you can increase the shard count to distribute load:
+
+```ts
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [
+		[HighVolumeWorkflow, { shards: 8 }],
+		[LowVolumeWorkflow, { shards: 1 }], // default
+	],
+});
+```
+
+<Callout type="info">
+	More shards = better write throughput for high-volume workflow types, but queries need to fan out to all shards. Start with the default
+	(1) and scale up as needed.
+</Callout>
+
+## Disabling Observability
+
+If you don't need the list/dashboard features, you can disable observability to save on Durable Object operations:
+
+```ts
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [OrderWorkflow],
+	observability: false,
+});
+
+// ablauf.list() will throw ObservabilityDisabledError
+```
+
+This skips all index updates, reducing the number of Durable Object writes. You can still use `ablauf.status(id)` to check individual workflows if you know their ID.
+
+## Production Considerations
+
+In production, you'll likely want:
+
+1. **Authentication** on the `/__ablauf` endpoint to prevent unauthorized access
+2. **Rate limiting** to protect against abuse
+3. **CORS headers** if your dashboard is hosted on a different domain
+4. **Reasonable shard counts** for high-volume workflow types (typically 2-8 shards)
+
+Observability adds minimal overhead (one additional Durable Object write per status change), but for extremely high-volume workflows, disabling it and using custom metrics/logging may be more cost-effective.

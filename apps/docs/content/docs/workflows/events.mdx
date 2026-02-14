@@ -3,6 +3,8 @@ title: Typed Events
 description: Define and send fully typed events to running workflows
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout';
+
 # Typed Events
 
 Ablauf's event system is fully typed end-to-end with Zod schemas. Events are defined as part of the workflow definition, and TypeScript knows exactly which events a workflow accepts and what shape their payloads have. No more guessing, no more runtime surprises.
@@ -148,19 +150,6 @@ const OrderWorkflow = defineWorkflow({
 
 ## Event Timeouts
 
-If an event doesn't arrive within the timeout, `step.waitForEvent()` throws `EventTimeoutError`:
+`step.waitForEvent()` accepts an optional timeout. If the event doesn't arrive in time, the workflow is marked as errored with `EventTimeoutError`. Timeouts use [duration strings](/docs/server/api-reference#duration-strings) like `"30s"`, `"5m"`, `"1h"`, or `"7d"`.
 
-```ts
-try {
-	const confirmation = await step.waitForEvent('payment-confirmed', {
-		timeout: '30m',
-	});
-} catch (err) {
-	if (err instanceof EventTimeoutError) {
-		// Handle timeout — maybe send a reminder email
-	}
-	throw err;
-}
-```
-
-Timeouts use [duration strings](/docs/server/api-reference#duration-strings) like `"30s"`, `"5m"`, `"1h"`, or `"7d"`.
+For the full details on timeout behavior and internals, see [step.waitForEvent()](/docs/workflows/steps/wait-for-event).

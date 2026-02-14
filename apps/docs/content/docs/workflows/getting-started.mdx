@@ -81,14 +81,15 @@ Create a Hono app and initialize Ablauf with your workflow. The `Ablauf` class c
 ```ts title="src/index.ts"
 import { Hono } from 'hono';
 import { Ablauf } from '@der-ablauf/workflows';
+import { env } from 'cloudflare:workers';
 import { GreetingWorkflow } from './workflows/greeting';
 
-const app = new Hono<{ Bindings: CloudflareBindings }>();
-
 // Initialize Ablauf with the WORKFLOW_RUNNER binding
-const ablauf = new Ablauf<CloudflareBindings['WORKFLOW_RUNNER']>((env) => env.WORKFLOW_RUNNER, {
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows: [GreetingWorkflow],
 });
+
+const app = new Hono();
 
 // Create a new greeting workflow
 app.post('/greet', async (c) => {
@@ -106,21 +107,13 @@ app.post('/greet', async (c) => {
 // Get workflow status
 app.get('/workflows/:id', async (c) => {
 	const id = c.req.param('id');
-	const workflow = ablauf.get(GreetingWorkflow, id);
-	const status = await workflow.getStatus();
+	const status = await ablauf.status(id, GreetingWorkflow);
 	return c.json(status);
 });
 
-// Export the Worker
+// Export the Worker and Durable Object class
 export default { fetch: app.fetch };
-
-// Export the Durable Object class
 export const WorkflowRunner = ablauf.createWorkflowRunner();
-
-// Type definitions
-interface CloudflareBindings {
-	WORKFLOW_RUNNER: DurableObjectNamespace;
-}
 ```
 
 <Callout type="warn">

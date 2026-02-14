@@ -29,6 +29,9 @@ new Ablauf(binding: DurableObjectNamespace, config?: AblaufConfig)
 **Example:**
 
 ```ts
+import { Ablauf } from '@der-ablauf/workflows';
+import { env } from 'cloudflare:workers';
+
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows: [OrderWorkflow, [HighVolumeWorkflow, { shards: 8 }]],
 	observability: true,
@@ -268,22 +271,33 @@ export const WorkflowRunner = ablauf.createWorkflowRunner();
 
 ---
 
-#### `createRPCHandler()`
+#### `createHandlers()`
 
-Returns an oRPC handler for the dashboard API.
+Returns oRPC handlers for the dashboard API (both RPC and OpenAPI).
+
+```ts
+createHandlers(): { rpcHandler: RPCHandler; openApiHandler: OpenAPIHandler }
+```
 
 **Example:**
 
 ```ts
-const rpcHandler = ablauf.createRPCHandler();
+const { rpcHandler, openApiHandler } = ablauf.createHandlers();
 
-app.use('/__ablauf/*', async (c, next) => {
-	const { matched, response } = await rpcHandler.handle(c.req.raw, {
+app.all('/__ablauf/*', async (c) => {
+	const { matched, response } = await openApiHandler.handle(c.req.raw, {
 		prefix: '/__ablauf',
 		context: ablauf.getDashboardContext(),
 	});
 	if (matched) return c.newResponse(response.body, response);
-	await next();
+
+	const { matched: matchedRpc, response: rpcResponse } = await rpcHandler.handle(c.req.raw, {
+		prefix: '/__ablauf',
+		context: ablauf.getDashboardContext(),
+	});
+	if (matchedRpc) return c.newResponse(rpcResponse.body, rpcResponse);
+
+	return new Response('Not Found', { status: 404 });
 });
 ```
 
