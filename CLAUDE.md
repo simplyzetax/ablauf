@@ -55,6 +55,7 @@ All errors MUST use the centralized error system in `packages/workflows/src/erro
 ```
 WorkflowError (extends Hono HTTPException)
 ├── WorkflowNotFoundError        (404, "api")
+├── ResourceNotFoundError        (404, "api")
 ├── WorkflowAlreadyExistsError   (409, "engine")
 ├── WorkflowTypeUnknownError     (400, "api")
 ├── PayloadValidationError       (400, "validation")
@@ -123,6 +124,7 @@ const MyWorkflow = defineWorkflow({
 - No `console.log` in library code (packages/workflows); acceptable in CLI tools (dashboard/cli.ts)
 - Empty catch blocks are OK only for best-effort operations (SSE writer cleanup, index updates) — always add a comment explaining why
 - Keep `packages/workflows/src/index.ts` as the single public API surface — if you add something, export it there
+- ALWAYS update the documentation in apps/docs when you make changes to the code and the code touches things mentioned in the documentation.
 
 ## Testing
 

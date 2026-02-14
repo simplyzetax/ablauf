@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * Possible states of a workflow instance during its lifecycle.
  *
@@ -10,7 +12,8 @@
  * - `"waiting"` — Blocked on an external event via `step.waitForEvent()`.
  * - `"terminated"` — Manually terminated; cannot be resumed.
  */
-export type WorkflowStatus = "created" | "running" | "completed" | "errored" | "paused" | "sleeping" | "waiting" | "terminated";
+export const workflowStatusSchema = z.enum(["created", "running", "completed", "errored", "paused", "sleeping", "waiting", "terminated"]);
+export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
 
 /**
  * Strategy for calculating the delay between retry attempts.
@@ -202,53 +205,65 @@ export interface WorkflowInstance<
 	run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }
 
-/** Full status snapshot of a workflow instance. */
-export interface WorkflowStatusResponse {
-	/** Unique identifier of the workflow instance. */
-	id: string;
-	/** Workflow type string. */
-	type: string;
-	/** Current lifecycle status. */
-	status: WorkflowStatus;
-	/** The input payload the workflow was started with. */
-	payload: unknown;
-	/** The final result, or `null` if not yet completed. */
-	result: unknown;
-	/** Error message if errored, otherwise `null`. */
-	error: string | null;
-	/** Ordered list of step execution details. */
-	steps: StepInfo[];
-	/** Unix timestamp (ms) when the instance was created. */
-	createdAt: number;
-	/** Unix timestamp (ms) of the last status update. */
-	updatedAt: number;
-}
+/** Zod schema for a single step's execution details. */
+export const stepInfoSchema = z.object({
+	/** Unique name of the step. */
+	name: z.string(),
+	/** Step type: `"do"`, `"sleep"`, or `"wait_for_event"`. */
+	type: z.string(),
+	/** Current status (e.g., `"completed"`, `"failed"`, `"sleeping"`, `"waiting"`). */
+	status: z.string(),
+	/** Number of execution attempts (including retries). */
+	attempts: z.number(),
+	/** Persisted result, or `null` if not yet completed. */
+	result: z.unknown(),
+	/** Error message from the most recent failure, or `null`. */
+	error: z.string().nullable(),
+	/** Unix timestamp (ms) when the step completed, or `null`. */
+	completedAt: z.number().nullable(),
+	/** Unix timestamp (ms) when the step started, or `null`. */
+	startedAt: z.number().nullable(),
+	/** Execution duration in milliseconds, or `null`. */
+	duration: z.number().nullable(),
+	/** Error stack trace from the most recent failure, or `null`. */
+	errorStack: z.string().nullable(),
+	/** History of failed retry attempts, or `null` if no retries occurred. */
+	retryHistory: z.array(z.object({
+		attempt: z.number(),
+		error: z.string(),
+		errorStack: z.string().nullable(),
+		timestamp: z.number(),
+		duration: z.number(),
+	})).nullable(),
+});
 
 /** Detailed information about a single step's execution. */
-export interface StepInfo {
-	/** Unique name of the step. */
-	name: string;
-	/** Step type: `"do"`, `"sleep"`, or `"wait_for_event"`. */
-	type: string;
-	/** Current status (e.g., `"completed"`, `"failed"`, `"sleeping"`, `"waiting"`). */
-	status: string;
-	/** Number of execution attempts (including retries). */
-	attempts: number;
-	/** Persisted result, or `null` if not yet completed. */
-	result: unknown;
-	/** Error message from the most recent failure, or `null`. */
-	error: string | null;
-	/** Unix timestamp (ms) when the step completed, or `null`. */
-	completedAt: number | null;
-	/** Unix timestamp (ms) when the step started, or `null`. */
-	startedAt: number | null;
-	/** Execution duration in milliseconds, or `null`. */
-	duration: number | null;
-	/** Error stack trace from the most recent failure, or `null`. */
-	errorStack: string | null;
-	/** History of failed retry attempts, or `null` if no retries occurred. */
-	retryHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> | null;
-}
+export type StepInfo = z.infer<typeof stepInfoSchema>;
+
+/** Zod schema for a full workflow status snapshot. */
+export const workflowStatusResponseSchema = z.object({
+	/** Unique identifier of the workflow instance. */
+	id: z.string(),
+	/** Workflow type string. */
+	type: z.string(),
+	/** Current lifecycle status. */
+	status: workflowStatusSchema,
+	/** The input payload the workflow was started with. */
+	payload: z.unknown(),
+	/** The final result, or `null` if not yet completed. */
+	result: z.unknown(),
+	/** Error message if errored, otherwise `null`. */
+	error: z.string().nullable(),
+	/** Ordered list of step execution details. */
+	steps: z.array(stepInfoSchema),
+	/** Unix timestamp (ms) when the instance was created. */
+	createdAt: z.number(),
+	/** Unix timestamp (ms) of the last status update. */
+	updatedAt: z.number(),
+});
+
+/** Full status snapshot of a workflow instance. */
+export type WorkflowStatusResponse = z.infer<typeof workflowStatusResponseSchema>;
 
 /** Properties required to initialize a new workflow instance in the Durable Object. */
 export interface WorkflowRunnerInitProps {
@@ -281,17 +296,20 @@ export type WorkflowStatusResponseFor<
 	result: Result | null;
 };
 
-/** Compact index entry for listing workflow instances without loading full status. */
-export interface WorkflowIndexEntry {
+/** Zod schema for a compact workflow index entry. */
+export const workflowIndexEntrySchema = z.object({
 	/** Unique identifier of the workflow instance. */
-	id: string;
+	id: z.string(),
 	/** Current lifecycle status. */
-	status: string;
+	status: z.string(),
 	/** Unix timestamp (ms) when the instance was created. */
-	createdAt: number;
+	createdAt: z.number(),
 	/** Unix timestamp (ms) of the last index update. */
-	updatedAt: number;
-}
+	updatedAt: z.number(),
+});
+
+/** Compact index entry for listing workflow instances without loading full status. */
+export type WorkflowIndexEntry = z.infer<typeof workflowIndexEntrySchema>;
 
 /** Filters for querying the workflow index. */
 export interface WorkflowIndexListFilters {

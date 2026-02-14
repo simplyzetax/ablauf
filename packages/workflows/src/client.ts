@@ -25,6 +25,8 @@ import { createWorkflowRunner } from "./engine/workflow-runner";
 import { RPCHandler } from "@orpc/server/fetch";
 import { dashboardRouter } from "./dashboard";
 import type { DashboardContext } from "./dashboard";
+import { CORSPlugin } from "@orpc/server/plugins";
+import { OpenAPIHandler } from "@orpc/openapi/fetch";
 
 /** Configuration for the Ablauf workflow engine. */
 export interface AblaufConfig {
@@ -34,6 +36,8 @@ export interface AblaufConfig {
 	shards?: Record<string, WorkflowShardConfig>;
 	/** Whether observability (index sharding and listing) is enabled. Defaults to `true`. */
 	observability?: boolean;
+	/** An array of allowed CORS origins for the oRPC API. */
+	corsOrigins?: string[];
 }
 
 /**
@@ -51,7 +55,7 @@ export class Ablauf {
 	 * @param binding - The `WORKFLOW_RUNNER` Durable Object namespace from your worker's `env`.
 	 * @param config - Optional configuration for registered workflows, sharding, and observability.
 	 */
-	constructor(binding: DurableObjectNamespace, config?: AblaufConfig) {
+	constructor(binding: DurableObjectNamespace, private config?: AblaufConfig) {
 		this.binding = binding;
 		this.shardConfigs = {};
 		this.workflows = [];
@@ -269,11 +273,11 @@ export class Ablauf {
 			timeoutMs === null
 				? null
 				: new Promise<never>((_, reject) => {
-						timer = setTimeout(() => {
-							abortController.abort();
-							reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
-						}, timeoutMs);
-					});
+					timer = setTimeout(() => {
+						abortController.abort();
+						reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
+					}, timeoutMs);
+				});
 
 		try {
 			if (!timeoutPromise) {
@@ -356,8 +360,22 @@ export class Ablauf {
 	 *
 	 * @returns An {@link RPCHandler} instance that can serve the dashboard API over HTTP.
 	 */
-	createRPCHandler() {
-		return new RPCHandler(dashboardRouter);
+	createHandlers() {
+		const openApiHandler = new OpenAPIHandler(dashboardRouter, {
+			plugins: [new CORSPlugin()],
+		});
+		const rpcHandler = new RPCHandler(dashboardRouter, {
+			plugins: [
+				new CORSPlugin({
+					origin: this.config?.corsOrigins,
+					allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH'],
+				}),
+			],
+		});
+		return {
+			openApiHandler,
+			rpcHandler,
+		}
 	}
 
 }

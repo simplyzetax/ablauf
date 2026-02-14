@@ -15,6 +15,7 @@ export type ErrorCode =
   | "UPDATE_TIMEOUT"
   | "EVENT_INVALID"
   | "WORKFLOW_NOT_RUNNING"
+  | "RESOURCE_NOT_FOUND"
   | "OBSERVABILITY_DISABLED"
   | "INTERNAL_ERROR";
 
@@ -39,6 +40,7 @@ const VALID_ERROR_CODES: readonly ErrorCode[] = [
   "UPDATE_TIMEOUT",
   "EVENT_INVALID",
   "WORKFLOW_NOT_RUNNING",
+  "RESOURCE_NOT_FOUND",
   "OBSERVABILITY_DISABLED",
   "INTERNAL_ERROR",
 ] as const;
@@ -332,6 +334,23 @@ export class InvalidDurationError extends WorkflowError {
       message: `Invalid duration: "${duration}". Use format like "30s", "5m", "24h", "7d".`,
       status: 400,
       source: "validation",
+    });
+  }
+}
+
+/**
+ * Thrown when a requested resource (other than a workflow instance) is not found.
+ *
+ * Error code: `RESOURCE_NOT_FOUND` | HTTP status: `404`
+ */
+export class ResourceNotFoundError extends WorkflowError {
+  constructor(resource: string, id?: string) {
+    super({
+      code: "RESOURCE_NOT_FOUND",
+      message: id ? `${resource} "${id}" not found` : `${resource} not found`,
+      status: 404,
+      source: "api",
+      details: id ? { resource, id } : { resource },
     });
   }
 }
