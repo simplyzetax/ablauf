@@ -6,10 +6,10 @@
 	"scripts": {
 		"generate:openapi": "bun scripts/generate-openapi.ts",
 		"dev": "bun scripts/generate-openapi.ts && next dev",
-		"build": "bun scripts/generate-openapi.ts && next build",
-		"build:worker": "bun scripts/generate-openapi.ts && opennextjs-cloudflare build",
-		"preview": "bun run build:worker && opennextjs-cloudflare preview",
-		"deploy": "bun run build:worker && opennextjs-cloudflare deploy",
+		"build": "bun scripts/generate-openapi.ts && next build && opennextjs-cloudflare build --skipNextBuild",
+		"build:worker": "bun run build",
+		"preview": "opennextjs-cloudflare preview",
+		"deploy": "opennextjs-cloudflare deploy",
 		"check-types": "fumadocs-mdx && tsc --noEmit"
 	},
 	"dependencies": {
