@@ -11,6 +11,8 @@
 		"db:generate": "drizzle-kit generate"
 	},
 	"dependencies": {
+		"@orpc/client": "^1.13.5",
+		"@orpc/openapi": "^1.13.5",
 		"@orpc/server": "^1.13.5",
 		"drizzle-orm": "^0.45.1",
 		"hono": "^4.11.9",

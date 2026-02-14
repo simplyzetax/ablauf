@@ -39,6 +39,7 @@ export { DEFAULT_RETRY_CONFIG, workflowStatusSchema, stepInfoSchema, workflowSta
 export {
 	WorkflowError,
 	WorkflowNotFoundError,
+	ResourceNotFoundError,
 	WorkflowAlreadyExistsError,
 	WorkflowTypeUnknownError,
 	PayloadValidationError,

@@ -4,7 +4,7 @@ import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, Workf
 import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from "./engine/types";
 import { listIndexEntries } from "./engine/index-listing";
 import { parseSSEStream } from "./engine/sse-stream";
-import { ObservabilityDisabledError } from "./errors";
+import { ObservabilityDisabledError, WorkflowError } from "./errors";
 
 export interface DashboardContext {
 	binding: DurableObjectNamespace;
@@ -13,7 +13,37 @@ export interface DashboardContext {
 	observability: boolean;
 }
 
-const base = os.$context<DashboardContext>();
+const base = os
+	.$context<DashboardContext>()
+	.errors({
+		WORKFLOW_NOT_FOUND: { status: 404, message: "Workflow not found" },
+		OBSERVABILITY_DISABLED: { status: 400, message: "Observability is disabled" },
+		WORKFLOW_NOT_RUNNING: { status: 409, message: "Workflow is not running" },
+		INTERNAL_ERROR: { status: 500, message: "Internal error" },
+	})
+	.use(async ({ next, errors }) => {
+		try {
+			return await next();
+		} catch (error) {
+			let wfError: WorkflowError | null = null;
+
+			if (error instanceof WorkflowError) {
+				wfError = error;
+			} else if (error instanceof Error) {
+				const deserialized = WorkflowError.fromSerialized(error);
+				if (deserialized.code !== "INTERNAL_ERROR") {
+					wfError = deserialized;
+				}
+			}
+
+			if (wfError && wfError.code in errors) {
+				const factory = errors[wfError.code as keyof typeof errors];
+				throw factory({ message: wfError.message });
+			}
+
+			throw error;
+		}
+	});
 
 function getStub(binding: DurableObjectNamespace, id: string): WorkflowRunnerStub {
 	return binding.get(binding.idFromName(id)) as unknown as WorkflowRunnerStub;

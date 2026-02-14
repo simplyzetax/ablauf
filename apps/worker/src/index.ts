@@ -10,43 +10,15 @@ import { env } from "cloudflare:workers";
 import type { WorkflowClass } from "@ablauf/workflows";
 
 const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow, DuplicateStepWorkflow];
-
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
 	corsOrigins: ["http://localhost:3000"],
 });
+const { openApiHandler, rpcHandler } = ablauf.createHandlers();
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Centralized error handler
-app.onError((err, c) => {
-	if (err instanceof WorkflowError) {
-		return c.json(
-			{
-				error: {
-					code: err.code,
-					message: err.message,
-					status: err.status,
-					source: err.source,
-					...(err.details && { details: err.details }),
-				},
-			},
-			err.status,
-		);
-	}
-
-	return c.json(
-		{
-			error: {
-				code: "INTERNAL_ERROR" as const,
-				message: "An unexpected error occurred",
-				status: 500,
-				source: "api" as const,
-			},
-		},
-		500,
-	);
-});
+app.use("/__ablauf/*", cors({ origin: ["http://localhost:3000"] }));
 
 app.post("/workflows/:type", async (c) => {
 	const { type } = c.req.param();
@@ -83,25 +55,28 @@ app.post("/workflows/:type", async (c) => {
 	}
 });
 
-const rpcHandler = ablauf.createRPCHandler();
-
-app.use("/__ablauf/*", cors({ origin: ["http://localhost:3000"] }));
-
-app.use("/__ablauf/*", async (c, next) => {
-	const { matched, response } = await rpcHandler.handle(c.req.raw, {
+app.all("/__ablauf/*", async (c) => {
+	const { matched: matchedOpenApi, response: responseOpenApi } = await openApiHandler.handle(c.req.raw, {
 		prefix: "/__ablauf",
 		context: ablauf.getDashboardContext(),
 	});
 
-	if (matched) {
-		return c.newResponse(response.body, response);
+	if (matchedOpenApi) {
+		return c.newResponse(responseOpenApi.body, responseOpenApi);
 	}
 
-	await next();
-});
+	const { matched: matchedRpc, response: responseRpc } = await rpcHandler.handle(c.req.raw, {
+		prefix: "/__ablauf",
+		context: ablauf.getDashboardContext(),
+	});
 
+	if (matchedRpc) {
+		return c.newResponse(responseRpc.body, responseRpc);
+	}
+
+	return new Response("Not Found", { status: 404 });
+});
 export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
-
 export const WorkflowRunner = ablauf.createWorkflowRunner();

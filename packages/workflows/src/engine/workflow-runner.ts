@@ -117,35 +117,42 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		}
 
 		async getStatus(): Promise<WorkflowStatusResponse> {
-			const [wf] = await this.db.select().from(workflowTable);
-			if (!wf) {
-				throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+			try {
+				const [wf] = await this.db.select().from(workflowTable);
+				if (!wf) {
+					throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+				}
+				const stepRows = await this.db.select().from(stepsTable);
+				const steps = stepRows.map<StepInfo>((s) => ({
+					name: s.name,
+					type: s.type,
+					status: s.status,
+					attempts: s.attempts,
+					result: s.result ? JSON.parse(s.result) : null,
+					error: s.error,
+					completedAt: s.completedAt,
+					startedAt: s.startedAt ?? null,
+					duration: s.duration ?? null,
+					errorStack: s.errorStack ?? null,
+					retryHistory: s.retryHistory ? JSON.parse(s.retryHistory) : null,
+				}));
+				return {
+					id: wf.workflowId,
+					type: wf.type,
+					status: wf.status as WorkflowStatus,
+					payload: wf.payload ? JSON.parse(wf.payload) : null,
+					result: wf.result ? JSON.parse(wf.result) : null,
+					error: wf.error,
+					steps,
+					createdAt: wf.createdAt,
+					updatedAt: wf.updatedAt,
+				};
+			} catch (e) {
+				if (e instanceof WorkflowError) {
+					throw new Error(JSON.stringify(e.toJSON()));
+				}
+				throw e;
 			}
-			const stepRows = await this.db.select().from(stepsTable);
-			const steps = stepRows.map<StepInfo>((s) => ({
-				name: s.name,
-				type: s.type,
-				status: s.status,
-				attempts: s.attempts,
-				result: s.result ? JSON.parse(s.result) : null,
-				error: s.error,
-				completedAt: s.completedAt,
-				startedAt: s.startedAt ?? null,
-				duration: s.duration ?? null,
-				errorStack: s.errorStack ?? null,
-				retryHistory: s.retryHistory ? JSON.parse(s.retryHistory) : null,
-			}));
-			return {
-				id: wf.workflowId,
-				type: wf.type,
-				status: wf.status as WorkflowStatus,
-				payload: wf.payload ? JSON.parse(wf.payload) : null,
-				result: wf.result ? JSON.parse(wf.result) : null,
-				error: wf.error,
-				steps,
-				createdAt: wf.createdAt,
-				updatedAt: wf.updatedAt,
-			};
 		}
 
 		async deliverEvent(props: WorkflowRunnerEventProps): Promise<void> {
@@ -221,33 +228,40 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		}
 
 		async connectSSE(): Promise<ReadableStream> {
-			const [wf] = await this.db.select().from(workflowTable);
-			if (!wf) {
-				throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
-			}
+			try {
+				const [wf] = await this.db.select().from(workflowTable);
+				if (!wf) {
+					throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+				}
 
-			const WorkflowCls = registry[wf.type];
-			const sseSchemas = WorkflowCls?.sseUpdates ?? null;
+				const WorkflowCls = registry[wf.type];
+				const sseSchemas = WorkflowCls?.sseUpdates ?? null;
 
-			const { readable, writable } = new TransformStream();
-			const writer = writable.getWriter();
+				const { readable, writable } = new TransformStream();
+				const writer = writable.getWriter();
 
-			if (!sseSchemas) {
-				writer.close();
+				if (!sseSchemas) {
+					writer.close();
+					return readable;
+				}
+
+				if (!this.sseCtx) {
+					this.sseCtx = new SSEContext(this.db, sseSchemas, true);
+				}
+
+				// Flush persisted emit messages to the new client
+				await this.sseCtx.flushPersistedMessages(writer);
+
+				// Register for live updates
+				this.sseCtx.addWriter(writer);
+
 				return readable;
+			} catch (e) {
+				if (e instanceof WorkflowError) {
+					throw new Error(JSON.stringify(e.toJSON()));
+				}
+				throw e;
 			}
-
-			if (!this.sseCtx) {
-				this.sseCtx = new SSEContext(this.db, sseSchemas, true);
-			}
-
-			// Flush persisted emit messages to the new client
-			await this.sseCtx.flushPersistedMessages(writer);
-
-			// Register for live updates
-			this.sseCtx.addWriter(writer);
-
-			return readable;
 		}
 
 		// ─── Index Shard RPC Methods ───

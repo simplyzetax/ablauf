@@ -55,6 +55,7 @@ All errors MUST use the centralized error system in `packages/workflows/src/erro
 ```
 WorkflowError (extends Hono HTTPException)
 ├── WorkflowNotFoundError        (404, "api")
+├── ResourceNotFoundError        (404, "api")
 ├── WorkflowAlreadyExistsError   (409, "engine")
 ├── WorkflowTypeUnknownError     (400, "api")
 ├── PayloadValidationError       (400, "validation")

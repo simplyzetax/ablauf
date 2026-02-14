@@ -26,6 +26,7 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { dashboardRouter } from "./dashboard";
 import type { DashboardContext } from "./dashboard";
 import { CORSPlugin } from "@orpc/server/plugins";
+import { OpenAPIHandler } from "@orpc/openapi/fetch";
 
 /** Configuration for the Ablauf workflow engine. */
 export interface AblaufConfig {
@@ -359,15 +360,22 @@ export class Ablauf {
 	 *
 	 * @returns An {@link RPCHandler} instance that can serve the dashboard API over HTTP.
 	 */
-	createRPCHandler() {
-		return new RPCHandler(dashboardRouter, {
+	createHandlers() {
+		const openApiHandler = new OpenAPIHandler(dashboardRouter, {
+			plugins: [new CORSPlugin()],
+		});
+		const rpcHandler = new RPCHandler(dashboardRouter, {
 			plugins: [
 				new CORSPlugin({
 					origin: this.config?.corsOrigins,
 					allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH'],
 				}),
-			]
+			],
 		});
+		return {
+			openApiHandler,
+			rpcHandler,
+		}
 	}
 
 }
