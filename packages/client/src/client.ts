@@ -4,7 +4,7 @@ import type { RouterClient } from "@orpc/server";
 import type { dashboardRouter, WorkflowClass } from "@ablauf/workflows";
 import type { AblaufClientConfig } from "./types";
 
-type RawAblaufClient = RouterClient<typeof dashboardRouter>;
+export type DashboardClient = RouterClient<typeof dashboardRouter>;
 
 export type InferSSEUpdates<W> = W extends WorkflowClass<
 	infer _Payload,
@@ -18,14 +18,15 @@ export type InferSSEUpdates<W> = W extends WorkflowClass<
 		}[Extract<keyof SSEUpdates, string>]
 	: never;
 
-export interface AblaufClient extends RawAblaufClient {
+export interface AblaufClient extends DashboardClient {
 	subscribe<W extends WorkflowClass>(
 		id: string,
 		options?: { signal?: AbortSignal },
 	): AsyncGenerator<InferSSEUpdates<W>, void, unknown>;
 }
 
-export function createAblaufClient(config: AblaufClientConfig): AblaufClient {
+/** Create a raw oRPC client for the dashboard API. */
+export function createDashboardClient(config: AblaufClientConfig): DashboardClient {
 	const link = new RPCLink({
 		url: config.url,
 		headers: config.headers ? () => config.headers! : undefined,
@@ -33,7 +34,12 @@ export function createAblaufClient(config: AblaufClientConfig): AblaufClient {
 			? (input, init) => fetch(input, { ...init, credentials: "include" })
 			: undefined,
 	});
-	const rawClient = createORPCClient(link) as RawAblaufClient;
+	return createORPCClient(link) as DashboardClient;
+}
+
+/** Create an extended client with a typed `subscribe()` helper for SSE. */
+export function createAblaufClient(config: AblaufClientConfig): AblaufClient {
+	const rawClient = createDashboardClient(config);
 
 	const client = Object.assign(rawClient, {
 		async *subscribe<W extends WorkflowClass>(
