@@ -1,0 +1,113 @@
+---
+title: Introduction
+description: "Durable workflows on the edge. No external queues, no infrastructure headaches \u2014 just workflows that survive anything."
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Introduction
+
+Ablauf is a **durable workflow engine** for Cloudflare Workers, powered by Durable Objects. It lets you write workflows that survive restarts, failures, and deployments—without setting up external queues, state machines, or orchestration services.
+
+## Why Ablauf?
+
+Traditional workflow engines require complex infrastructure: message queues, state stores, worker pools. Ablauf brings durable execution to the edge with zero external dependencies.
+
+Here's what you get:
+
+- **Replay-based execution**: Workflows automatically resume after restarts. Completed steps return cached results from SQLite.
+- **Automatic retries**: Steps fail? They retry with exponential backoff. You control the limits.
+- **Typed events**: Wait for external events with full TypeScript safety and Zod validation.
+- **Real-time updates**: Stream workflow progress to clients via Server-Sent Events.
+- **Edge-native**: Runs on Cloudflare Workers. Your workflows live close to your users.
+
+<Callout type="info">
+Ablauf is built on Cloudflare Durable Objects, which give you consistent SQLite storage and automatic failover. Your workflow state is safe.
+</Callout>
+
+## Quick Example
+
+Here's a workflow that processes a payment with retries, waits for confirmation, and sends a receipt:
+
+```ts
+import { defineWorkflow } from "@ablauf/workflows";
+import { z } from "zod";
+
+const PaymentWorkflow = defineWorkflow({
+  type: "payment",
+  input: z.object({
+    orderId: z.string(),
+    amount: z.number(),
+  }),
+  events: {
+    confirmed: z.object({ transactionId: z.string() }),
+  },
+  run: async (step, payload) => {
+    // This step retries on failure
+    const charge = await step.do("charge-card", async () => {
+      return await stripe.charges.create({
+        amount: payload.amount,
+        currency: "usd",
+      });
+    });
+
+    // Wait for external confirmation (webhook, user action, etc.)
+    const confirmation = await step.waitForEvent("confirmed", {
+      timeout: "5m",
+    });
+
+    // Send receipt
+    await step.do("send-receipt", async () => {
+      await sendEmail({
+        to: payload.orderId,
+        subject: "Payment received!",
+        transactionId: confirmation.transactionId,
+      });
+    });
+
+    return { status: "complete", charge };
+  },
+});
+```
+
+If the worker crashes after charging the card, Ablauf **replays** the workflow. The `charge-card` step returns the cached result—your customer won't be charged twice. The workflow picks up where it left off.
+
+## How It Works
+
+Ablauf uses **replay-based execution**. Every time a workflow wakes up (on a new request, after a timer, or when an event arrives), it:
+
+1. Replays from the beginning
+2. Returns cached results for completed steps
+3. Executes new steps and persists them to SQLite
+4. Resumes from the next step
+
+This model is simple, predictable, and **correct**. No manual state management. No race conditions.
+
+<Callout type="warn">
+Because workflows replay, your step functions must be **deterministic**. Don't use `Math.random()` or `Date.now()` directly—use them inside a `step.do()` block so the result gets cached.
+</Callout>
+
+## Built on Cloudflare
+
+Ablauf is designed for Cloudflare Workers and Durable Objects:
+
+- **Durable Objects** provide consistent SQLite storage and automatic failover
+- **Edge deployment** means low latency worldwide
+- **No external dependencies**—no queues, no databases, no orchestrators
+
+You bring Hono (or any Worker-compatible framework), define your workflows, and deploy. That's it.
+
+## What's Next?
+
+Ready to build? Head to [Getting Started](/docs/getting-started) to create your first workflow.
+
+Want to dive deeper? Check out:
+
+- [Workflows](/docs/workflows) — Learn how to define workflows with `defineWorkflow()` and `BaseWorkflow`
+- [Steps](/docs/steps) — Master `step.do()`, `step.sleep()`, and `step.waitForEvent()`
+- [Events](/docs/events) — Send typed events to running workflows
+- [Observability](/docs/observability) — Stream real-time updates via SSE
+
+---
+
+**Fun fact**: "Ablauf" is German for "process" or "sequence". It's pronounced *AH-blowf*. Now you know.

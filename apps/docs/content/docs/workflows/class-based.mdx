@@ -1,0 +1,269 @@
+---
+title: Class-based API
+description: Learn how to define workflows by extending BaseWorkflow for more structure and control.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Class-based API
+
+The class-based API allows you to define workflows by extending `BaseWorkflow`. This approach is great if you prefer object-oriented patterns, need additional helper methods, or want more explicit type control.
+
+<Callout type="info">
+	Most users should start with the [functional API](/docs/workflows/functional) for less boilerplate. Use classes when you need additional structure or methods.
+</Callout>
+
+## Basic Example
+
+Here's a workflow that handles user onboarding with email verification:
+
+```ts
+import { BaseWorkflow } from "@ablauf/workflows";
+import type { Step, SSE } from "@ablauf/workflows";
+import { z } from "zod";
+
+const inputSchema = z.object({
+	name: z.string(),
+	email: z.string().email(),
+});
+type Payload = z.infer<typeof inputSchema>;
+
+const eventSchemas = {
+	verification: z.object({ code: z.string() }),
+};
+type Events = { verification: { code: string } };
+
+interface Result {
+	verified: boolean;
+	welcomeMessage: string;
+}
+
+export class OnboardingWorkflow extends BaseWorkflow<Payload, Result, Events> {
+	static type = "onboarding" as const;
+	static inputSchema = inputSchema;
+	static events = eventSchemas;
+	static defaults = {
+		retries: { limit: 3, delay: "1s", backoff: "exponential" as const },
+	};
+
+	async run(
+		step: Step<Events>,
+		payload: Payload,
+		_sse: SSE<never>
+	): Promise<Result> {
+		await step.do("send-verification", async () => {
+			// Send verification email
+			console.log(`Sending verification to ${payload.email}`);
+		});
+
+		const verification = await step.waitForEvent("verification", {
+			timeout: "1h",
+		});
+
+		const verified = verification.code === "VALID";
+
+		const welcomeMessage = await step.do("create-welcome", async () => {
+			return `Welcome, ${payload.name}!`;
+		});
+
+		return { verified, welcomeMessage };
+	}
+}
+```
+
+## Generic Type Parameters
+
+`BaseWorkflow` accepts up to four generic type parameters:
+
+```ts
+BaseWorkflow<Payload, Result, Events, SSEUpdates>
+```
+
+- **`Payload`** - The input type for your workflow
+- **`Result`** - The return type of the `run` method
+- **`Events`** - Event payload types (use `never` if no events)
+- **`SSEUpdates`** - SSE message type (use `never` if no SSE)
+
+## Static Properties
+
+All static properties are required except `events`, `defaults`, and `sseUpdates`.
+
+### `type` (required)
+
+The unique workflow identifier. The `as const` assertion is important for proper type narrowing.
+
+```ts
+static type = "onboarding" as const;
+```
+
+<Callout type="warn">
+	Don't forget `as const`! Without it, TypeScript will widen the type to `string` and you'll lose type safety.
+</Callout>
+
+### `inputSchema` (required)
+
+A Zod schema that validates the workflow payload.
+
+```ts
+static inputSchema = z.object({
+	name: z.string(),
+	email: z.string().email(),
+});
+```
+
+### `events` (optional)
+
+A record mapping event names to their Zod validation schemas.
+
+```ts
+static events = {
+	verification: z.object({ code: z.string() }),
+	cancellation: z.object({ reason: z.string() }),
+};
+```
+
+### `defaults` (optional)
+
+Default retry configuration for all steps. Note the `as const` on the backoff strategy.
+
+```ts
+static defaults = {
+	retries: {
+		limit: 3,
+		delay: "1s",
+		backoff: "exponential" as const,
+	},
+};
+```
+
+### `sseUpdates` (optional)
+
+A Zod schema for SSE message types your workflow can broadcast.
+
+```ts
+static sseUpdates = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("status"), message: z.string() }),
+	z.object({ type: z.literal("error"), error: z.string() }),
+]);
+```
+
+## The `run` Method
+
+The `run` method is where your workflow logic lives. It receives three parameters and must return a Promise of your `Result` type.
+
+```ts
+async run(
+	step: Step<Events>,
+	payload: Payload,
+	sse: SSE<SSEUpdates>
+): Promise<Result> {
+	// Your workflow logic
+}
+```
+
+### Type Annotations
+
+Unlike the functional API, you'll need to manually annotate parameter types:
+
+- `step: Step<Events>` - Typed with your event schemas
+- `payload: Payload` - Your input type
+- `sse: SSE<SSEUpdates>` - Typed with your SSE schema (or `SSE<never>`)
+
+## Advanced Example
+
+Here's a more complex workflow with SSE updates and multiple event types:
+
+```ts
+import { BaseWorkflow } from "@ablauf/workflows";
+import type { Step, SSE } from "@ablauf/workflows";
+import { z } from "zod";
+
+const inputSchema = z.object({
+	fileUrl: z.string().url(),
+	format: z.enum(["pdf", "docx", "txt"]),
+});
+type Payload = z.infer<typeof inputSchema>;
+
+const eventSchemas = {
+	progress: z.object({ percent: z.number() }),
+	cancel: z.object({ reason: z.string() }),
+};
+type Events = {
+	progress: { percent: number };
+	cancel: { reason: string };
+};
+
+const sseSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("started"), url: z.string() }),
+	z.object({ type: z.literal("progress"), percent: z.number() }),
+	z.object({ type: z.literal("complete"), outputUrl: z.string() }),
+]);
+type SSEUpdates = z.infer<typeof sseSchema>;
+
+interface Result {
+	success: boolean;
+	outputUrl?: string;
+	cancelReason?: string;
+}
+
+export class DocumentProcessingWorkflow extends BaseWorkflow<
+	Payload,
+	Result,
+	Events,
+	SSEUpdates
+> {
+	static type = "document-processing" as const;
+	static inputSchema = inputSchema;
+	static events = eventSchemas;
+	static sseUpdates = sseSchema;
+	static defaults = {
+		retries: { limit: 5, delay: "2s", backoff: "exponential" as const },
+	};
+
+	async run(
+		step: Step<Events>,
+		payload: Payload,
+		sse: SSE<SSEUpdates>
+	): Promise<Result> {
+		sse.broadcast({ type: "started", url: payload.fileUrl });
+
+		const downloaded = await step.do("download", async () => {
+			// Download file logic
+			return { path: "/tmp/file", size: 1024 };
+		});
+
+		sse.broadcast({ type: "progress", percent: 33 });
+
+		const converted = await step.do("convert", async () => {
+			// Conversion logic
+			return { outputPath: `/tmp/output.${payload.format}` };
+		});
+
+		sse.broadcast({ type: "progress", percent: 66 });
+
+		const uploaded = await step.do("upload", async () => {
+			// Upload to storage
+			return { url: "https://cdn.example.com/output.pdf" };
+		});
+
+		sse.broadcast({ type: "complete", outputUrl: uploaded.url });
+
+		return { success: true, outputUrl: uploaded.url };
+	}
+}
+```
+
+## When to Use Classes
+
+Consider the class-based API when:
+
+- You prefer object-oriented programming patterns
+- You need helper methods or computed properties
+- You want more explicit control over type annotations
+- You're integrating with other class-based code
+
+Otherwise, the [functional API](/docs/workflows/functional) is recommended for its simplicity and superior type inference.
+
+<Callout type="info">
+	**Remember:** Both APIs are functionally identical. The functional API actually creates a class under the hood. Choose based on your style preference, not performance or capability.
+</Callout>

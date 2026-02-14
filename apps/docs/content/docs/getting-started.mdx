@@ -1,0 +1,261 @@
+---
+title: Getting Started
+description: Create your first Ablauf workflow in minutes. No external infrastructure required.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Getting Started
+
+This guide walks you through creating your first durable workflow with Ablauf. By the end, you'll have a working Cloudflare Worker that runs workflows on the edge.
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- A [Cloudflare Workers account](https://workers.cloudflare.com/) (free tier works great)
+- Node.js 18+ installed
+- `wrangler` CLI installed (`npm install -g wrangler`)
+
+<Callout type="info">
+New to Cloudflare Workers? Check out their [getting started guide](https://developers.cloudflare.com/workers/get-started/) first.
+</Callout>
+
+## Installation
+
+Install Ablauf alongside Hono and Zod:
+
+```bash
+npm install @ablauf/workflows hono zod
+```
+
+- **`@ablauf/workflows`** — The workflow engine
+- **`hono`** — Lightweight web framework for Workers
+- **`zod`** — Runtime validation for workflow inputs and events
+
+## Build Your First Workflow
+
+<Steps>
+
+<Step>
+
+### Define a Workflow
+
+Create a simple greeting workflow using the `defineWorkflow()` API. This is the recommended way to define workflows—less boilerplate than classes, full type safety.
+
+```ts title="src/workflows/greeting.ts"
+import { defineWorkflow } from "@ablauf/workflows";
+import { z } from "zod";
+
+export const GreetingWorkflow = defineWorkflow({
+  type: "greeting",
+  input: z.object({
+    name: z.string(),
+  }),
+  run: async (step, payload) => {
+    // This step is durable—if the worker crashes, it replays with cached results
+    const message = await step.do("create-greeting", async () => {
+      return `Hello, ${payload.name}! Welcome aboard.`;
+    });
+
+    // Simulate some work
+    await step.sleep("wait-a-moment", "2s");
+
+    // Return the final result
+    return { message, completedAt: new Date().toISOString() };
+  },
+});
+```
+
+The `step.do()` block ensures the greeting is generated once and cached. If the workflow restarts, it won't regenerate the message—it'll use the stored result.
+
+</Step>
+
+<Step>
+
+### Set Up the Worker
+
+Create a Hono app and initialize Ablauf with your workflow. The `Ablauf` class connects to your Durable Object binding and registers your workflows.
+
+```ts title="src/index.ts"
+import { Hono } from "hono";
+import { Ablauf } from "@ablauf/workflows";
+import { GreetingWorkflow } from "./workflows/greeting";
+
+const app = new Hono<{ Bindings: CloudflareBindings }>();
+
+// Initialize Ablauf with the WORKFLOW_RUNNER binding
+const ablauf = new Ablauf<CloudflareBindings["WORKFLOW_RUNNER"]>(
+  (env) => env.WORKFLOW_RUNNER,
+  {
+    workflows: [GreetingWorkflow],
+  }
+);
+
+// Create a new greeting workflow
+app.post("/greet", async (c) => {
+  const { name } = await c.req.json();
+
+  const workflow = await ablauf.create(GreetingWorkflow, {
+    id: crypto.randomUUID(),
+    payload: { name },
+  });
+
+  const status = await workflow.getStatus();
+  return c.json(status);
+});
+
+// Get workflow status
+app.get("/workflows/:id", async (c) => {
+  const id = c.req.param("id");
+  const workflow = ablauf.get(GreetingWorkflow, id);
+  const status = await workflow.getStatus();
+  return c.json(status);
+});
+
+// Export the Worker
+export default { fetch: app.fetch };
+
+// Export the Durable Object class
+export const WorkflowRunner = ablauf.createWorkflowRunner();
+
+// Type definitions
+interface CloudflareBindings {
+  WORKFLOW_RUNNER: DurableObjectNamespace;
+}
+```
+
+<Callout type="warn">
+The `createWorkflowRunner()` call **must** be exported as `WorkflowRunner` to match your Durable Object binding name in `wrangler.jsonc`.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Configure Wrangler
+
+Tell Cloudflare about your Durable Object. This is what makes your workflows durable—the `WorkflowRunner` class gets its own SQLite database.
+
+```jsonc title="wrangler.jsonc"
+{
+  "name": "my-ablauf-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "WorkflowRunner",
+        "name": "WORKFLOW_RUNNER"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["WorkflowRunner"],
+      "tag": "v1"
+    }
+  ]
+}
+```
+
+**Key fields:**
+
+- `durable_objects.bindings` — Registers the Durable Object class and binding name
+- `migrations` — Enables SQLite storage for the Durable Object (required for Ablauf)
+- `compatibility_flags` — Enables Node.js compatibility for crypto and other APIs
+
+</Step>
+
+<Step>
+
+### Run Locally
+
+Start the local development server:
+
+```bash
+npx wrangler dev
+```
+
+Wrangler will start a local server (usually on `http://localhost:8787`). Your Durable Objects run in a local environment with real SQLite storage.
+
+</Step>
+
+<Step>
+
+### Test Your Workflow
+
+Create a workflow:
+
+```bash
+curl -X POST http://localhost:8787/greet \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice"}'
+```
+
+Response:
+
+```json
+{
+  "id": "some-uuid",
+  "type": "greeting",
+  "status": "running",
+  "payload": { "name": "Alice" },
+  "createdAt": "2025-02-14T12:00:00.000Z"
+}
+```
+
+Wait a couple seconds, then check the status:
+
+```bash
+curl http://localhost:8787/workflows/some-uuid
+```
+
+Response:
+
+```json
+{
+  "id": "some-uuid",
+  "type": "greeting",
+  "status": "completed",
+  "payload": { "name": "Alice" },
+  "result": {
+    "message": "Hello, Alice! Welcome aboard.",
+    "completedAt": "2025-02-14T12:00:02.000Z"
+  },
+  "createdAt": "2025-02-14T12:00:00.000Z",
+  "completedAt": "2025-02-14T12:00:02.000Z"
+}
+```
+
+Congratulations! You've just run a durable workflow on the edge.
+
+</Step>
+
+</Steps>
+
+## What Just Happened?
+
+Let's break down what Ablauf did behind the scenes:
+
+1. **Created a workflow instance** — Your workflow got a unique ID and its payload was validated against the Zod schema.
+2. **Executed the first step** — The `create-greeting` step ran and its result was saved to SQLite.
+3. **Slept for 2 seconds** — Ablauf set a Durable Object alarm for 2 seconds in the future, then released resources.
+4. **Woke up and replayed** — After 2 seconds, the alarm fired. Ablauf replayed the workflow, used the cached greeting, and completed.
+
+If your worker had crashed during the sleep, the workflow would have resumed automatically. That's the magic of durable execution.
+
+## What's Next?
+
+Now that you've built your first workflow, explore the full power of Ablauf:
+
+- **[Workflows](/docs/workflows)** — Learn about `defineWorkflow()` vs `BaseWorkflow`, typed events, and SSE
+- **[Steps](/docs/steps)** — Master `step.do()` retry policies, `step.sleep()` durations, and `step.waitForEvent()` timeouts
+- **[Events](/docs/events)** — Send external events to running workflows (webhooks, user actions, etc.)
+- **[Observability](/docs/observability)** — Stream real-time workflow progress to your frontend with SSE
+
+---
+
+**Stuck?** Join our [Discord](https://discord.gg/ablauf) or open an issue on [GitHub](https://github.com/ablauf/ablauf). We're here to help.

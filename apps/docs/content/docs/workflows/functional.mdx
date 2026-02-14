@@ -1,0 +1,195 @@
+---
+title: Functional API (Recommended)
+description: Learn how to define workflows using the functional API with defineWorkflow() for less boilerplate and better type inference.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Functional API
+
+The functional API using `defineWorkflow()` is the recommended way to define workflows in Ablauf. It provides excellent type inference, minimal boilerplate, and a clean declarative style.
+
+<Callout type="info">
+	**Why functional?** Types are automatically inferred from your schemas, and you get the same power as the class-based API with less code to maintain.
+</Callout>
+
+## Basic Example
+
+Here's a simple workflow that processes an order with validation, a cool-down period, and shipping:
+
+```ts
+import { defineWorkflow } from "@ablauf/workflows";
+import { z } from "zod";
+
+const OrderWorkflow = defineWorkflow({
+	type: "process-order",
+	input: z.object({
+		orderId: z.string(),
+		items: z.array(
+			z.object({
+				name: z.string(),
+				quantity: z.number(),
+			})
+		),
+	}),
+	run: async (step, payload) => {
+		const validated = await step.do("validate-order", async () => {
+			return { valid: true, itemCount: payload.items.length };
+		});
+
+		await step.sleep("cool-down", "5s");
+
+		const shipped = await step.do("ship-order", async () => {
+			return { trackingId: `TRK-${payload.orderId}` };
+		});
+
+		return { validated, shipped };
+	},
+});
+```
+
+Notice how `payload` is automatically typed based on your `input` schema. No manual type annotations needed.
+
+## Configuration Fields
+
+### `type` (required)
+
+A unique string identifier for your workflow. This is used for routing, listing, and querying workflows.
+
+```ts
+type: "process-order"
+```
+
+<Callout type="warn">
+	Workflow types must be unique across your application. Think of them like route paths.
+</Callout>
+
+### `input` (required)
+
+A Zod schema that validates the workflow payload. The type of `payload` in your `run` function is automatically inferred from this schema.
+
+```ts
+input: z.object({
+	orderId: z.string(),
+	customerId: z.string().uuid(),
+	amount: z.number().positive(),
+})
+```
+
+### `run` (required)
+
+The main workflow function. It receives three parameters:
+
+- **`step`** - The step context for executing durable steps
+- **`payload`** - The validated input (typed from your schema)
+- **`sse`** - Server-sent events broadcaster for real-time updates
+
+```ts
+run: async (step, payload, sse) => {
+	// Your workflow logic here
+	return { success: true };
+}
+```
+
+### `events` (optional)
+
+A record mapping event names to Zod schemas. This makes `step.waitForEvent()` fully typed.
+
+```ts
+events: {
+	approved: z.object({ by: z.string() }),
+	rejected: z.object({ reason: z.string() }),
+}
+```
+
+### `defaults` (optional)
+
+Default retry configuration applied to all steps in the workflow. Individual steps can override these settings.
+
+```ts
+defaults: {
+	retries: {
+		limit: 5,
+		delay: "2s",
+		backoff: "exponential",
+	},
+}
+```
+
+### `sseUpdates` (optional)
+
+A Zod schema defining the shape of SSE messages your workflow can broadcast. Use discriminated unions for multiple message types.
+
+```ts
+sseUpdates: z.discriminatedUnion("type", [
+	z.object({ type: z.literal("progress"), percent: z.number() }),
+	z.object({ type: z.literal("complete"), result: z.string() }),
+])
+```
+
+## Advanced Example
+
+Here's a more complex workflow demonstrating events, SSE updates, and retry configuration:
+
+```ts
+import { defineWorkflow } from "@ablauf/workflows";
+import { z } from "zod";
+
+const ApprovalWorkflow = defineWorkflow({
+	type: "approval",
+	input: z.object({
+		requestId: z.string(),
+		amount: z.number(),
+	}),
+	events: {
+		decision: z.object({
+			approved: z.boolean(),
+			reviewer: z.string(),
+		}),
+	},
+	sseUpdates: z.discriminatedUnion("type", [
+		z.object({ type: z.literal("progress"), message: z.string() }),
+		z.object({ type: z.literal("complete"), approved: z.boolean() }),
+	]),
+	defaults: {
+		retries: {
+			limit: 5,
+			delay: "2s",
+			backoff: "exponential",
+		},
+	},
+	run: async (step, payload, sse) => {
+		sse.broadcast({ type: "progress", message: "Processing request..." });
+
+		const check = await step.do("validate", async () => {
+			return payload.amount < 10000;
+		});
+
+		if (!check) {
+			sse.broadcast({
+				type: "progress",
+				message: "Request requires approval...",
+			});
+		}
+
+		const decision = await step.waitForEvent("decision", { timeout: "24h" });
+
+		sse.emit({ type: "complete", approved: decision.approved });
+
+		return {
+			approved: decision.approved,
+			reviewer: decision.reviewer,
+		};
+	},
+});
+```
+
+## Under the Hood
+
+The `defineWorkflow()` function is actually a convenience wrapper that creates a class extending `BaseWorkflow`. Both the functional and class-based APIs are functionally identical and compile to the same thing.
+
+If you find yourself needing more structure or additional methods, you can always refactor to the [class-based API](/docs/workflows/class-based) without changing behavior.
+
+<Callout type="info">
+	**Pro tip:** Start with the functional API. You can always refactor to classes later if your workflow logic becomes complex enough to warrant it.
+</Callout>
