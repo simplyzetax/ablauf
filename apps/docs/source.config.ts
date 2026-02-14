@@ -3,7 +3,7 @@ import { remarkAutoTypeTable, createGenerator, createFileSystemGeneratorCache } 
 
 const generator = createGenerator({
 	tsconfigPath: '../../packages/workflows/tsconfig.json',
-	cache: createFileSystemGeneratorCache('.next/fumadocs-typescript'),
+	cache: createFileSystemGeneratorCache('.cache/fumadocs-typescript'),
 });
 
 export const docs = defineDocs({
