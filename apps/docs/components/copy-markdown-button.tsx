@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
 export function CopyMarkdownButton({ markdownUrl }: { markdownUrl: string }) {
 	const [copied, setCopied] = useState(false);
@@ -47,7 +47,7 @@ export function CopyMarkdownButton({ markdownUrl }: { markdownUrl: string }) {
 					<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
 				</svg>
 			)}
-			{copied ? "Copied!" : "Copy Markdown"}
+			{copied ? 'Copied!' : 'Copy Markdown'}
 		</button>
 	);
 }

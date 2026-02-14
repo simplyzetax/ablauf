@@ -1,48 +1,48 @@
 {
-  "version": "7",
-  "dialect": "sqlite",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "6",
-      "when": 1770831208606,
-      "tag": "0000_peaceful_shotgun",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1770832367686,
-      "tag": "0001_many_gauntlet",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1770852538522,
-      "tag": "0002_smooth_martin_li",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1770858251704,
-      "tag": "0003_cultured_runaways",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1770864681477,
-      "tag": "0004_furry_meteorite",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1771032363896,
-      "tag": "0005_sse_update_events",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "sqlite",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "6",
+			"when": 1770831208606,
+			"tag": "0000_peaceful_shotgun",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1770832367686,
+			"tag": "0001_many_gauntlet",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "6",
+			"when": 1770852538522,
+			"tag": "0002_smooth_martin_li",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "6",
+			"when": 1770858251704,
+			"tag": "0003_cultured_runaways",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "6",
+			"when": 1770864681477,
+			"tag": "0004_furry_meteorite",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "6",
+			"when": 1771032363896,
+			"tag": "0005_sse_update_events",
+			"breakpoints": true
+		}
+	]
 }

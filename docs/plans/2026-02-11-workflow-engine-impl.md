@@ -15,6 +15,7 @@
 ### Task 1: Project Setup
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `wrangler.jsonc`
 - Create: `drizzle.config.ts`
@@ -28,6 +29,7 @@ Run: `bun add drizzle-orm && bun add -d drizzle-kit`
 **Step 2: Add drizzle scripts to package.json**
 
 Add to `scripts`:
+
 ```json
 "db:generate": "drizzle-kit generate",
 "db:push": "drizzle-kit push"
@@ -36,19 +38,20 @@ Add to `scripts`:
 **Step 3: Create drizzle.config.ts**
 
 ```typescript
-import { defineConfig } from "drizzle-kit";
+import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
-	out: "./drizzle",
-	schema: "./src/db/schema.ts",
-	dialect: "sqlite",
-	driver: "durable-sqlite",
+	out: './drizzle',
+	schema: './src/db/schema.ts',
+	dialect: 'sqlite',
+	driver: 'durable-sqlite',
 });
 ```
 
 **Step 4: Update wrangler.jsonc**
 
 Replace the entire content with:
+
 ```jsonc
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
@@ -57,29 +60,29 @@ Replace the entire content with:
 	"compatibility_date": "2026-02-10",
 	"compatibility_flags": ["nodejs_compat"],
 	"observability": {
-		"enabled": true
+		"enabled": true,
 	},
 	"durable_objects": {
 		"bindings": [
 			{
 				"class_name": "WorkflowRunner",
-				"name": "WORKFLOW_RUNNER"
-			}
-		]
+				"name": "WORKFLOW_RUNNER",
+			},
+		],
 	},
 	"migrations": [
 		{
 			"new_sqlite_classes": ["WorkflowRunner"],
-			"tag": "v1"
-		}
+			"tag": "v1",
+		},
 	],
 	"rules": [
 		{
 			"type": "Text",
 			"globs": ["**/*.sql"],
-			"fallthrough": true
-		}
-	]
+			"fallthrough": true,
+		},
+	],
 }
 ```
 
@@ -114,6 +117,7 @@ git commit -m "chore: setup drizzle, single DO binding, new directory structure"
 ### Task 2: Type System
 
 **Files:**
+
 - Create: `src/engine/types.ts`
 - Create: `src/engine/interrupts.ts`
 - Create: `src/engine/duration.ts`
@@ -121,9 +125,9 @@ git commit -m "chore: setup drizzle, single DO binding, new directory structure"
 **Step 1: Create src/engine/types.ts**
 
 ```typescript
-export type WorkflowStatus = "created" | "running" | "completed" | "errored" | "paused" | "sleeping" | "waiting" | "terminated";
+export type WorkflowStatus = 'created' | 'running' | 'completed' | 'errored' | 'paused' | 'sleeping' | 'waiting' | 'terminated';
 
-export type BackoffStrategy = "fixed" | "linear" | "exponential";
+export type BackoffStrategy = 'fixed' | 'linear' | 'exponential';
 
 export interface RetryConfig {
 	limit: number;
@@ -145,35 +149,24 @@ export interface WorkflowDefaults {
 
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	limit: 3,
-	delay: "1s",
-	backoff: "exponential",
+	delay: '1s',
+	backoff: 'exponential',
 };
 
 export interface Step<Events extends Record<string, unknown> = Record<string, never>> {
 	do<T>(name: string, fn: () => Promise<T> | T, options?: StepDoOptions): Promise<T>;
 	sleep(name: string, duration: string): Promise<void>;
-	waitForEvent<K extends Extract<keyof Events, string>>(
-		name: K,
-		options?: StepWaitOptions,
-	): Promise<Events[K]>;
+	waitForEvent<K extends Extract<keyof Events, string>>(name: K, options?: StepWaitOptions): Promise<Events[K]>;
 }
 
-export interface WorkflowClass<
-	Payload = unknown,
-	Result = unknown,
-	Events extends Record<string, unknown> = Record<string, never>,
-> {
+export interface WorkflowClass<Payload = unknown, Result = unknown, Events extends Record<string, unknown> = Record<string, never>> {
 	type: string;
 	events?: Events;
 	defaults?: Partial<WorkflowDefaults>;
 	new (): WorkflowInstance<Payload, Result, Events>;
 }
 
-export interface WorkflowInstance<
-	Payload = unknown,
-	Result = unknown,
-	Events extends Record<string, unknown> = Record<string, never>,
-> {
+export interface WorkflowInstance<Payload = unknown, Result = unknown, Events extends Record<string, unknown> = Record<string, never>> {
 	run(step: Step<Events>, payload: Payload): Promise<Result>;
 }
 
@@ -204,7 +197,7 @@ export interface StepInfo {
 
 ```typescript
 export class SleepInterrupt {
-	readonly _tag = "SleepInterrupt";
+	readonly _tag = 'SleepInterrupt';
 	constructor(
 		public readonly stepName: string,
 		public readonly wakeAt: number,
@@ -212,7 +205,7 @@ export class SleepInterrupt {
 }
 
 export class WaitInterrupt {
-	readonly _tag = "WaitInterrupt";
+	readonly _tag = 'WaitInterrupt';
 	constructor(
 		public readonly stepName: string,
 		public readonly timeoutAt: number | null,
@@ -220,7 +213,7 @@ export class WaitInterrupt {
 }
 
 export class PauseInterrupt {
-	readonly _tag = "PauseInterrupt";
+	readonly _tag = 'PauseInterrupt';
 }
 
 export function isInterrupt(e: unknown): e is SleepInterrupt | WaitInterrupt | PauseInterrupt {
@@ -265,43 +258,44 @@ git commit -m "feat: add type system, interrupts, and duration parser"
 ### Task 3: Drizzle Schema + Migrations
 
 **Files:**
+
 - Create: `src/db/schema.ts`
 
 **Step 1: Create src/db/schema.ts**
 
 ```typescript
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 // Per-workflow-instance tables (stored in each workflow DO)
-export const workflowTable = sqliteTable("workflow", {
-	id: integer("id").primaryKey().default(1),
-	type: text("type").notNull(),
-	status: text("status").notNull().default("created"),
-	payload: text("payload"),
-	result: text("result"),
-	error: text("error"),
-	paused: integer("paused").notNull().default(0),
-	createdAt: integer("created_at").notNull(),
-	updatedAt: integer("updated_at").notNull(),
+export const workflowTable = sqliteTable('workflow', {
+	id: integer('id').primaryKey().default(1),
+	type: text('type').notNull(),
+	status: text('status').notNull().default('created'),
+	payload: text('payload'),
+	result: text('result'),
+	error: text('error'),
+	paused: integer('paused').notNull().default(0),
+	createdAt: integer('created_at').notNull(),
+	updatedAt: integer('updated_at').notNull(),
 });
 
-export const stepsTable = sqliteTable("steps", {
-	name: text("name").primaryKey(),
-	type: text("type").notNull(), // 'do' | 'sleep' | 'wait_for_event'
-	status: text("status").notNull(), // 'completed' | 'failed' | 'sleeping' | 'waiting'
-	result: text("result"),
-	error: text("error"),
-	attempts: integer("attempts").notNull().default(0),
-	wakeAt: integer("wake_at"),
-	completedAt: integer("completed_at"),
+export const stepsTable = sqliteTable('steps', {
+	name: text('name').primaryKey(),
+	type: text('type').notNull(), // 'do' | 'sleep' | 'wait_for_event'
+	status: text('status').notNull(), // 'completed' | 'failed' | 'sleeping' | 'waiting'
+	result: text('result'),
+	error: text('error'),
+	attempts: integer('attempts').notNull().default(0),
+	wakeAt: integer('wake_at'),
+	completedAt: integer('completed_at'),
 });
 
 // Index shard table (stored in __index:{type} DOs)
-export const instancesTable = sqliteTable("instances", {
-	id: text("id").primaryKey(),
-	status: text("status").notNull(),
-	createdAt: integer("created_at").notNull(),
-	updatedAt: integer("updated_at").notNull(),
+export const instancesTable = sqliteTable('instances', {
+	id: text('id').primaryKey(),
+	status: text('status').notNull(),
+	createdAt: integer('created_at').notNull(),
+	updatedAt: integer('updated_at').notNull(),
 });
 ```
 
@@ -327,6 +321,7 @@ git commit -m "feat: add drizzle schema and generate migrations"
 ### Task 4: WorkflowRunner DO Skeleton
 
 **Files:**
+
 - Create: `src/engine/workflow-runner.ts`
 - Create: `src/workflows/registry.ts`
 - Modify: `src/index.ts`
@@ -334,7 +329,7 @@ git commit -m "feat: add drizzle schema and generate migrations"
 **Step 1: Create src/workflows/registry.ts**
 
 ```typescript
-import type { WorkflowClass } from "../engine/types";
+import type { WorkflowClass } from '../engine/types';
 
 // Add workflow classes here as they're created
 // e.g. import { TestWorkflow } from "./test-workflow";
@@ -346,15 +341,15 @@ export const registry: Record<string, WorkflowClass> = {
 **Step 2: Create src/engine/workflow-runner.ts**
 
 ```typescript
-import { DurableObject } from "cloudflare:workers";
-import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
-import { migrate } from "drizzle-orm/durable-sqlite/migrator";
-import migrations from "../../drizzle/migrations";
-import { workflowTable, stepsTable, instancesTable } from "../db/schema";
-import { registry } from "../workflows/registry";
-import { isInterrupt, SleepInterrupt, WaitInterrupt, PauseInterrupt } from "./interrupts";
-import { eq } from "drizzle-orm";
-import type { WorkflowStatus, WorkflowStatusResponse, StepInfo } from "./types";
+import { DurableObject } from 'cloudflare:workers';
+import { drizzle, type DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
+import { migrate } from 'drizzle-orm/durable-sqlite/migrator';
+import migrations from '../../drizzle/migrations';
+import { workflowTable, stepsTable, instancesTable } from '../db/schema';
+import { registry } from '../workflows/registry';
+import { isInterrupt, SleepInterrupt, WaitInterrupt, PauseInterrupt } from './interrupts';
+import { eq } from 'drizzle-orm';
+import type { WorkflowStatus, WorkflowStatusResponse, StepInfo } from './types';
 
 export class WorkflowRunner extends DurableObject<Env> {
 	db: DrizzleSqliteDODatabase;
@@ -373,12 +368,12 @@ export class WorkflowRunner extends DurableObject<Env> {
 		const now = Date.now();
 		await this.db.insert(workflowTable).values({
 			type: props.type,
-			status: "running",
+			status: 'running',
 			payload: JSON.stringify(props.payload),
 			createdAt: now,
 			updatedAt: now,
 		});
-		await this.updateIndex(props.type, props.id, "running", now);
+		await this.updateIndex(props.type, props.id, 'running', now);
 		await this.replay();
 	}
 
@@ -408,19 +403,16 @@ export class WorkflowRunner extends DurableObject<Env> {
 	}
 
 	async deliverEvent(props: { event: string; payload: unknown }): Promise<void> {
-		const [step] = await this.db
-			.select()
-			.from(stepsTable)
-			.where(eq(stepsTable.name, props.event));
+		const [step] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, props.event));
 
-		if (!step || step.status !== "waiting") {
+		if (!step || step.status !== 'waiting') {
 			throw new Error(`No waiting step found for event "${props.event}"`);
 		}
 
 		await this.db
 			.update(stepsTable)
 			.set({
-				status: "completed",
+				status: 'completed',
 				result: JSON.stringify(props.payload),
 				completedAt: Date.now(),
 			})
@@ -428,24 +420,24 @@ export class WorkflowRunner extends DurableObject<Env> {
 
 		// Cancel timeout alarm if set — we'll set a new one if needed during replay
 		await this.ctx.storage.deleteAlarm();
-		await this.setStatus("running");
+		await this.setStatus('running');
 		await this.replay();
 	}
 
 	async pause(): Promise<void> {
 		await this.db.update(workflowTable).set({ paused: 1, updatedAt: Date.now() });
-		await this.setStatus("paused");
+		await this.setStatus('paused');
 	}
 
 	async resume(): Promise<void> {
 		await this.db.update(workflowTable).set({ paused: 0, updatedAt: Date.now() });
-		await this.setStatus("running");
+		await this.setStatus('running');
 		await this.replay();
 	}
 
 	async terminate(): Promise<void> {
 		await this.ctx.storage.deleteAlarm();
-		await this.setStatus("terminated");
+		await this.setStatus('terminated');
 	}
 
 	// ─── Index Shard RPC Methods ───
@@ -475,30 +467,21 @@ export class WorkflowRunner extends DurableObject<Env> {
 
 	async alarm(): Promise<void> {
 		// Find the step that's sleeping or waiting
-		const sleepingSteps = await this.db
-			.select()
-			.from(stepsTable)
-			.where(eq(stepsTable.status, "sleeping"));
-		const waitingSteps = await this.db
-			.select()
-			.from(stepsTable)
-			.where(eq(stepsTable.status, "waiting"));
+		const sleepingSteps = await this.db.select().from(stepsTable).where(eq(stepsTable.status, 'sleeping'));
+		const waitingSteps = await this.db.select().from(stepsTable).where(eq(stepsTable.status, 'waiting'));
 
 		const now = Date.now();
 
 		for (const step of [...sleepingSteps, ...waitingSteps]) {
 			if (step.wakeAt && step.wakeAt <= now) {
-				if (step.status === "sleeping") {
-					await this.db
-						.update(stepsTable)
-						.set({ status: "completed", completedAt: now })
-						.where(eq(stepsTable.name, step.name));
-				} else if (step.status === "waiting") {
+				if (step.status === 'sleeping') {
+					await this.db.update(stepsTable).set({ status: 'completed', completedAt: now }).where(eq(stepsTable.name, step.name));
+				} else if (step.status === 'waiting') {
 					// Timeout — mark as failed
 					await this.db
 						.update(stepsTable)
 						.set({
-							status: "failed",
+							status: 'failed',
 							error: `Event "${step.name}" timed out`,
 							completedAt: now,
 						})
@@ -507,7 +490,7 @@ export class WorkflowRunner extends DurableObject<Env> {
 			}
 		}
 
-		await this.setStatus("running");
+		await this.setStatus('running');
 		await this.replay();
 	}
 
@@ -519,20 +502,20 @@ export class WorkflowRunner extends DurableObject<Env> {
 
 		const WorkflowClass = registry[wf.type];
 		if (!WorkflowClass) {
-			await this.setStatus("errored");
+			await this.setStatus('errored');
 			await this.db.update(workflowTable).set({ error: `Unknown workflow type: "${wf.type}"` });
 			return;
 		}
 
 		// Import StepContext here to avoid circular deps
-		const { StepContext } = await import("./step");
+		const { StepContext } = await import('./step');
 
 		const instance = new WorkflowClass();
 		const stepCtx = new StepContext(this.db, WorkflowClass.defaults);
 
 		// Check pause flag
 		if (wf.paused) {
-			await this.setStatus("paused");
+			await this.setStatus('paused');
 			return;
 		}
 
@@ -541,30 +524,30 @@ export class WorkflowRunner extends DurableObject<Env> {
 		try {
 			const result = await instance.run(stepCtx, payload);
 			await this.db.update(workflowTable).set({
-				status: "completed",
+				status: 'completed',
 				result: JSON.stringify(result),
 				updatedAt: Date.now(),
 			});
-			await this.updateIndex(wf.type, this.ctx.id.toString(), "completed", Date.now());
+			await this.updateIndex(wf.type, this.ctx.id.toString(), 'completed', Date.now());
 		} catch (e) {
 			if (e instanceof SleepInterrupt) {
 				await this.ctx.storage.setAlarm(e.wakeAt);
-				await this.setStatus("sleeping");
+				await this.setStatus('sleeping');
 			} else if (e instanceof WaitInterrupt) {
 				if (e.timeoutAt) {
 					await this.ctx.storage.setAlarm(e.timeoutAt);
 				}
-				await this.setStatus("waiting");
+				await this.setStatus('waiting');
 			} else if (e instanceof PauseInterrupt) {
-				await this.setStatus("paused");
+				await this.setStatus('paused');
 			} else if (!isInterrupt(e)) {
 				const errorMsg = e instanceof Error ? e.message : String(e);
 				await this.db.update(workflowTable).set({
-					status: "errored",
+					status: 'errored',
 					error: errorMsg,
 					updatedAt: Date.now(),
 				});
-				await this.updateIndex(wf.type, this.ctx.id.toString(), "errored", Date.now());
+				await this.updateIndex(wf.type, this.ctx.id.toString(), 'errored', Date.now());
 			}
 		}
 	}
@@ -595,19 +578,19 @@ export class WorkflowRunner extends DurableObject<Env> {
 **Step 3: Update src/index.ts (minimal, just exports)**
 
 ```typescript
-import { Hono } from "hono";
+import { Hono } from 'hono';
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/", (c) => {
-	return c.json({ status: "ok" });
+app.get('/', (c) => {
+	return c.json({ status: 'ok' });
 });
 
 export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
 
-export { WorkflowRunner } from "./engine/workflow-runner";
+export { WorkflowRunner } from './engine/workflow-runner';
 ```
 
 **Step 4: Regenerate types**
@@ -631,18 +614,19 @@ git commit -m "feat: add WorkflowRunner DO skeleton with replay, alarms, and ind
 ### Task 5: Step Context with step.do() and Replay
 
 **Files:**
+
 - Create: `src/engine/step.ts`
 
 **Step 1: Create src/engine/step.ts**
 
 ```typescript
-import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
-import { eq } from "drizzle-orm";
-import { stepsTable } from "../db/schema";
-import { SleepInterrupt, WaitInterrupt, PauseInterrupt } from "./interrupts";
-import { parseDuration } from "./duration";
-import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
-import { DEFAULT_RETRY_CONFIG } from "./types";
+import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
+import { eq } from 'drizzle-orm';
+import { stepsTable } from '../db/schema';
+import { SleepInterrupt, WaitInterrupt, PauseInterrupt } from './interrupts';
+import { parseDuration } from './duration';
+import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from './types';
+import { DEFAULT_RETRY_CONFIG } from './types';
 
 export class StepContext<Events extends Record<string, unknown> = Record<string, never>> implements Step<Events> {
 	private defaults: WorkflowDefaults;
@@ -660,7 +644,7 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 		// Check for cached result
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
 
-		if (existing?.status === "completed") {
+		if (existing?.status === 'completed') {
 			return existing.result ? JSON.parse(existing.result) : undefined;
 		}
 
@@ -679,7 +663,7 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 				await this.db
 					.update(stepsTable)
 					.set({
-						status: "completed",
+						status: 'completed',
 						result: serialized,
 						attempts: attempts + 1,
 						completedAt: Date.now(),
@@ -688,8 +672,8 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 			} else {
 				await this.db.insert(stepsTable).values({
 					name,
-					type: "do",
-					status: "completed",
+					type: 'do',
+					status: 'completed',
 					result: serialized,
 					attempts: 1,
 					completedAt: Date.now(),
@@ -706,13 +690,13 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 				if (existing) {
 					await this.db
 						.update(stepsTable)
-						.set({ status: "failed", error: errorMsg, attempts: newAttempts })
+						.set({ status: 'failed', error: errorMsg, attempts: newAttempts })
 						.where(eq(stepsTable.name, name));
 				} else {
 					await this.db.insert(stepsTable).values({
 						name,
-						type: "do",
-						status: "failed",
+						type: 'do',
+						status: 'failed',
 						error: errorMsg,
 						attempts: newAttempts,
 					});
@@ -722,15 +706,12 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 
 			// Store failed attempt and retry inline
 			if (existing) {
-				await this.db
-					.update(stepsTable)
-					.set({ status: "failed", error: errorMsg, attempts: newAttempts })
-					.where(eq(stepsTable.name, name));
+				await this.db.update(stepsTable).set({ status: 'failed', error: errorMsg, attempts: newAttempts }).where(eq(stepsTable.name, name));
 			} else {
 				await this.db.insert(stepsTable).values({
 					name,
-					type: "do",
-					status: "failed",
+					type: 'do',
+					status: 'failed',
 					error: errorMsg,
 					attempts: newAttempts,
 				});
@@ -749,11 +730,11 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 	async sleep(name: string, duration: string): Promise<void> {
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
 
-		if (existing?.status === "completed") {
+		if (existing?.status === 'completed') {
 			return; // Already slept, skip
 		}
 
-		if (existing?.status === "sleeping") {
+		if (existing?.status === 'sleeping') {
 			// We're replaying but the alarm hasn't fired yet — re-throw
 			throw new SleepInterrupt(name, existing.wakeAt!);
 		}
@@ -762,8 +743,8 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 
 		await this.db.insert(stepsTable).values({
 			name,
-			type: "sleep",
-			status: "sleeping",
+			type: 'sleep',
+			status: 'sleeping',
 			wakeAt,
 			attempts: 0,
 		});
@@ -771,21 +752,21 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 		throw new SleepInterrupt(name, wakeAt);
 	}
 
-	async waitForEvent<K extends Extract<keyof Events, string>>(
-		name: K,
-		options?: StepWaitOptions,
-	): Promise<Events[K]> {
-		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name as string));
+	async waitForEvent<K extends Extract<keyof Events, string>>(name: K, options?: StepWaitOptions): Promise<Events[K]> {
+		const [existing] = await this.db
+			.select()
+			.from(stepsTable)
+			.where(eq(stepsTable.name, name as string));
 
-		if (existing?.status === "completed") {
+		if (existing?.status === 'completed') {
 			return existing.result ? JSON.parse(existing.result) : undefined;
 		}
 
-		if (existing?.status === "failed") {
+		if (existing?.status === 'failed') {
 			throw new Error(existing.error ?? `Event "${name as string}" failed`);
 		}
 
-		if (existing?.status === "waiting") {
+		if (existing?.status === 'waiting') {
 			// Already registered, re-throw interrupt
 			throw new WaitInterrupt(name as string, existing.wakeAt);
 		}
@@ -794,8 +775,8 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 
 		await this.db.insert(stepsTable).values({
 			name: name as string,
-			type: "wait_for_event",
-			status: "waiting",
+			type: 'wait_for_event',
+			status: 'waiting',
 			wakeAt: timeoutAt,
 			attempts: 0,
 		});
@@ -805,11 +786,11 @@ export class StepContext<Events extends Record<string, unknown> = Record<string,
 
 	private calculateBackoff(baseDelay: number, attempt: number, strategy: string): number {
 		switch (strategy) {
-			case "exponential":
+			case 'exponential':
 				return baseDelay * Math.pow(2, attempt - 1);
-			case "linear":
+			case 'linear':
 				return baseDelay * attempt;
-			case "fixed":
+			case 'fixed':
 			default:
 				return baseDelay;
 		}
@@ -834,6 +815,7 @@ git commit -m "feat: add StepContext with step.do(), step.sleep(), step.waitForE
 ### Task 6: Base Workflow Class
 
 **Files:**
+
 - Create: `src/engine/base-workflow.ts`
 
 **Step 1: Create src/engine/base-workflow.ts**
@@ -841,13 +823,9 @@ git commit -m "feat: add StepContext with step.do(), step.sleep(), step.waitForE
 This provides static helpers (`create`, `sendEvent`, `status`, `pause`, `resume`, `terminate`) that workflow subclasses inherit.
 
 ```typescript
-import type { Step, WorkflowDefaults, WorkflowStatusResponse } from "./types";
+import type { Step, WorkflowDefaults, WorkflowStatusResponse } from './types';
 
-export abstract class BaseWorkflow<
-	Payload = unknown,
-	Result = unknown,
-	Events extends Record<string, unknown> = Record<string, never>,
-> {
+export abstract class BaseWorkflow<Payload = unknown, Result = unknown, Events extends Record<string, unknown> = Record<string, never>> {
 	static type: string;
 	static events: Record<string, unknown> = {};
 	static defaults: Partial<WorkflowDefaults> = {};
@@ -907,14 +885,15 @@ git commit -m "feat: add BaseWorkflow with static create/sendEvent/status/pause/
 ### Task 7: Test Workflow + Registry
 
 **Files:**
+
 - Create: `src/workflows/test-workflow.ts`
 - Modify: `src/workflows/registry.ts`
 
 **Step 1: Create src/workflows/test-workflow.ts**
 
 ```typescript
-import { BaseWorkflow } from "../engine/base-workflow";
-import type { Step } from "../engine/types";
+import { BaseWorkflow } from '../engine/base-workflow';
+import type { Step } from '../engine/types';
 
 interface TestPayload {
 	name: string;
@@ -930,28 +909,26 @@ interface TestEvents {
 }
 
 export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEvents> {
-	static type = "test" as const;
+	static type = 'test' as const;
 	static events = {
 		approval: {} as { approved: boolean },
 	};
 	static defaults = {
-		retries: { limit: 2, delay: "500ms", backoff: "exponential" as const },
+		retries: { limit: 2, delay: '500ms', backoff: 'exponential' as const },
 	};
 
 	async run(step: Step<TestEvents>, payload: TestPayload): Promise<TestResult> {
-		const greeting = await step.do("greet", async () => {
+		const greeting = await step.do('greet', async () => {
 			return `Hello, ${payload.name}!`;
 		});
 
-		await step.sleep("pause", "5s");
+		await step.sleep('pause', '5s');
 
-		const approval = await step.waitForEvent("approval", {
-			timeout: "1m",
+		const approval = await step.waitForEvent('approval', {
+			timeout: '1m',
 		});
 
-		const message = approval.approved
-			? `${payload.name} was approved`
-			: `${payload.name} was rejected`;
+		const message = approval.approved ? `${payload.name} was approved` : `${payload.name} was rejected`;
 
 		return { message, greeting };
 	}
@@ -961,8 +938,8 @@ export class TestWorkflow extends BaseWorkflow<TestPayload, TestResult, TestEven
 **Step 2: Update src/workflows/registry.ts**
 
 ```typescript
-import type { WorkflowClass } from "../engine/types";
-import { TestWorkflow } from "./test-workflow";
+import type { WorkflowClass } from '../engine/types';
+import { TestWorkflow } from './test-workflow';
 
 export const registry: Record<string, WorkflowClass> = {
 	test: TestWorkflow as unknown as WorkflowClass,
@@ -985,23 +962,24 @@ git commit -m "feat: add TestWorkflow with sleep + event + registry"
 ### Task 8: HTTP API Routes
 
 **Files:**
+
 - Modify: `src/index.ts`
 
 **Step 1: Update src/index.ts with full API**
 
 ```typescript
-import { Hono } from "hono";
-import { registry } from "./workflows/registry";
+import { Hono } from 'hono';
+import { registry } from './workflows/registry';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // Health check
-app.get("/", (c) => {
-	return c.json({ status: "ok", workflows: Object.keys(registry) });
+app.get('/', (c) => {
+	return c.json({ status: 'ok', workflows: Object.keys(registry) });
 });
 
 // Create a workflow instance
-app.post("/workflows", async (c) => {
+app.post('/workflows', async (c) => {
 	const body = await c.req.json<{ type: string; id: string; payload: unknown }>();
 	const { type, id, payload } = body;
 
@@ -1012,56 +990,56 @@ app.post("/workflows", async (c) => {
 	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
 	await stub.initialize({ type, id, payload });
 
-	return c.json({ id, type, status: "running" }, 201);
+	return c.json({ id, type, status: 'running' }, 201);
 });
 
 // Get workflow status
-app.get("/workflows/:id", async (c) => {
-	const id = c.req.param("id");
+app.get('/workflows/:id', async (c) => {
+	const id = c.req.param('id');
 	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
 	const status = await stub.getStatus();
 	return c.json(status);
 });
 
 // Pause workflow
-app.post("/workflows/:id/pause", async (c) => {
-	const id = c.req.param("id");
+app.post('/workflows/:id/pause', async (c) => {
+	const id = c.req.param('id');
 	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
 	await stub.pause();
-	return c.json({ id, status: "paused" });
+	return c.json({ id, status: 'paused' });
 });
 
 // Resume workflow
-app.post("/workflows/:id/resume", async (c) => {
-	const id = c.req.param("id");
+app.post('/workflows/:id/resume', async (c) => {
+	const id = c.req.param('id');
 	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
 	await stub.resume();
-	return c.json({ id, status: "running" });
+	return c.json({ id, status: 'running' });
 });
 
 // Terminate workflow
-app.post("/workflows/:id/terminate", async (c) => {
-	const id = c.req.param("id");
+app.post('/workflows/:id/terminate', async (c) => {
+	const id = c.req.param('id');
 	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
 	await stub.terminate();
-	return c.json({ id, status: "terminated" });
+	return c.json({ id, status: 'terminated' });
 });
 
 // Send event to workflow
-app.post("/workflows/:id/events/:event", async (c) => {
-	const id = c.req.param("id");
-	const event = c.req.param("event");
+app.post('/workflows/:id/events/:event', async (c) => {
+	const id = c.req.param('id');
+	const event = c.req.param('event');
 	const body = await c.req.json();
 	const stub = c.env.WORKFLOW_RUNNER.get(c.env.WORKFLOW_RUNNER.idFromName(id));
 	await stub.deliverEvent({ event, payload: body });
-	return c.json({ id, event, status: "delivered" });
+	return c.json({ id, event, status: 'delivered' });
 });
 
 // List workflows by type (queries index shard)
-app.get("/workflows", async (c) => {
-	const type = c.req.query("type");
-	const status = c.req.query("status");
-	const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!) : 50;
+app.get('/workflows', async (c) => {
+	const type = c.req.query('type');
+	const status = c.req.query('status');
+	const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!) : 50;
 
 	if (type) {
 		// Query single index shard
@@ -1088,7 +1066,7 @@ export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
 
-export { WorkflowRunner } from "./engine/workflow-runner";
+export { WorkflowRunner } from './engine/workflow-runner';
 ```
 
 **Step 2: Type check**
@@ -1113,6 +1091,7 @@ Run: `npx wrangler dev` (in a background terminal)
 **Step 2: Create a workflow**
 
 Run:
+
 ```bash
 curl -s -X POST http://localhost:8787/workflows \
   -H 'Content-Type: application/json' \
@@ -1124,6 +1103,7 @@ Expected: `{"id":"test-1","type":"test","status":"running"}` with 201 status.
 **Step 3: Check status (should be sleeping after step.do completes)**
 
 Run:
+
 ```bash
 curl -s http://localhost:8787/workflows/test-1 | jq .
 ```
@@ -1133,6 +1113,7 @@ Expected: Status should be `"sleeping"` with the "greet" step completed and "pau
 **Step 4: Wait for sleep to complete (5s), then check status**
 
 Run:
+
 ```bash
 sleep 6 && curl -s http://localhost:8787/workflows/test-1 | jq .
 ```
@@ -1142,6 +1123,7 @@ Expected: Status should be `"waiting"` — the sleep completed and now it's wait
 **Step 5: Send event**
 
 Run:
+
 ```bash
 curl -s -X POST http://localhost:8787/workflows/test-1/events/approval \
   -H 'Content-Type: application/json' \
@@ -1153,6 +1135,7 @@ Expected: `{"id":"test-1","event":"approval","status":"delivered"}`
 **Step 6: Check final status**
 
 Run:
+
 ```bash
 curl -s http://localhost:8787/workflows/test-1 | jq .
 ```
@@ -1162,6 +1145,7 @@ Expected: Status `"completed"`, result `{"message":"World was approved","greetin
 **Step 7: Test listing**
 
 Run:
+
 ```bash
 curl -s http://localhost:8787/workflows?type=test | jq .
 ```

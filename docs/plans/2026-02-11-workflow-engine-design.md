@@ -9,10 +9,10 @@ One DO class (`WorkflowRunner`), one binding, one migration. Workflow types are 
 ```jsonc
 // wrangler.jsonc — never grows
 {
-  "durable_objects": {
-    "bindings": [{ "class_name": "WorkflowRunner", "name": "WORKFLOW_RUNNER" }]
-  },
-  "migrations": [{ "new_sqlite_classes": ["WorkflowRunner"], "tag": "v1" }]
+	"durable_objects": {
+		"bindings": [{ "class_name": "WorkflowRunner", "name": "WORKFLOW_RUNNER" }],
+	},
+	"migrations": [{ "new_sqlite_classes": ["WorkflowRunner"], "tag": "v1" }],
 }
 ```
 
@@ -20,8 +20,8 @@ One DO class (`WorkflowRunner`), one binding, one migration. Workflow types are 
 
 ```typescript
 const registry = {
-  test: TestWorkflow,
-  payment: PaymentWorkflow,
+	test: TestWorkflow,
+	payment: PaymentWorkflow,
 } as const;
 ```
 
@@ -29,8 +29,8 @@ const registry = {
 
 ```typescript
 const instance = await TestWorkflow.create(env, {
-  id: "unique-instance-id",
-  payload: { name: "World" },
+	id: 'unique-instance-id',
+	payload: { name: 'World' },
 });
 ```
 
@@ -47,9 +47,13 @@ The `step` object is passed to every workflow's `run()` method. Three primitives
 Execute a retryable unit of work. Returns cached result on replay.
 
 ```typescript
-const user = await step.do("fetch-user", async () => {
-  return await api.getUser(payload.userId);
-}, { retries: { limit: 5, delay: "2s", backoff: "exponential" } });
+const user = await step.do(
+	'fetch-user',
+	async () => {
+		return await api.getUser(payload.userId);
+	},
+	{ retries: { limit: 5, delay: '2s', backoff: 'exponential' } },
+);
 ```
 
 ### `step.sleep(name, duration)`
@@ -57,7 +61,7 @@ const user = await step.do("fetch-user", async () => {
 Pause the workflow. Sets a DO alarm and hibernates.
 
 ```typescript
-await step.sleep("wait-for-cooling-period", "24 hours");
+await step.sleep('wait-for-cooling-period', '24 hours');
 ```
 
 ### `step.waitForEvent(name, options?)`
@@ -65,8 +69,8 @@ await step.sleep("wait-for-cooling-period", "24 hours");
 Block until an external event arrives or timeout expires. Returns the event payload.
 
 ```typescript
-const approval = await step.waitForEvent<{ approved: boolean }>("wait-for-approval", {
-  timeout: "7 days",
+const approval = await step.waitForEvent<{ approved: boolean }>('wait-for-approval', {
+	timeout: '7 days',
 });
 ```
 
@@ -74,13 +78,13 @@ const approval = await step.waitForEvent<{ approved: boolean }>("wait-for-approv
 
 ```typescript
 class PaymentWorkflow implements Workflow<PaymentPayload, PaymentResult> {
-  static defaults = {
-    retries: { limit: 3, delay: "1s", backoff: "exponential" },
-  };
+	static defaults = {
+		retries: { limit: 3, delay: '1s', backoff: 'exponential' },
+	};
 
-  async run(step: Step<typeof PaymentWorkflow.events>, payload: PaymentPayload) {
-    // steps inherit defaults unless they override
-  }
+	async run(step: Step<typeof PaymentWorkflow.events>, payload: PaymentPayload) {
+		// steps inherit defaults unless they override
+	}
 }
 ```
 
@@ -94,17 +98,17 @@ Events are type-safe at three points: where they're defined, where they're await
 
 ```typescript
 class PaymentWorkflow implements Workflow<PaymentPayload, PaymentResult> {
-  static events = {
-    "approval": {} as { approved: boolean; reviewer: string },
-    "refund-requested": {} as { reason: string; amount: number },
-  };
+	static events = {
+		approval: {} as { approved: boolean; reviewer: string },
+		'refund-requested': {} as { reason: string; amount: number },
+	};
 
-  async run(step: Step<typeof PaymentWorkflow.events>, payload: PaymentPayload) {
-    const approval = await step.waitForEvent("approval", { timeout: "7d" });
-    //    ^ typed as { approved: boolean; reviewer: string }
+	async run(step: Step<typeof PaymentWorkflow.events>, payload: PaymentPayload) {
+		const approval = await step.waitForEvent('approval', { timeout: '7d' });
+		//    ^ typed as { approved: boolean; reviewer: string }
 
-    await step.waitForEvent("typo"); // compile error
-  }
+		await step.waitForEvent('typo'); // compile error
+	}
 }
 ```
 
@@ -114,9 +118,9 @@ Static helpers on the workflow subclass — type flows from the class, no regist
 
 ```typescript
 await PaymentWorkflow.sendEvent(env, {
-  id: "payment-123",
-  event: "approval",
-  payload: { approved: true, reviewer: "alice" },
+	id: 'payment-123',
+	event: 'approval',
+	payload: { approved: true, reviewer: 'alice' },
 });
 ```
 
@@ -232,15 +236,15 @@ await indexStub.indexWrite({ id: "payment-123", status: "running", ... });
 ### Querying
 
 List by type hits one shard:
+
 ```
 GET /workflows?type=payment -> queries __index:payment DO
 ```
 
 List across all types fans out to all registry keys in parallel:
+
 ```typescript
-const results = await Promise.all(
-  Object.keys(registry).map(type => getIndexShard(env, type).list(filters))
-);
+const results = await Promise.all(Object.keys(registry).map((type) => getIndexShard(env, type).list(filters)));
 ```
 
 ### Role detection
@@ -272,13 +276,13 @@ import { migrate } from 'drizzle-orm/durable-sqlite/migrator';
 import migrations from '../drizzle/migrations';
 
 export class WorkflowRunner extends DurableObject<Env> {
-  db: DrizzleSqliteDODatabase;
+	db: DrizzleSqliteDODatabase;
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-    this.db = drizzle(ctx.storage, { logger: false });
-    ctx.blockConcurrencyWhile(() => migrate(this.db, migrations));
-  }
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env);
+		this.db = drizzle(ctx.storage, { logger: false });
+		ctx.blockConcurrencyWhile(() => migrate(this.db, migrations));
+	}
 }
 ```
 
@@ -290,19 +294,19 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 // Used by workflow instances
 export const steps = sqliteTable('steps', {
-  name: text('name').primaryKey(),
-  result: text('result'),
-  status: text('status').notNull(),
-  attempts: integer('attempts').default(0),
-  completedAt: integer('completed_at'),
+	name: text('name').primaryKey(),
+	result: text('result'),
+	status: text('status').notNull(),
+	attempts: integer('attempts').default(0),
+	completedAt: integer('completed_at'),
 });
 
 // Used by index shard instances
 export const instances = sqliteTable('instances', {
-  id: text('id').primaryKey(),
-  status: text('status').notNull(),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+	id: text('id').primaryKey(),
+	status: text('status').notNull(),
+	createdAt: integer('created_at').notNull(),
+	updatedAt: integer('updated_at').notNull(),
 });
 ```
 
@@ -311,10 +315,10 @@ export const instances = sqliteTable('instances', {
 ```typescript
 // drizzle.config.ts
 export default defineConfig({
-  out: './drizzle',
-  schema: './src/db/schema.ts',
-  dialect: 'sqlite',
-  driver: 'durable-sqlite',
+	out: './drizzle',
+	schema: './src/db/schema.ts',
+	dialect: 'sqlite',
+	driver: 'durable-sqlite',
 });
 ```
 

@@ -3,8 +3,8 @@ title: Getting Started
 description: Create your first Ablauf workflow in minutes. No external infrastructure required.
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
-import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 # Getting Started
 
@@ -19,7 +19,7 @@ Before you start, make sure you have:
 - `wrangler` CLI installed (`npm install -g wrangler`)
 
 <Callout type="info">
-New to Cloudflare Workers? Check out their [getting started guide](https://developers.cloudflare.com/workers/get-started/) first.
+	New to Cloudflare Workers? Check out their [getting started guide](https://developers.cloudflare.com/workers/get-started/) first.
 </Callout>
 
 ## Installation
@@ -45,26 +45,26 @@ npm install @der-ablauf/workflows hono zod
 Create a simple greeting workflow using the `defineWorkflow()` API. This is the recommended way to define workflows—less boilerplate than classes, full type safety.
 
 ```ts title="src/workflows/greeting.ts"
-import { defineWorkflow } from "@der-ablauf/workflows";
-import { z } from "zod";
+import { defineWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
 
 export const GreetingWorkflow = defineWorkflow({
-  type: "greeting",
-  input: z.object({
-    name: z.string(),
-  }),
-  run: async (step, payload) => {
-    // This step is durable—if the worker crashes, it replays with cached results
-    const message = await step.do("create-greeting", async () => {
-      return `Hello, ${payload.name}! Welcome aboard.`;
-    });
+	type: 'greeting',
+	input: z.object({
+		name: z.string(),
+	}),
+	run: async (step, payload) => {
+		// This step is durable—if the worker crashes, it replays with cached results
+		const message = await step.do('create-greeting', async () => {
+			return `Hello, ${payload.name}! Welcome aboard.`;
+		});
 
-    // Simulate some work
-    await step.sleep("wait-a-moment", "2s");
+		// Simulate some work
+		await step.sleep('wait-a-moment', '2s');
 
-    // Return the final result
-    return { message, completedAt: new Date().toISOString() };
-  },
+		// Return the final result
+		return { message, completedAt: new Date().toISOString() };
+	},
 });
 ```
 
@@ -79,39 +79,36 @@ The `step.do()` block ensures the greeting is generated once and cached. If the 
 Create a Hono app and initialize Ablauf with your workflow. The `Ablauf` class connects to your Durable Object binding and registers your workflows.
 
 ```ts title="src/index.ts"
-import { Hono } from "hono";
-import { Ablauf } from "@der-ablauf/workflows";
-import { GreetingWorkflow } from "./workflows/greeting";
+import { Hono } from 'hono';
+import { Ablauf } from '@der-ablauf/workflows';
+import { GreetingWorkflow } from './workflows/greeting';
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 // Initialize Ablauf with the WORKFLOW_RUNNER binding
-const ablauf = new Ablauf<CloudflareBindings["WORKFLOW_RUNNER"]>(
-  (env) => env.WORKFLOW_RUNNER,
-  {
-    workflows: [GreetingWorkflow],
-  }
-);
+const ablauf = new Ablauf<CloudflareBindings['WORKFLOW_RUNNER']>((env) => env.WORKFLOW_RUNNER, {
+	workflows: [GreetingWorkflow],
+});
 
 // Create a new greeting workflow
-app.post("/greet", async (c) => {
-  const { name } = await c.req.json();
+app.post('/greet', async (c) => {
+	const { name } = await c.req.json();
 
-  const workflow = await ablauf.create(GreetingWorkflow, {
-    id: crypto.randomUUID(),
-    payload: { name },
-  });
+	const workflow = await ablauf.create(GreetingWorkflow, {
+		id: crypto.randomUUID(),
+		payload: { name },
+	});
 
-  const status = await workflow.getStatus();
-  return c.json(status);
+	const status = await workflow.getStatus();
+	return c.json(status);
 });
 
 // Get workflow status
-app.get("/workflows/:id", async (c) => {
-  const id = c.req.param("id");
-  const workflow = ablauf.get(GreetingWorkflow, id);
-  const status = await workflow.getStatus();
-  return c.json(status);
+app.get('/workflows/:id', async (c) => {
+	const id = c.req.param('id');
+	const workflow = ablauf.get(GreetingWorkflow, id);
+	const status = await workflow.getStatus();
+	return c.json(status);
 });
 
 // Export the Worker
@@ -122,12 +119,12 @@ export const WorkflowRunner = ablauf.createWorkflowRunner();
 
 // Type definitions
 interface CloudflareBindings {
-  WORKFLOW_RUNNER: DurableObjectNamespace;
+	WORKFLOW_RUNNER: DurableObjectNamespace;
 }
 ```
 
 <Callout type="warn">
-The `createWorkflowRunner()` call **must** be exported as `WorkflowRunner` to match your Durable Object binding name in `wrangler.jsonc`.
+	The `createWorkflowRunner()` call **must** be exported as `WorkflowRunner` to match your Durable Object binding name in `wrangler.jsonc`.
 </Callout>
 
 </Step>
@@ -140,31 +137,31 @@ Tell Cloudflare about your Durable Object. This is what makes your workflows dur
 
 ```jsonc title="wrangler.jsonc"
 {
-  "name": "my-ablauf-app",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "rules": [
-    {
-      "type": "Text",
-      "globs": ["**/*.sql"],
-      "fallthrough": true
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "class_name": "WorkflowRunner",
-        "name": "WORKFLOW_RUNNER"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "new_sqlite_classes": ["WorkflowRunner"],
-      "tag": "v1"
-    }
-  ]
+	"name": "my-ablauf-app",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"rules": [
+		{
+			"type": "Text",
+			"globs": ["**/*.sql"],
+			"fallthrough": true,
+		},
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"class_name": "WorkflowRunner",
+				"name": "WORKFLOW_RUNNER",
+			},
+		],
+	},
+	"migrations": [
+		{
+			"new_sqlite_classes": ["WorkflowRunner"],
+			"tag": "v1",
+		},
+	],
 }
 ```
 
@@ -207,11 +204,11 @@ Response:
 
 ```json
 {
-  "id": "some-uuid",
-  "type": "greeting",
-  "status": "running",
-  "payload": { "name": "Alice" },
-  "createdAt": "2025-02-14T12:00:00.000Z"
+	"id": "some-uuid",
+	"type": "greeting",
+	"status": "running",
+	"payload": { "name": "Alice" },
+	"createdAt": "2025-02-14T12:00:00.000Z"
 }
 ```
 
@@ -225,16 +222,16 @@ Response:
 
 ```json
 {
-  "id": "some-uuid",
-  "type": "greeting",
-  "status": "completed",
-  "payload": { "name": "Alice" },
-  "result": {
-    "message": "Hello, Alice! Welcome aboard.",
-    "completedAt": "2025-02-14T12:00:02.000Z"
-  },
-  "createdAt": "2025-02-14T12:00:00.000Z",
-  "completedAt": "2025-02-14T12:00:02.000Z"
+	"id": "some-uuid",
+	"type": "greeting",
+	"status": "completed",
+	"payload": { "name": "Alice" },
+	"result": {
+		"message": "Hello, Alice! Welcome aboard.",
+		"completedAt": "2025-02-14T12:00:02.000Z"
+	},
+	"createdAt": "2025-02-14T12:00:00.000Z",
+	"completedAt": "2025-02-14T12:00:02.000Z"
 }
 ```
 

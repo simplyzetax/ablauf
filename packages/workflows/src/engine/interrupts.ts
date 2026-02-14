@@ -5,7 +5,7 @@
  * rather than propagating as a failure.
  */
 export class SleepInterrupt {
-	readonly _tag = "SleepInterrupt";
+	readonly _tag = 'SleepInterrupt';
 	constructor(
 		/** Name of the step that triggered the sleep. */
 		public readonly stepName: string,
@@ -21,7 +21,7 @@ export class SleepInterrupt {
  * for the optional timeout.
  */
 export class WaitInterrupt {
-	readonly _tag = "WaitInterrupt";
+	readonly _tag = 'WaitInterrupt';
 	constructor(
 		/** Name of the event being waited for. */
 		public readonly stepName: string,
@@ -36,7 +36,7 @@ export class WaitInterrupt {
  * Not an `Error` subclass — caught by the workflow runner to set the `"paused"` status.
  */
 export class PauseInterrupt {
-	readonly _tag = "PauseInterrupt";
+	readonly _tag = 'PauseInterrupt';
 }
 
 /**

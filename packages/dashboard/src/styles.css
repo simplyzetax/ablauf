@@ -1,35 +1,46 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-surface-0: #09090b;
-  --color-surface-1: #18181b;
-  --color-surface-2: #27272a;
-  --color-border: #27272a;
-  --color-border-muted: rgba(39, 39, 42, 0.5);
+	--color-surface-0: #09090b;
+	--color-surface-1: #18181b;
+	--color-surface-2: #27272a;
+	--color-border: #27272a;
+	--color-border-muted: rgba(39, 39, 42, 0.5);
 }
 
 html {
-  color-scheme: dark;
+	color-scheme: dark;
 }
 
 body {
-  font-variant-numeric: tabular-nums;
+	font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.4;
+	}
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
 }

@@ -1,9 +1,6 @@
 {
 	"extends": "./tsconfig.base.json",
 	"compilerOptions": {},
-	"references": [
-		{ "path": "packages/workflows" },
-		{ "path": "apps/worker" }
-	],
+	"references": [{ "path": "packages/workflows" }, { "path": "apps/worker" }],
 	"files": []
 }

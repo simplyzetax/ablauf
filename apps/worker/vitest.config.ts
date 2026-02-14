@@ -1,4 +1,4 @@
-import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
+import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
 
 export default defineWorkersConfig({
 	test: {
@@ -6,10 +6,10 @@ export default defineWorkersConfig({
 			optimizer: {
 				ssr: {
 					enabled: true,
-					include: ["@der-ablauf/workflows", "@der-ablauf/client"],
+					include: ['@der-ablauf/workflows', '@der-ablauf/client'],
 					esbuildOptions: {
 						loader: {
-							".sql": "text",
+							'.sql': 'text',
 						},
 					},
 				},
@@ -17,7 +17,7 @@ export default defineWorkersConfig({
 		},
 		poolOptions: {
 			workers: {
-				wrangler: { configPath: "./wrangler.jsonc" },
+				wrangler: { configPath: './wrangler.jsonc' },
 				isolatedStorage: false,
 				singleWorker: false,
 			},

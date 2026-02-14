@@ -10,13 +10,13 @@ const ablauf = new Ablauf(env.WORKFLOW_RUNNER, shardConfigs);
 const workflows = [TestWorkflow, EchoWorkflow];
 
 export const WorkflowRunner = createWorkflowRunner({
-  workflows: [TestWorkflow, [EchoWorkflow, { shards: 4 }]],
+	workflows: [TestWorkflow, [EchoWorkflow, { shards: 4 }]],
 });
 
 const dashboardHandler = createDashboardHandler({
-  binding: env.WORKFLOW_RUNNER,
-  workflows,
-  shardConfigs,
+	binding: env.WORKFLOW_RUNNER,
+	workflows,
+	shardConfigs,
 });
 ```
 
@@ -28,9 +28,9 @@ Workflows, binding, and shard configs are repeated. The dashboard handler had a 
 
 ```typescript
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [TestWorkflow, EchoWorkflow],
-  // Optional: shard configs per workflow type
-  shards: { echo: { shards: 4, previousShards: 2 } },
+	workflows: [TestWorkflow, EchoWorkflow],
+	// Optional: shard configs per workflow type
+	shards: { echo: { shards: 4, previousShards: 2 } },
 });
 ```
 
@@ -41,24 +41,24 @@ Everything else derives from it:
 export const WorkflowRunner = ablauf.createWorkflowRunner();
 
 // Dashboard REST handler (replaces createDashboardHandler)
-app.all("/__ablauf/*", (c) => ablauf.handleDashboard(c.req.raw, "/__ablauf"));
+app.all('/__ablauf/*', (c) => ablauf.handleDashboard(c.req.raw, '/__ablauf'));
 
 // Optional: authentication
-app.all("/__ablauf/*", (c) =>
-  ablauf.handleDashboard(c.req.raw, "/__ablauf", {
-    authenticate: (req) => checkAuth(req),
-  }),
+app.all('/__ablauf/*', (c) =>
+	ablauf.handleDashboard(c.req.raw, '/__ablauf', {
+		authenticate: (req) => checkAuth(req),
+	}),
 );
 
 // Creating/managing workflows (unchanged API)
-const wf = await ablauf.create(EchoWorkflow, { id: "echo-1", payload: { message: "hi" } });
-const status = await ablauf.status("echo-1");
+const wf = await ablauf.create(EchoWorkflow, { id: 'echo-1', payload: { message: 'hi' } });
+const status = await ablauf.status('echo-1');
 
 // SSE stream
-app.get("/workflows/:id/sse", (c) => ablauf.sseStream(c.req.param("id")));
+app.get('/workflows/:id/sse', (c) => ablauf.sseStream(c.req.param('id')));
 
 // Listing
-const list = await ablauf.list("echo");
+const list = await ablauf.list('echo');
 ```
 
 ## Worker File (Before → After)
@@ -66,18 +66,18 @@ const list = await ablauf.list("echo");
 ### Before
 
 ```typescript
-import { Ablauf, createSSEStream, createDashboardHandler, createWorkflowRunner } from "@der-ablauf/workflows";
+import { Ablauf, createSSEStream, createDashboardHandler, createWorkflowRunner } from '@der-ablauf/workflows';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
 
 const dashboardHandler = createDashboardHandler({
-  binding: env.WORKFLOW_RUNNER,
-  workflows,
+	binding: env.WORKFLOW_RUNNER,
+	workflows,
 });
 
-app.get("/workflows/:id/sse", (c) => createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param("id")));
-app.all("/__ablauf/*", (c) => dashboardHandler(c.req.raw, "/__ablauf"));
+app.get('/workflows/:id/sse', (c) => createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param('id')));
+app.all('/__ablauf/*', (c) => dashboardHandler(c.req.raw, '/__ablauf'));
 
 export const WorkflowRunner = createWorkflowRunner({ workflows });
 ```
@@ -85,14 +85,14 @@ export const WorkflowRunner = createWorkflowRunner({ workflows });
 ### After
 
 ```typescript
-import { Ablauf } from "@der-ablauf/workflows";
+import { Ablauf } from '@der-ablauf/workflows';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow],
+	workflows: [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow],
 });
 
-app.get("/workflows/:id/sse", (c) => ablauf.sseStream(c.req.param("id")));
-app.all("/__ablauf/*", (c) => ablauf.handleDashboard(c.req.raw, "/__ablauf"));
+app.get('/workflows/:id/sse', (c) => ablauf.sseStream(c.req.param('id')));
+app.all('/__ablauf/*', (c) => ablauf.handleDashboard(c.req.raw, '/__ablauf'));
 
 export const WorkflowRunner = ablauf.createWorkflowRunner();
 ```
@@ -102,11 +102,13 @@ export const WorkflowRunner = ablauf.createWorkflowRunner();
 ### 1. Refactor `Ablauf` constructor (`packages/workflows/src/client.ts`)
 
 **Current signature:**
+
 ```typescript
 constructor(binding: DurableObjectNamespace, shardConfigs?: Record<string, WorkflowShardConfig>)
 ```
 
 **New signature:**
+
 ```typescript
 constructor(binding: DurableObjectNamespace, config?: {
   workflows?: WorkflowRegistration[];
@@ -121,6 +123,7 @@ constructor(binding: DurableObjectNamespace, config?: {
 ### 2. Move `createWorkflowRunner` onto `Ablauf` instance
 
 **New method:**
+
 ```typescript
 ablauf.createWorkflowRunner(overrides?: { binding?: string }): typeof DurableObject
 ```
@@ -132,6 +135,7 @@ ablauf.createWorkflowRunner(overrides?: { binding?: string }): typeof DurableObj
 ### 3. Move `createDashboardHandler` onto `Ablauf` instance
 
 **New method:**
+
 ```typescript
 ablauf.handleDashboard(request: Request, basePath: string, options?: {
   authenticate?: (request: Request) => boolean | Promise<boolean>;
@@ -144,6 +148,7 @@ ablauf.handleDashboard(request: Request, basePath: string, options?: {
 ### 4. Move `createSSEStream` onto `Ablauf` instance
 
 **New method:**
+
 ```typescript
 ablauf.sseStream(workflowId: string): Response
 ```
@@ -162,14 +167,14 @@ ablauf.sseStream(workflowId: string): Response
 
 ## Files to Change
 
-| File | Change |
-|------|--------|
-| `packages/workflows/src/client.ts` | Refactor constructor, add methods |
+| File                                               | Change                                |
+| -------------------------------------------------- | ------------------------------------- |
+| `packages/workflows/src/client.ts`                 | Refactor constructor, add methods     |
 | `packages/workflows/src/engine/workflow-runner.ts` | Extract class factory logic for reuse |
-| `packages/workflows/src/dashboard.ts` | Extract handler logic for reuse |
-| `packages/workflows/src/sse-stream.ts` | Extract for reuse |
-| `packages/workflows/src/index.ts` | Update exports |
-| `apps/worker/src/index.ts` | Use new unified API |
+| `packages/workflows/src/dashboard.ts`              | Extract handler logic for reuse       |
+| `packages/workflows/src/sse-stream.ts`             | Extract for reuse                     |
+| `packages/workflows/src/index.ts`                  | Update exports                        |
+| `apps/worker/src/index.ts`                         | Use new unified API                   |
 
 ## Migration
 

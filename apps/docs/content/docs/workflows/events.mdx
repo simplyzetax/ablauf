@@ -12,29 +12,29 @@ Ablauf's event system is fully typed end-to-end with Zod schemas. Events are def
 Events are defined alongside your workflow using a simple event name → Zod schema mapping:
 
 ```ts
-import { defineWorkflow } from "@der-ablauf/workflows";
-import { z } from "zod";
+import { defineWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
 
 const PaymentWorkflow = defineWorkflow({
-	type: "payment",
+	type: 'payment',
 	input: z.object({ amount: z.number(), currency: z.string() }),
 	events: {
-		"payment-confirmed": z.object({
+		'payment-confirmed': z.object({
 			transactionId: z.string(),
 			confirmedAt: z.number(),
 		}),
-		"payment-failed": z.object({
+		'payment-failed': z.object({
 			reason: z.string(),
 		}),
 	},
 	run: async (step, payload) => {
-		await step.do("initiate-payment", async () => {
+		await step.do('initiate-payment', async () => {
 			// Start payment process...
 		});
 
 		// TypeScript knows this returns { transactionId, confirmedAt }
-		const confirmation = await step.waitForEvent("payment-confirmed", {
-			timeout: "30m",
+		const confirmation = await step.waitForEvent('payment-confirmed', {
+			timeout: '30m',
 		});
 
 		return { transactionId: confirmation.transactionId };
@@ -50,9 +50,9 @@ When you send an event, TypeScript enforces the correct event name and payload s
 // Fully typed — autocomplete on event names and payload properties
 await ablauf.sendEvent(PaymentWorkflow, {
 	id: workflowInstanceId,
-	event: "payment-confirmed",
+	event: 'payment-confirmed',
 	payload: {
-		transactionId: "txn_123",
+		transactionId: 'txn_123',
 		confirmedAt: Date.now(),
 	},
 });
@@ -77,16 +77,16 @@ This means your workflow's `step.waitForEvent()` always receives valid, properly
 The classic use case: a webhook fires, your workflow wakes up.
 
 ```ts
-import { Hono } from "hono";
+import { Hono } from 'hono';
 
 const app = new Hono();
 
-app.post("/webhooks/payment", async (c) => {
+app.post('/webhooks/payment', async (c) => {
 	const body = await c.req.json();
 
 	await ablauf.sendEvent(PaymentWorkflow, {
 		id: body.workflowId,
-		event: "payment-confirmed",
+		event: 'payment-confirmed',
 		payload: {
 			transactionId: body.transaction_id,
 			confirmedAt: Date.now(),
@@ -98,7 +98,8 @@ app.post("/webhooks/payment", async (c) => {
 ```
 
 <Callout type="info">
-	Events are the glue between the outside world and your workflows. A webhook fires, a user clicks a button, a cron job runs — send an event, and your workflow picks up right where it left off.
+	Events are the glue between the outside world and your workflows. A webhook fires, a user clicks a button, a cron job runs — send an
+	event, and your workflow picks up right where it left off.
 </Callout>
 
 ### User Actions
@@ -106,14 +107,14 @@ app.post("/webhooks/payment", async (c) => {
 Let users resume workflows with a button click:
 
 ```ts
-app.post("/workflows/:id/approve", async (c) => {
-	const id = c.req.param("id");
+app.post('/workflows/:id/approve', async (c) => {
+	const id = c.req.param('id');
 
 	await ablauf.sendEvent(ApprovalWorkflow, {
 		id,
-		event: "approved",
+		event: 'approved',
 		payload: {
-			approvedBy: c.get("userId"),
+			approvedBy: c.get('userId'),
 			approvedAt: Date.now(),
 		},
 	});
@@ -128,17 +129,17 @@ Your workflow can wait for different events at different steps:
 
 ```ts
 const OrderWorkflow = defineWorkflow({
-	type: "order",
+	type: 'order',
 	input: z.object({ orderId: z.string() }),
 	events: {
-		"payment-received": z.object({ amount: z.number() }),
-		"item-shipped": z.object({ trackingNumber: z.string() }),
-		"item-delivered": z.object({ deliveredAt: z.number() }),
+		'payment-received': z.object({ amount: z.number() }),
+		'item-shipped': z.object({ trackingNumber: z.string() }),
+		'item-delivered': z.object({ deliveredAt: z.number() }),
 	},
 	run: async (step, payload) => {
-		const payment = await step.waitForEvent("payment-received", { timeout: "1h" });
-		const shipment = await step.waitForEvent("item-shipped", { timeout: "3d" });
-		const delivery = await step.waitForEvent("item-delivered", { timeout: "7d" });
+		const payment = await step.waitForEvent('payment-received', { timeout: '1h' });
+		const shipment = await step.waitForEvent('item-shipped', { timeout: '3d' });
+		const delivery = await step.waitForEvent('item-delivered', { timeout: '7d' });
 
 		return { trackingNumber: shipment.trackingNumber };
 	},
@@ -151,8 +152,8 @@ If an event doesn't arrive within the timeout, `step.waitForEvent()` throws `Eve
 
 ```ts
 try {
-	const confirmation = await step.waitForEvent("payment-confirmed", {
-		timeout: "30m",
+	const confirmation = await step.waitForEvent('payment-confirmed', {
+		timeout: '30m',
 	});
 } catch (err) {
 	if (err instanceof EventTimeoutError) {

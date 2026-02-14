@@ -31,8 +31,8 @@ export async function* parseSSEStream(
 ): AsyncGenerator<SSEStreamEvent, void, unknown> {
 	const reader = stream.getReader();
 	const decoder = new TextDecoder();
-	let buffer = "";
-	let currentEvent = "message";
+	let buffer = '';
+	let currentEvent = 'message';
 	const signal = options?.signal;
 
 	const isAborted = () => signal?.aborted ?? false;
@@ -41,7 +41,7 @@ export async function* parseSSEStream(
 		reader.cancel().catch(() => {});
 	};
 
-	signal?.addEventListener("abort", abortHandler);
+	signal?.addEventListener('abort', abortHandler);
 
 	try {
 		while (!isAborted()) {
@@ -54,7 +54,7 @@ export async function* parseSSEStream(
 					return;
 				}
 				const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-				if (message.includes("cancel")) {
+				if (message.includes('cancel')) {
 					return;
 				}
 				throw error;
@@ -64,19 +64,19 @@ export async function* parseSSEStream(
 			}
 
 			buffer += decoder.decode(value, { stream: true });
-			const lines = buffer.split("\n");
-			buffer = lines.pop() ?? "";
+			const lines = buffer.split('\n');
+			buffer = lines.pop() ?? '';
 
 			for (const rawLine of lines) {
 				const line = rawLine.trim();
 				if (!line) continue;
 
-				if (line.startsWith("event: ")) {
+				if (line.startsWith('event: ')) {
 					currentEvent = line.slice(7).trim();
 					continue;
 				}
 
-				if (line.startsWith("data: ")) {
+				if (line.startsWith('data: ')) {
 					try {
 						yield { event: currentEvent, data: JSON.parse(line.slice(6)) };
 					} catch {
@@ -86,7 +86,7 @@ export async function* parseSSEStream(
 			}
 		}
 	} finally {
-		signal?.removeEventListener("abort", abortHandler);
+		signal?.removeEventListener('abort', abortHandler);
 		await reader.cancel().catch(() => {});
 	}
 }

@@ -104,6 +104,7 @@ export default {
 ### @der-ablauf/workflows (packages/workflows)
 
 Exports:
+
 - `createWorkflowRunner(workflows)` — DO class factory
 - `Ablauf` — Client class wrapping DO binding
 - `BaseWorkflow` — Abstract base class for defining workflows
@@ -119,6 +120,7 @@ Ships TypeScript source directly (no build step) since all consumers use wrangle
 ### @der-ablauf/worker (apps/worker)
 
 Owns:
+
 - Hono HTTP routes
 - Wrangler config + DO bindings
 - Drizzle migrations + config
@@ -138,6 +140,7 @@ Dependencies: `@der-ablauf/workflows` (workspace), plus dev deps for wrangler, v
 - Single `step.do("echo", ...)` returning `{ original, echoed, timestamp }`
 
 **Demo route** in `apps/worker/src/index.ts`:
+
 ```
 POST /echo
 Body: { "message": "hello" }
@@ -151,6 +154,7 @@ Creates the workflow, polls for completion (synchronous single-step), returns re
 ### turbo.json
 
 Tasks:
+
 - `check-types`: `tsc --noEmit` in each workspace
 - `test`: depends on `check-types`, runs vitest
 - `dev`: persistent, runs `wrangler dev`
@@ -160,12 +164,14 @@ No `build` task needed — wrangler bundles TS source at deploy time.
 ### Package configs
 
 **@der-ablauf/workflows package.json**:
+
 - `exports`: points to `./src/index.ts`
 - `types`: points to `./src/index.ts`
 - `scripts.check-types`: `tsc --noEmit`
 - No build script
 
 **@der-ablauf/worker package.json**:
+
 - `scripts.dev`: `wrangler dev`
 - `scripts.deploy`: `wrangler deploy`
 - `scripts.test`: `vitest run`
@@ -178,6 +184,7 @@ No `build` task needed — wrangler bundles TS source at deploy time.
 ## Rename
 
 All references to "durable-workflows" renamed to "ablauf":
+
 - Root package name: `ablauf`
 - Package names: `@der-ablauf/workflows`, `@der-ablauf/worker`
 - README, AGENTS.md, any internal references
@@ -193,13 +200,16 @@ All references to "durable-workflows" renamed to "ablauf":
 ## Dependencies
 
 Root:
+
 - `turbo` (devDep)
 - `typescript` (devDep)
 
 @der-ablauf/workflows:
+
 - `hono`, `drizzle-orm`, `zod` (deps)
 
 @der-ablauf/worker:
+
 - `@der-ablauf/workflows` (workspace dep)
 - `@cloudflare/vitest-pool-workers`, `wrangler`, `vitest`, `drizzle-kit` (devDeps)
 - `@types/node` (devDep)

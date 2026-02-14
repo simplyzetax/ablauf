@@ -22,6 +22,7 @@
 ### Task 1: Add Zod schemas to `engine/types.ts`
 
 **Files:**
+
 - Modify: `packages/workflows/src/engine/types.ts:1-14,206-294`
 
 **Step 1: Add Zod import**
@@ -29,19 +30,21 @@
 Add at the top of `packages/workflows/src/engine/types.ts`:
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod';
 ```
 
 **Step 2: Replace `WorkflowStatus` type (line 13)**
 
 Replace:
+
 ```typescript
-export type WorkflowStatus = "created" | "running" | "completed" | "errored" | "paused" | "sleeping" | "waiting" | "terminated";
+export type WorkflowStatus = 'created' | 'running' | 'completed' | 'errored' | 'paused' | 'sleeping' | 'waiting' | 'terminated';
 ```
 
 With:
+
 ```typescript
-export const workflowStatusSchema = z.enum(["created", "running", "completed", "errored", "paused", "sleeping", "waiting", "terminated"]);
+export const workflowStatusSchema = z.enum(['created', 'running', 'completed', 'errored', 'paused', 'sleeping', 'waiting', 'terminated']);
 export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
 ```
 
@@ -75,13 +78,17 @@ export const stepInfoSchema = z.object({
 	/** Error stack trace from the most recent failure, or `null`. */
 	errorStack: z.string().nullable(),
 	/** History of failed retry attempts, or `null` if no retries occurred. */
-	retryHistory: z.array(z.object({
-		attempt: z.number(),
-		error: z.string(),
-		errorStack: z.string().nullable(),
-		timestamp: z.number(),
-		duration: z.number(),
-	})).nullable(),
+	retryHistory: z
+		.array(
+			z.object({
+				attempt: z.number(),
+				error: z.string(),
+				errorStack: z.string().nullable(),
+				timestamp: z.number(),
+				duration: z.number(),
+			}),
+		)
+		.nullable(),
 });
 
 /** Detailed information about a single step's execution. */
@@ -164,6 +171,7 @@ git commit -m "refactor: replace type interfaces with Zod schemas in engine/type
 ### Task 2: Add `.output()` to dashboard routes
 
 **Files:**
+
 - Modify: `packages/workflows/src/dashboard.ts`
 
 **Step 1: Update imports**
@@ -171,8 +179,8 @@ git commit -m "refactor: replace type interfaces with Zod schemas in engine/type
 Change the import from `./engine/types` to include the schemas:
 
 ```typescript
-import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from "./engine/types";
-import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from "./engine/types";
+import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from './engine/types';
+import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from './engine/types';
 ```
 
 **Step 2: Define route-specific output schemas**
@@ -265,6 +273,7 @@ git commit -m "feat: add .output() schemas to dashboard routes"
 ### Task 3: Export schemas from `index.ts`
 
 **Files:**
+
 - Modify: `packages/workflows/src/index.ts:36`
 
 **Step 1: Add schema exports**
@@ -272,7 +281,7 @@ git commit -m "feat: add .output() schemas to dashboard routes"
 After the existing `export { DEFAULT_RETRY_CONFIG } from "./engine/types";` line (line 36), add:
 
 ```typescript
-export { workflowStatusSchema, stepInfoSchema, workflowStatusResponseSchema, workflowIndexEntrySchema } from "./engine/types";
+export { workflowStatusSchema, stepInfoSchema, workflowStatusResponseSchema, workflowIndexEntrySchema } from './engine/types';
 ```
 
 **Step 2: Run type-check**
@@ -292,11 +301,13 @@ git commit -m "feat: export Zod output schemas from public API"
 ### Task 4: Verify OpenAPI spec generation
 
 **Files:**
+
 - Run: `apps/docs/scripts/generate-openapi.ts`
 
 **Step 1: Generate the OpenAPI spec**
 
 Run from the repo root:
+
 ```bash
 cd apps/docs && bun run generate-openapi
 ```
@@ -313,6 +324,7 @@ Expected: More matches than before (should include response schemas, not just in
 **Step 3: Commit (if openapi.json is tracked)**
 
 If `openapi.json` is gitignored (likely), no commit needed. Otherwise:
+
 ```bash
 git add apps/docs/openapi.json
 git commit -m "docs: regenerate OpenAPI spec with response schemas"

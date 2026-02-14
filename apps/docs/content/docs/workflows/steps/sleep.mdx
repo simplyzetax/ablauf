@@ -10,31 +10,32 @@ import { Callout } from 'fumadocs-ui/components/callout';
 `step.sleep()` pauses a workflow for a specified duration using Durable Object alarms. No resources consumed while sleeping, no memory held, no charges for nap time.
 
 ```ts
-await step.sleep("wait-before-retry", "30s");
-await step.sleep("cool-down-period", "5m");
-await step.sleep("wait-for-next-day", "24h");
+await step.sleep('wait-before-retry', '30s');
+await step.sleep('cool-down-period', '5m');
+await step.sleep('wait-for-next-day', '24h');
 ```
 
 <Callout type="info">
-**Sleeping workflows consume zero resources.** The Durable Object is hibernated and only wakes up when the alarm fires. Sleep for a week? That's fine. Sleep for a month? Also fine. Cloudflare won't charge you for time spent dreaming.
+	**Sleeping workflows consume zero resources.** The Durable Object is hibernated and only wakes up when the alarm fires. Sleep for a week?
+	That's fine. Sleep for a month? Also fine. Cloudflare won't charge you for time spent dreaming.
 </Callout>
 
 ## Basic Usage
 
 ```ts
 const workflow = defineWorkflow({
-	type: "scheduled-reminder",
+	type: 'scheduled-reminder',
 	input: z.object({ userId: z.string() }),
 	run: async (step, payload) => {
-		await step.do("send-immediate-email", async () => {
-			await sendEmail(payload.userId, "Thanks for signing up!");
+		await step.do('send-immediate-email', async () => {
+			await sendEmail(payload.userId, 'Thanks for signing up!');
 		});
 
 		// Wait 7 days
-		await step.sleep("wait-one-week", "7d");
+		await step.sleep('wait-one-week', '7d');
 
-		await step.do("send-follow-up-email", async () => {
-			await sendEmail(payload.userId, "How are you liking the product?");
+		await step.do('send-follow-up-email', async () => {
+			await sendEmail(payload.userId, 'How are you liking the product?');
 		});
 
 		return { remindersSent: 2 };
@@ -48,33 +49,33 @@ The workflow sends an immediate email, sleeps for 7 days (consuming zero resourc
 
 Duration strings support the following units:
 
-| Unit | Example | Description |
-|------|---------|-------------|
+| Unit | Example   | Description  |
+| ---- | --------- | ------------ |
 | `ms` | `"500ms"` | Milliseconds |
-| `s` | `"30s"` | Seconds |
-| `m` | `"5m"` | Minutes |
-| `h` | `"24h"` | Hours |
-| `d` | `"7d"` | Days |
+| `s`  | `"30s"`   | Seconds      |
+| `m`  | `"5m"`    | Minutes      |
+| `h`  | `"24h"`   | Hours        |
+| `d`  | `"7d"`    | Days         |
 
 ```ts
-await step.sleep("brief-pause", "500ms");
-await step.sleep("half-minute", "30s");
-await step.sleep("five-minutes", "5m");
-await step.sleep("one-hour", "1h");
-await step.sleep("one-week", "7d");
+await step.sleep('brief-pause', '500ms');
+await step.sleep('half-minute', '30s');
+await step.sleep('five-minutes', '5m');
+await step.sleep('one-hour', '1h');
+await step.sleep('one-week', '7d');
 ```
 
 Invalid duration strings throw `InvalidDurationError`:
 
 ```ts
 // ❌ Invalid formats
-await step.sleep("bad", "5"); // Missing unit
-await step.sleep("bad", "5 seconds"); // Space not allowed
-await step.sleep("bad", "5y"); // 'y' is not a valid unit
+await step.sleep('bad', '5'); // Missing unit
+await step.sleep('bad', '5 seconds'); // Space not allowed
+await step.sleep('bad', '5y'); // 'y' is not a valid unit
 
 // ✅ Valid formats
-await step.sleep("good", "5s");
-await step.sleep("good", "500ms");
+await step.sleep('good', '5s');
+await step.sleep('good', '500ms');
 ```
 
 ## How It Works
@@ -115,7 +116,7 @@ for (let i = 0; i < items.length; i++) {
 	});
 
 	if (i < items.length - 1) {
-		await step.sleep(`rate-limit-${i}`, "1s");
+		await step.sleep(`rate-limit-${i}`, '1s');
 	}
 }
 ```
@@ -126,21 +127,21 @@ Send time-delayed notifications:
 
 ```ts
 const workflow = defineWorkflow({
-	type: "trial-reminder-sequence",
+	type: 'trial-reminder-sequence',
 	input: z.object({ userId: z.string() }),
 	run: async (step, { userId }) => {
-		await step.sleep("wait-3-days", "3d");
-		await step.do("send-3-day-reminder", async () => {
-			await sendEmail(userId, "3 days left in your trial!");
+		await step.sleep('wait-3-days', '3d');
+		await step.do('send-3-day-reminder', async () => {
+			await sendEmail(userId, '3 days left in your trial!');
 		});
 
-		await step.sleep("wait-2-more-days", "2d");
-		await step.do("send-1-day-reminder", async () => {
-			await sendEmail(userId, "Last day of your trial!");
+		await step.sleep('wait-2-more-days', '2d');
+		await step.do('send-1-day-reminder', async () => {
+			await sendEmail(userId, 'Last day of your trial!');
 		});
 
-		await step.sleep("wait-final-day", "1d");
-		await step.do("convert-or-downgrade", async () => {
+		await step.sleep('wait-final-day', '1d');
+		await step.do('convert-or-downgrade', async () => {
 			await handleTrialExpiration(userId);
 		});
 	},
@@ -158,8 +159,8 @@ const maxAttempts = 5;
 while (attempt < maxAttempts) {
 	try {
 		const result = await step.do(`attempt-${attempt}`, async () => {
-			const res = await fetch("https://flaky.api/data");
-			if (!res.ok) throw new Error("API error");
+			const res = await fetch('https://flaky.api/data');
+			if (!res.ok) throw new Error('API error');
 			return res.json();
 		});
 
@@ -174,7 +175,7 @@ while (attempt < maxAttempts) {
 	}
 }
 
-throw new Error("All attempts failed");
+throw new Error('All attempts failed');
 ```
 
 (Though for this use case, you'd probably just use `step.do()` with the built-in `retries` option!)
@@ -185,12 +186,12 @@ Like all step primitives, sleep step names must be unique within a workflow run:
 
 ```ts
 // ❌ This will throw DuplicateStepError
-await step.sleep("pause", "5s");
-await step.sleep("pause", "10s");
+await step.sleep('pause', '5s');
+await step.sleep('pause', '10s');
 
 // ✅ This is fine
-await step.sleep("first-pause", "5s");
-await step.sleep("second-pause", "10s");
+await step.sleep('first-pause', '5s');
+await step.sleep('second-pause', '10s');
 ```
 
 ## Performance Notes
@@ -198,6 +199,7 @@ await step.sleep("second-pause", "10s");
 Sleeping workflows consume zero compute resources. The Durable Object is completely hibernated during the sleep period. You can have thousands of workflows sleeping for days or weeks without any resource concerns.
 
 The only limit is Cloudflare's alarm scheduling limits:
+
 - Maximum alarm time is approximately 1 year in the future
 - Alarms are reliable and survive Durable Object migrations
 
