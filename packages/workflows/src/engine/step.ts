@@ -7,8 +7,21 @@ import { parseDuration } from "./duration";
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from "./types";
 import { DEFAULT_RETRY_CONFIG } from "./types";
 
+/**
+ * Concrete implementation of the {@link Step} interface backed by SQLite.
+ *
+ * Each step's result is persisted via Drizzle ORM. On replay, completed steps
+ * return their cached results instead of re-executing, enabling durable
+ * execution across Durable Object wake-ups.
+ *
+ * @typeParam Events - Map of event names to payload types this workflow can receive.
+ */
 export class StepContext<Events extends object = {}> implements Step<Events> {
 	private defaults: WorkflowDefaults;
+	/**
+	 * Callback invoked when the first non-cached step executes.
+	 * Used by the workflow runner to switch SSE from replay mode to live mode.
+	 */
 	public onFirstExecution: (() => void) | null = null;
 	private hasExecuted = false;
 	private usedNames = new Set<string>();

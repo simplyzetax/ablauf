@@ -1,8 +1,30 @@
+/** A single parsed event from an SSE stream. */
 export interface SSEStreamEvent {
+	/** The event type (from `event:` lines, defaults to `"message"`). */
 	event: string;
+	/** The parsed JSON payload from the `data:` line. */
 	data: unknown;
 }
 
+/**
+ * Parse a raw SSE byte stream into typed {@link SSEStreamEvent} objects.
+ *
+ * Handles chunked reads, line splitting, `event:`/`data:` field parsing,
+ * and abort signal support. Malformed JSON payloads are silently skipped.
+ *
+ * @param stream - The raw `ReadableStream<Uint8Array>` to consume.
+ * @param options - Optional abort signal to cancel reading.
+ * @yields Parsed SSE events as `{ event, data }` objects.
+ *
+ * @example
+ * ```ts
+ * for await (const update of parseSSEStream(stream, { signal })) {
+ *   if (update.event === "progress") {
+ *     console.log("Progress:", update.data);
+ *   }
+ * }
+ * ```
+ */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,
 	options?: { signal?: AbortSignal },

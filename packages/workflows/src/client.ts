@@ -26,12 +26,20 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { dashboardRouter } from "./dashboard";
 import type { DashboardContext } from "./dashboard";
 
+/** Configuration for the Ablauf workflow engine. */
 export interface AblaufConfig {
+	/** Workflow classes (or `[WorkflowClass, ShardConfig]` tuples) to register. */
 	workflows?: WorkflowRegistration[];
+	/** Per-type shard configuration overrides for index listing. */
 	shards?: Record<string, WorkflowShardConfig>;
+	/** Whether observability (index sharding and listing) is enabled. Defaults to `true`. */
 	observability?: boolean;
 }
 
+/**
+ * Main API for creating and managing durable workflow instances.
+ * Backed by Cloudflare Durable Objects for persistence and scheduling.
+ */
 export class Ablauf {
 	private binding: DurableObjectNamespace;
 	private shardConfigs: Record<string, WorkflowShardConfig>;
@@ -39,6 +47,10 @@ export class Ablauf {
 	private registry: Record<string, WorkflowClass>;
 	private observability: boolean;
 
+	/**
+	 * @param binding - The `WORKFLOW_RUNNER` Durable Object namespace from your worker's `env`.
+	 * @param config - Optional configuration for registered workflows, sharding, and observability.
+	 */
 	constructor(binding: DurableObjectNamespace, config?: AblaufConfig) {
 		this.binding = binding;
 		this.shardConfigs = {};
@@ -68,6 +80,23 @@ export class Ablauf {
 		return this.binding.get(this.binding.idFromName(id)) as unknown as WorkflowRunnerStub;
 	}
 
+	/**
+	 * Create and start a new workflow instance.
+	 *
+	 * @param workflow - The workflow class defining the type and input schema.
+	 * @param props - The instance ID and payload.
+	 * @returns A typed stub for interacting with the created workflow instance.
+	 * @throws {PayloadValidationError} If the payload fails Zod schema validation.
+	 * @throws {WorkflowAlreadyExistsError} If a workflow with the given ID already exists.
+	 *
+	 * @example
+	 * ```ts
+	 * const stub = await ablauf.create(OrderWorkflow, {
+	 *   id: "order-123",
+	 *   payload: { orderId: "123", amount: 99.99 },
+	 * });
+	 * ```
+	 */
 	async create<Payload, Result, Events extends object, Type extends string>(
 		workflow: WorkflowClass<Payload, Result, Events, Type>,
 		props: { id: string; payload: NoInfer<Payload> },
@@ -79,6 +108,23 @@ export class Ablauf {
 		return stub as TypedWorkflowRunnerStub<Payload, Result, Events, Type>;
 	}
 
+	/**
+	 * Send a typed event to a running workflow instance.
+	 *
+	 * @param workflow - The workflow class (for type inference and event schema lookup).
+	 * @param props - The instance ID, event name, and event payload.
+	 * @throws {EventValidationError} If the event name is unknown or the payload fails validation.
+	 * @throws {WorkflowNotRunningError} If the workflow is not waiting for this event.
+	 *
+	 * @example
+	 * ```ts
+	 * await ablauf.sendEvent(OrderWorkflow, {
+	 *   id: "order-123",
+	 *   event: "payment-received",
+	 *   payload: { amount: 99.99, transactionId: "tx-456" },
+	 * });
+	 * ```
+	 */
 	async sendEvent<Payload, Result, Events extends object, Type extends string>(
 		workflow: WorkflowClass<Payload, Result, Events, Type>,
 		props: { id: string } & NoInfer<WorkflowEventProps<Events>>,
@@ -100,7 +146,20 @@ export class Ablauf {
 		await stub.deliverEvent({ event: props.event, payload });
 	}
 
+	/**
+	 * Get the current status of a workflow instance.
+	 *
+	 * @param id - The workflow instance ID.
+	 * @returns The untyped workflow status response.
+	 */
 	async status(id: string): Promise<WorkflowStatusResponse>;
+	/**
+	 * Get the current status of a workflow instance with typed payload and result.
+	 *
+	 * @param id - The workflow instance ID.
+	 * @param workflow - The workflow class for narrowing the response type.
+	 * @returns A typed status response with inferred payload, result, and type.
+	 */
 	async status<Payload, Result, Events extends object, Type extends string>(
 		id: string,
 		workflow: WorkflowClass<Payload, Result, Events, Type>,
@@ -111,21 +170,60 @@ export class Ablauf {
 		return stub.getStatus();
 	}
 
+	/**
+	 * Pause a running workflow. It will finish its current step, then suspend.
+	 *
+	 * @param id - The workflow instance ID.
+	 */
 	async pause(id: string): Promise<void> {
 		const stub = this.getStub(id);
 		await stub.pause();
 	}
 
+	/**
+	 * Resume a paused workflow. Replays execution history and continues from where it stopped.
+	 *
+	 * @param id - The workflow instance ID.
+	 */
 	async resume(id: string): Promise<void> {
 		const stub = this.getStub(id);
 		await stub.resume();
 	}
 
+	/**
+	 * Permanently terminate a workflow. It cannot be resumed after termination.
+	 *
+	 * @param id - The workflow instance ID.
+	 */
 	async terminate(id: string): Promise<void> {
 		const stub = this.getStub(id);
 		await stub.terminate();
 	}
 
+	/**
+	 * Wait for a specific SSE update from a running workflow.
+	 *
+	 * Connects to the workflow's SSE stream and resolves when the named update
+	 * arrives, or rejects if the timeout expires or the workflow stops running.
+	 *
+	 * @param workflow - The workflow class (for SSE update type inference).
+	 * @param props - Options including the instance ID, update name, and optional timeout.
+	 * @param props.id - The workflow instance ID.
+	 * @param props.update - The SSE update event name to wait for.
+	 * @param props.timeout - Optional timeout as a duration string (e.g., `"30s"`, `"5m"`).
+	 * @returns The typed data payload of the matched SSE update event.
+	 * @throws {UpdateTimeoutError} If the timeout expires before the update arrives.
+	 * @throws {WorkflowNotRunningError} If the workflow completes or errors before the update.
+	 *
+	 * @example
+	 * ```ts
+	 * const progress = await ablauf.waitForUpdate(OrderWorkflow, {
+	 *   id: "order-123",
+	 *   update: "progress",
+	 *   timeout: "30s",
+	 * });
+	 * ```
+	 */
 	async waitForUpdate<
 		Payload,
 		Result,
@@ -195,6 +293,14 @@ export class Ablauf {
 		}
 	}
 
+	/**
+	 * List workflow instances of a given type from the index shards.
+	 *
+	 * @param type - The workflow type string (e.g., `"process-order"`).
+	 * @param filters - Optional filters for status and result limit.
+	 * @returns An array of index entries, sorted by `updatedAt` descending when a limit is applied.
+	 * @throws {ObservabilityDisabledError} If observability is disabled in the configuration.
+	 */
 	async list(type: string, filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]> {
 		if (!this.observability) {
 			throw new ObservabilityDisabledError();
@@ -209,6 +315,11 @@ export class Ablauf {
 
 	// ─── Unified API Methods ───
 
+	/**
+	 * Create a `WorkflowRunner` Durable Object class configured with the registered workflows.
+	 *
+	 * @returns A Durable Object class to export from your worker entry point.
+	 */
 	createWorkflowRunner(overrides?: { binding?: string }) {
 		const registrations: WorkflowRegistration[] = this.workflows.map((wf) => {
 			const shardConfig = this.shardConfigs[wf.type];
@@ -221,6 +332,11 @@ export class Ablauf {
 		});
 	}
 
+	/**
+	 * Build the context object required by the dashboard oRPC router.
+	 *
+	 * @returns A {@link DashboardContext} for use with the RPC handler.
+	 */
 	getDashboardContext(): DashboardContext {
 		return {
 			binding: this.binding,
@@ -230,10 +346,16 @@ export class Ablauf {
 		};
 	}
 
+	/** The oRPC dashboard router for type-safe API access. */
 	get router() {
 		return dashboardRouter;
 	}
 
+	/**
+	 * Create an oRPC fetch handler for the dashboard router.
+	 *
+	 * @returns An {@link RPCHandler} instance that can serve the dashboard API over HTTP.
+	 */
 	createRPCHandler() {
 		return new RPCHandler(dashboardRouter);
 	}

@@ -29,14 +29,40 @@ import type {
 	WorkflowShardConfig,
 } from "./types";
 
+/**
+ * A workflow class, or a `[WorkflowClass, ShardConfig]` tuple for workflows
+ * that need custom index shard counts.
+ */
 export type WorkflowRegistration = WorkflowClass | [WorkflowClass, WorkflowShardConfig];
 
+/** Configuration for the {@link createWorkflowRunner} factory function. */
 export interface CreateWorkflowRunnerConfig {
+	/** Workflow classes (or `[WorkflowClass, ShardConfig]` tuples) to register. */
 	workflows: WorkflowRegistration[];
+	/** Name of the Durable Object binding in the worker's `env`. Defaults to `"WORKFLOW_RUNNER"`. */
 	binding?: string;
+	/** Whether observability (index sharding and listing) is enabled. Defaults to `true`. */
 	observability?: boolean;
 }
 
+/**
+ * Factory function that creates a configured `WorkflowRunner` Durable Object class.
+ *
+ * The returned class extends `DurableObject` and implements the full workflow
+ * lifecycle: initialization, replay-based execution, event delivery, pause/resume,
+ * terminate, SSE streaming, and index shard management.
+ *
+ * @param config - Configuration specifying workflows, binding name, and observability.
+ * @returns A `DurableObject` subclass to export from your worker entry point.
+ *
+ * @example
+ * ```ts
+ * export const WorkflowRunner = createWorkflowRunner({
+ *   workflows: [OrderWorkflow, [HighVolumeWorkflow, { shards: 8 }]],
+ *   observability: true,
+ * });
+ * ```
+ */
 export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 	const bindingName = config.binding ?? "WORKFLOW_RUNNER";
 	const observability = config.observability ?? true;

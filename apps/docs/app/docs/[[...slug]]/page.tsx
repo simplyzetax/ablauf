@@ -1,6 +1,6 @@
 import { source } from "@/lib/source";
 import { getMDXComponents } from "@/mdx-components";
-import defaultMdxComponents from "fumadocs-ui/mdx";
+import { APIPage } from "@/components/api-page";
 import {
 	DocsPage,
 	DocsBody,
@@ -15,6 +15,18 @@ export default async function Page(props: {
 	const params = await props.params;
 	const page = source.getPage(params.slug);
 	if (!page) notFound();
+
+	if (page.data.type === "openapi") {
+		return (
+			<DocsPage full>
+				<DocsTitle>{page.data.title}</DocsTitle>
+				<DocsDescription>{page.data.description}</DocsDescription>
+				<DocsBody>
+					<APIPage {...page.data.getAPIPageProps()} />
+				</DocsBody>
+			</DocsPage>
+		);
+	}
 
 	const MDX = page.data.body;
 

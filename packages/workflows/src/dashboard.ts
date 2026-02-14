@@ -19,6 +19,13 @@ function getStub(binding: DurableObjectNamespace, id: string): WorkflowRunnerStu
 }
 
 const list = base
+	.route({
+		method: "GET",
+		path: "/workflows",
+		summary: "List workflow instances",
+		description: "List workflow instances, optionally filtered by type, status, or limited to the most recent entries.",
+		tags: ["workflows"],
+	})
 	.input(
 		z.object({
 			type: z.string().optional(),
@@ -55,6 +62,13 @@ const list = base
 	});
 
 const get = base
+	.route({
+		method: "GET",
+		path: "/workflows/{id}",
+		summary: "Get workflow status",
+		description: "Get the current status of a workflow instance including its steps, payload, and result.",
+		tags: ["workflows"],
+	})
 	.input(z.object({ id: z.string() }))
 	.handler(async ({ input, context }) => {
 		const stub = getStub(context.binding, input.id);
@@ -62,6 +76,13 @@ const get = base
 	});
 
 const timeline = base
+	.route({
+		method: "GET",
+		path: "/workflows/{id}/timeline",
+		summary: "Get workflow timeline",
+		description: "Get a chronological timeline of all executed steps for a workflow instance, including durations and retry history.",
+		tags: ["workflows"],
+	})
 	.input(z.object({ id: z.string() }))
 	.handler(async ({ input, context }) => {
 		const stub = getStub(context.binding, input.id);
@@ -83,6 +104,13 @@ const timeline = base
 	});
 
 const subscribe = base
+	.route({
+		method: "GET",
+		path: "/workflows/{id}/subscribe",
+		summary: "Subscribe to workflow updates",
+		description: "Open an SSE stream to receive real-time updates from a running workflow instance.",
+		tags: ["workflows"],
+	})
 	.input(z.object({ id: z.string() }))
 	.handler(async function* ({ input, context, signal }) {
 		const stub = getStub(context.binding, input.id);

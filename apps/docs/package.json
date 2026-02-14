@@ -4,24 +4,31 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "next dev",
-		"build": "next build",
+		"generate:openapi": "bun scripts/generate-openapi.ts",
+		"dev": "bun scripts/generate-openapi.ts && next dev",
+		"build": "bun scripts/generate-openapi.ts && next build",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"fumadocs-core": "^15.0.0",
-		"fumadocs-mdx": "^12.0.0",
-		"fumadocs-ui": "^15.0.0",
-		"next": "^15.3.0",
-		"react": "^19.0.0",
-		"react-dom": "^19.0.0"
+		"fumadocs-core": "^16.0.0",
+		"fumadocs-mdx": "^14.0.0",
+		"fumadocs-openapi": "^10.3.5",
+		"fumadocs-typescript": "^5.1.2",
+		"fumadocs-ui": "^16.0.0",
+		"next": "^16.0.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"shiki": "^3.22.0"
 	},
 	"devDependencies": {
+		"@orpc/openapi": "^1.13.5",
+		"@orpc/server": "^1.13.5",
+		"@orpc/zod": "^1.13.5",
 		"@tailwindcss/postcss": "^4.1.0",
 		"@types/mdx": "^2.0.0",
 		"@types/node": "25.2.3",
-		"@types/react": "^19.0.0",
-		"@types/react-dom": "^19.0.0",
+		"@types/react": "^19.2.0",
+		"@types/react-dom": "^19.2.0",
 		"postcss": "^8.5.0",
 		"tailwindcss": "^4.1.0",
 		"typescript": "^5.5.2"

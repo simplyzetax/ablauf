@@ -163,6 +163,10 @@ dist
 # turbo
 .turbo/
 
+# fumadocs generated
+.source/
+openapi.json
+
 # wrangler project
 .dev.vars*
 !.dev.vars.example
