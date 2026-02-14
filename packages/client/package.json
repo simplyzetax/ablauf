@@ -1,16 +1,24 @@
 {
-	"name": "@ablauf/client",
+	"name": "@der-ablauf/client",
 	"version": "0.0.1",
+	"description": "Browser and server client for the Ablauf workflow engine",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/der-ablauf/ablauf",
+		"directory": "packages/client"
+	},
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts"
 	},
 	"types": "./src/index.ts",
+	"files": ["src/"],
 	"scripts": {
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@ablauf/workflows": "workspace:*",
+		"@der-ablauf/workflows": "workspace:*",
 		"@orpc/client": "^1.13.5",
 		"@orpc/server": "^1.13.5"
 	},

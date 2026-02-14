@@ -1,4 +1,4 @@
-import { createDashboardClient } from "@ablauf/client";
+import { createDashboardClient } from "@der-ablauf/client";
 import { createRouterUtils } from "@orpc/tanstack-query";
 
 function getBaseUrl(): string {

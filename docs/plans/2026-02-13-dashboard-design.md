@@ -14,7 +14,7 @@ A standalone TanStack Start dashboard for the Ablauf workflow engine. Clean mini
 ## CLI
 
 ```bash
-npx @ablauf/dashboard --url http://localhost:8787 --port 4100
+npx @der-ablauf/dashboard --url http://localhost:8787 --port 4100
 ```
 
 - `--url` (required): Worker URL to fetch API data from

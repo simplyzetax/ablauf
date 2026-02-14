@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add real-time type-safe SSE streaming from Durable Object workflows to browser clients via `sse.broadcast()` / `sse.emit()` in workflows and a new `@ablauf/client` package.
+**Goal:** Add real-time type-safe SSE streaming from Durable Object workflows to browser clients via `sse.broadcast()` / `sse.emit()` in workflows and a new `@der-ablauf/client` package.
 
-**Architecture:** Workflows get an `sse` parameter in `run()` backed by an `SSEContext` that writes to connected `TransformStream` writers stored in-memory on the DO. `emit()` persists messages to a new `sse_messages` SQLite table for replay to late-joining clients. A `createSSEStream()` helper returns a raw `Response` for user-defined routes. The `@ablauf/client` package provides a `createAblaufClient()` singleton with typed `subscribe()` using `fetch()`-based SSE parsing.
+**Architecture:** Workflows get an `sse` parameter in `run()` backed by an `SSEContext` that writes to connected `TransformStream` writers stored in-memory on the DO. `emit()` persists messages to a new `sse_messages` SQLite table for replay to late-joining clients. A `createSSEStream()` helper returns a raw `Response` for user-defined routes. The `@der-ablauf/client` package provides a `createAblaufClient()` singleton with typed `subscribe()` using `fetch()`-based SSE parsing.
 
 **Tech Stack:** TypeScript, Zod, Drizzle ORM, Cloudflare Durable Objects, ReadableStream/TransformStream APIs
 
@@ -525,7 +525,7 @@ The `run()` signature now requires a third `sse` parameter. Existing workflows t
 Add `SSE` import and update the `run()` signature:
 
 ```ts
-import type { Step, SSE } from "@ablauf/workflows";
+import type { Step, SSE } from "@der-ablauf/workflows";
 ```
 
 ```ts
@@ -535,7 +535,7 @@ async run(step: Step<TestEvents>, payload: TestPayload, _sse: SSE<never>): Promi
 **Step 2: Update `EchoWorkflow`**
 
 ```ts
-import type { Step, SSE } from "@ablauf/workflows";
+import type { Step, SSE } from "@der-ablauf/workflows";
 ```
 
 ```ts
@@ -545,7 +545,7 @@ async run(step: Step, payload: EchoPayload, _sse: SSE<never>): Promise<EchoResul
 **Step 3: Update `FailingStepWorkflow`**
 
 ```ts
-import type { Step, SSE } from "@ablauf/workflows";
+import type { Step, SSE } from "@der-ablauf/workflows";
 ```
 
 ```ts
@@ -580,8 +580,8 @@ Create `apps/worker/src/workflows/sse-workflow.ts`:
 
 ```ts
 import { z } from "zod";
-import { BaseWorkflow } from "@ablauf/workflows";
-import type { Step, SSE } from "@ablauf/workflows";
+import { BaseWorkflow } from "@der-ablauf/workflows";
+import type { Step, SSE } from "@der-ablauf/workflows";
 
 const inputSchema = z.object({ itemCount: z.number() });
 type SSEPayload = z.infer<typeof inputSchema>;
@@ -643,8 +643,8 @@ Create `apps/worker/src/__tests__/sse.test.ts`:
 import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
-import { Ablauf } from "@ablauf/workflows";
-import type { WorkflowRunnerStub } from "@ablauf/workflows";
+import { Ablauf } from "@der-ablauf/workflows";
+import type { WorkflowRunnerStub } from "@der-ablauf/workflows";
 import { SSEWorkflow } from "../workflows/sse-workflow";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
@@ -735,7 +735,7 @@ git commit -m "test(sse): add SSE workflow and integration tests"
 Add to imports:
 
 ```ts
-import { createSSEStream } from "@ablauf/workflows";
+import { createSSEStream } from "@der-ablauf/workflows";
 ```
 
 Add a new route after the existing `/echo` route:
@@ -759,7 +759,7 @@ git commit -m "feat(sse): add SSE endpoint to demo worker"
 
 ---
 
-### Task 11: Create `@ablauf/client` Package
+### Task 11: Create `@der-ablauf/client` Package
 
 **Files:**
 - Create: `packages/client/package.json`
@@ -773,7 +773,7 @@ git commit -m "feat(sse): add SSE endpoint to demo worker"
 
 ```json
 {
-	"name": "@ablauf/client",
+	"name": "@der-ablauf/client",
 	"version": "0.0.1",
 	"type": "module",
 	"exports": {
@@ -984,7 +984,7 @@ Run: `bun run check-types`
 
 ```bash
 git add packages/client/
-git commit -m "feat(sse): create @ablauf/client package with typed SSE subscribe"
+git commit -m "feat(sse): create @der-ablauf/client package with typed SSE subscribe"
 ```
 
 ---
@@ -1018,6 +1018,6 @@ git commit -m "chore(sse): final integration fixes"
 
 | Package | Files Modified | Files Created |
 |---------|---------------|---------------|
-| `@ablauf/workflows` | `base-workflow.ts`, `types.ts`, `step.ts`, `workflow-runner.ts`, `schema.ts`, `index.ts` | `sse.ts`, `sse-stream.ts`, migration SQL |
-| `@ablauf/client` | — | `package.json`, `tsconfig.json`, `index.ts`, `client.ts`, `types.ts`, `sse-parser.ts` |
-| `@ablauf/worker` | `index.ts`, all 3 existing workflows | `sse-workflow.ts`, `sse.test.ts` |
+| `@der-ablauf/workflows` | `base-workflow.ts`, `types.ts`, `step.ts`, `workflow-runner.ts`, `schema.ts`, `index.ts` | `sse.ts`, `sse-stream.ts`, migration SQL |
+| `@der-ablauf/client` | — | `package.json`, `tsconfig.json`, `index.ts`, `client.ts`, `types.ts`, `sse-parser.ts` |
+| `@der-ablauf/worker` | `index.ts`, all 3 existing workflows | `sse-workflow.ts`, `sse.test.ts` |

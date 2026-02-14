@@ -66,7 +66,7 @@ const list = await ablauf.list("echo");
 ### Before
 
 ```typescript
-import { Ablauf, createSSEStream, createDashboardHandler, createWorkflowRunner } from "@ablauf/workflows";
+import { Ablauf, createSSEStream, createDashboardHandler, createWorkflowRunner } from "@der-ablauf/workflows";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow];
@@ -85,7 +85,7 @@ export const WorkflowRunner = createWorkflowRunner({ workflows });
 ### After
 
 ```typescript
-import { Ablauf } from "@ablauf/workflows";
+import { Ablauf } from "@der-ablauf/workflows";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
   workflows: [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow],
@@ -173,4 +173,4 @@ ablauf.sseStream(workflowId: string): Response
 
 ## Migration
 
-This can be a breaking change (major version bump on `@ablauf/workflows`) or backwards-compatible by keeping the old standalone functions that delegate to the new implementation. Given this is pre-1.0, a clean break is fine.
+This can be a breaking change (major version bump on `@der-ablauf/workflows`) or backwards-compatible by keeping the old standalone functions that delegate to the new implementation. Given this is pre-1.0, a clean break is fine.

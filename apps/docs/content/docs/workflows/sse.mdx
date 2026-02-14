@@ -14,7 +14,7 @@ Two methods: `broadcast()` for live-only updates, and `emit()` for persisted mes
 SSE messages are typed with Zod schemas, just like events and payloads:
 
 ```ts
-import { defineWorkflow } from '@ablauf/workflows';
+import { defineWorkflow } from '@der-ablauf/workflows';
 import { z } from 'zod';
 
 const ImportWorkflow = defineWorkflow({
@@ -98,10 +98,10 @@ source.onerror = (error) => {
 
 ### Using the Ablauf Client Package
 
-The `@ablauf/client` package provides a type-safe oRPC client for the dashboard API, including SSE subscriptions:
+The `@der-ablauf/client` package provides a type-safe oRPC client for the dashboard API, including SSE subscriptions:
 
 ```ts
-import { createAblaufClient } from '@ablauf/client';
+import { createAblaufClient } from '@der-ablauf/client';
 import { ImportWorkflow } from './workflows';
 
 const client = createAblaufClient({

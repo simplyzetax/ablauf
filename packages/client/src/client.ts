@@ -1,7 +1,7 @@
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
-import type { dashboardRouter, WorkflowClass } from "@ablauf/workflows";
+import type { dashboardRouter, WorkflowClass } from "@der-ablauf/workflows";
 import type { AblaufClientConfig } from "./types";
 
 export type DashboardClient = RouterClient<typeof dashboardRouter>;

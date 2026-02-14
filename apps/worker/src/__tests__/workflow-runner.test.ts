@@ -1,8 +1,8 @@
 import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
-import { Ablauf, WorkflowError } from "@ablauf/workflows";
-import type { WorkflowRunnerStub, WorkflowStatus } from "@ablauf/workflows";
+import { Ablauf, WorkflowError } from "@der-ablauf/workflows";
+import type { WorkflowRunnerStub, WorkflowStatus } from "@der-ablauf/workflows";
 import { TestWorkflow } from "../workflows/test-workflow";
 import { FailingStepWorkflow } from "../workflows/failing-step-workflow";
 import { EchoWorkflow } from "../workflows/echo-workflow";

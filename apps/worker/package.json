@@ -1,5 +1,5 @@
 {
-	"name": "@ablauf/worker",
+	"name": "@der-ablauf/worker",
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
@@ -11,8 +11,8 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@ablauf/client": "workspace:*",
-		"@ablauf/workflows": "workspace:*",
+		"@der-ablauf/client": "workspace:*",
+		"@der-ablauf/workflows": "workspace:*",
 		"hono": "^4.11.9",
 		"zod": "^4.3.6"
 	},

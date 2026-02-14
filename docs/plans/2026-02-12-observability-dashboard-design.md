@@ -15,8 +15,8 @@ Ablauf has no structured observability. When a workflow fails, there's no error 
 Three layers, each building on the previous:
 
 1. **Richer SQLite schema** in `stepsTable` — captures lifecycle data at the source
-2. **Dashboard helper** in `@ablauf/workflows` — serves observability data via HTTP endpoints
-3. **Dashboard CLI + app** in `@ablauf/dashboard` — standalone React app for visualization
+2. **Dashboard helper** in `@der-ablauf/workflows` — serves observability data via HTTP endpoints
+3. **Dashboard CLI + app** in `@der-ablauf/dashboard` — standalone React app for visualization
 
 ## 1. Schema Changes
 
@@ -57,7 +57,7 @@ For retry tracking: each failed attempt appends to the `retryHistory` array. On 
 Users mount this in their worker:
 
 ```typescript
-import { createDashboardHandler } from "@ablauf/workflows";
+import { createDashboardHandler } from "@der-ablauf/workflows";
 
 app.get("/__ablauf/*", createDashboardHandler({ binding: "WORKFLOW_RUNNER" }));
 ```
@@ -81,14 +81,14 @@ Step data shaped for timeline rendering: ordered steps with `startedAt`, `durati
 - Returns plain `Response` objects — framework agnostic (works with Hono, itty-router, raw fetch)
 - No auth by default (local dev). Accepts optional `authenticate` callback for production.
 
-## 4. Dashboard Package (`@ablauf/dashboard`)
+## 4. Dashboard Package (`@der-ablauf/dashboard`)
 
 New package at `packages/dashboard`.
 
 ### CLI
 
 ```bash
-npx @ablauf/dashboard --port 4100 --worker http://localhost:8787
+npx @der-ablauf/dashboard --port 4100 --worker http://localhost:8787
 ```
 
 Connects to `/__ablauf/*` endpoints on the running dev worker. No config files.
@@ -117,7 +117,7 @@ Aggregate stats: average step duration by name, retry rates, failure rates by wo
 ## Implementation Order
 
 1. Schema migration + `StepContext` changes (foundation)
-2. Dashboard helper endpoints in `@ablauf/workflows`
+2. Dashboard helper endpoints in `@der-ablauf/workflows`
 3. Dashboard package scaffold (Vite + TanStack Router + Tailwind + shadcn)
 4. Workflow List view
 5. Workflow Detail view with timeline

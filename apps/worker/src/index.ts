@@ -1,13 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { Ablauf, WorkflowError, WorkflowTypeUnknownError } from "@ablauf/workflows";
+import { Ablauf, WorkflowError, WorkflowTypeUnknownError } from "@der-ablauf/workflows";
 import { TestWorkflow } from "./workflows/test-workflow";
 import { FailingStepWorkflow } from "./workflows/failing-step-workflow";
 import { EchoWorkflow } from "./workflows/echo-workflow";
 import { SSEWorkflow } from "./workflows/sse-workflow";
 import { DuplicateStepWorkflow } from "./workflows/duplicate-step-workflow";
 import { env } from "cloudflare:workers";
-import type { WorkflowClass } from "@ablauf/workflows";
+import type { WorkflowClass } from "@der-ablauf/workflows";
 
 const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow, DuplicateStepWorkflow];
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {

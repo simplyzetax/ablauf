@@ -1,8 +1,8 @@
 import { env } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
-import { Ablauf } from "@ablauf/workflows";
-import type { WorkflowRunnerStub } from "@ablauf/workflows";
+import { Ablauf } from "@der-ablauf/workflows";
+import type { WorkflowRunnerStub } from "@der-ablauf/workflows";
 import { SSEWorkflow } from "../workflows/sse-workflow";
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);

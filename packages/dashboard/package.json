@@ -1,20 +1,28 @@
 {
-	"name": "@ablauf/dashboard",
+	"name": "@der-ablauf/dashboard",
 	"version": "0.0.1",
+	"description": "Observability dashboard for the Ablauf workflow engine",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/der-ablauf/ablauf",
+		"directory": "packages/dashboard"
+	},
 	"type": "module",
 	"bin": {
-		"ablauf-dashboard": "./src/cli.ts"
+		"ablauf-dashboard": "./src/serve.ts"
 	},
+	"files": ["src/", "dist/", "vite.config.ts", "tsconfig.json"],
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
-		"start": "node .output/server/index.mjs",
+		"start": "bun src/serve.ts",
 		"check-types": "tsc --noEmit",
 		"compile": "bun run build.ts"
 	},
 	"dependencies": {
-		"@ablauf/client": "workspace:*",
-		"@ablauf/workflows": "workspace:*",
+		"@der-ablauf/client": "workspace:*",
+		"@der-ablauf/workflows": "workspace:*",
 		"@orpc/tanstack-query": "^1.13.5",
 		"@tanstack/react-query": "^5.71.10",
 		"@tanstack/react-router": "^1.120.0",
