@@ -1,6 +1,7 @@
 import { source } from "@/lib/source";
 import { getMDXComponents } from "@/mdx-components";
 import { APIPage } from "@/components/api-page";
+import { CopyMarkdownButton } from "@/components/copy-markdown-button";
 import {
 	DocsPage,
 	DocsBody,
@@ -34,6 +35,7 @@ export default async function Page(props: {
 		<DocsPage toc={page.data.toc} full={page.data.full}>
 			<DocsTitle>{page.data.title}</DocsTitle>
 			<DocsDescription>{page.data.description}</DocsDescription>
+			<CopyMarkdownButton markdownUrl={`/docs/mdx/${params.slug?.join("/")}`} />
 			<DocsBody>
 				<MDX components={getMDXComponents()} />
 			</DocsBody>
