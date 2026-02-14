@@ -13,10 +13,26 @@ import { FailingStepWorkflow } from './workflows/failing-step-workflow';
 import { EchoWorkflow } from './workflows/echo-workflow';
 import { SSEWorkflow } from './workflows/sse-workflow';
 import { DuplicateStepWorkflow } from './workflows/duplicate-step-workflow';
+import { MultiStepWorkflow } from './workflows/multi-step-workflow';
+import { ReplayCounterWorkflow } from './workflows/replay-counter-workflow';
+import { BackoffConfigWorkflow } from './workflows/backoff-config-workflow';
+import { NoSchemaWorkflow } from './workflows/no-schema-workflow';
+import { MultiEventWorkflow } from './workflows/multi-event-workflow';
 import { env } from 'cloudflare:workers';
 import type { WorkflowClass } from '@der-ablauf/workflows';
 
-const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow, DuplicateStepWorkflow];
+const workflows = [
+	TestWorkflow,
+	FailingStepWorkflow,
+	EchoWorkflow,
+	SSEWorkflow,
+	DuplicateStepWorkflow,
+	MultiStepWorkflow,
+	ReplayCounterWorkflow,
+	BackoffConfigWorkflow,
+	NoSchemaWorkflow,
+	MultiEventWorkflow,
+];
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
 	corsOrigins: ['http://localhost:3000'],
