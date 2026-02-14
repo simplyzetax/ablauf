@@ -1,4 +1,4 @@
-import type { WorkflowRunnerStub, WorkflowIndexEntry, WorkflowIndexListFilters, WorkflowShardConfig } from "./types";
+import type { WorkflowRunnerStub, WorkflowIndexEntry, WorkflowIndexListFilters, WorkflowShardConfig } from './types';
 
 /**
  * Queries all index shards (current + previous) for a workflow type,

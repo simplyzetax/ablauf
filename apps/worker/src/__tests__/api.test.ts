@@ -1,17 +1,17 @@
-import { SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { SELF } from 'cloudflare:test';
+import { describe, expect, it } from 'vitest';
 
-describe("Demo API", () => {
-	it("waits through active states and returns once workflow is non-complete", async () => {
-		const request = SELF.fetch("http://localhost/workflows/test", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ name: "QuickCheck" }),
+describe('Demo API', () => {
+	it('waits through active states and returns once workflow is non-complete', async () => {
+		const request = SELF.fetch('http://localhost/workflows/test', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ name: 'QuickCheck' }),
 		});
 
 		const response = await new Promise<Response>((resolve, reject) => {
 			const timeout = setTimeout(() => {
-				reject(new Error("Timed out waiting for create endpoint response"));
+				reject(new Error('Timed out waiting for create endpoint response'));
 			}, 2000);
 
 			request
@@ -33,8 +33,8 @@ describe("Demo API", () => {
 			status: string;
 		};
 
-		expect(body.id).toBeTypeOf("string");
-		expect(body.type).toBe("test");
-		expect(["sleeping", "waiting", "paused", "errored", "terminated"]).toContain(body.status);
+		expect(body.id).toBeTypeOf('string');
+		expect(body.type).toBe('test');
+		expect(['sleeping', 'waiting', 'paused', 'errored', 'terminated']).toContain(body.status);
 	}, 10000);
 });

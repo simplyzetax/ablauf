@@ -10,28 +10,24 @@ Workflows opt into SSE by adding an optional static `sseUpdates` Zod schema:
 
 ```ts
 const sseUpdates = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('progress'), percent: z.number() }),
-  z.object({ type: z.literal('status'), message: z.string() }),
-])
+	z.object({ type: z.literal('progress'), percent: z.number() }),
+	z.object({ type: z.literal('status'), message: z.string() }),
+]);
 
 export class OrderWorkflow extends BaseWorkflow<OrderPayload, OrderResult, OrderEvents> {
-  static type = 'order'
-  static inputSchema = inputSchema
-  static events = eventSchemas
-  static sseUpdates = sseUpdates
+	static type = 'order';
+	static inputSchema = inputSchema;
+	static events = eventSchemas;
+	static sseUpdates = sseUpdates;
 
-  async run(
-    step: Step<OrderEvents>,
-    payload: OrderPayload,
-    sse: SSE<z.infer<typeof sseUpdates>>
-  ): Promise<OrderResult> {
-    sse.broadcast({ type: 'progress', percent: 0 })
-    const items = await step.do('fetch-items', () => getItems(payload.orderId))
-    sse.broadcast({ type: 'progress', percent: 50 })
-    const result = await step.do('charge', () => charge(items))
-    sse.emit({ type: 'status', message: 'Order complete' })
-    return result
-  }
+	async run(step: Step<OrderEvents>, payload: OrderPayload, sse: SSE<z.infer<typeof sseUpdates>>): Promise<OrderResult> {
+		sse.broadcast({ type: 'progress', percent: 0 });
+		const items = await step.do('fetch-items', () => getItems(payload.orderId));
+		sse.broadcast({ type: 'progress', percent: 50 });
+		const result = await step.do('charge', () => charge(items));
+		sse.emit({ type: 'status', message: 'Order complete' });
+		return result;
+	}
 }
 ```
 
@@ -79,13 +75,13 @@ CREATE TABLE sse_messages (
 The package exports a helper that returns a raw `Response`. Users mount it on whatever route they want:
 
 ```ts
-import { createSSEStream } from '@der-ablauf/workflows'
+import { createSSEStream } from '@der-ablauf/workflows';
 
 app.get('/workflows/:id/sse', async (c) => {
-  const user = await getUser(c.req)
-  if (!user) return c.json({ error: 'unauthorized' }, 401)
-  return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.params.id)
-})
+	const user = await getUser(c.req);
+	if (!user) return c.json({ error: 'unauthorized' }, 401);
+	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.params.id);
+});
 ```
 
 ### Under the Hood
@@ -124,15 +120,15 @@ Lightweight, framework-agnostic TypeScript package. Zero dependency on `@der-abl
 
 ```ts
 // lib/ablauf.ts
-import { createAblaufClient } from '@der-ablauf/client'
+import { createAblaufClient } from '@der-ablauf/client';
 
 export const ablaufClient = createAblaufClient({
-  url: '/api/workflows',
-  withCredentials: true,
-  headers: {
-    'Authorization': `Bearer ${getToken()}`
-  }
-})
+	url: '/api/workflows',
+	withCredentials: true,
+	headers: {
+		Authorization: `Bearer ${getToken()}`,
+	},
+});
 ```
 
 Uses `fetch()` with a manual SSE parser on the readable stream internally (not native `EventSource`) to support custom headers.
@@ -140,18 +136,18 @@ Uses `fetch()` with a manual SSE parser on the readable stream internally (not n
 ### Subscribe API
 
 ```ts
-import type { OrderWorkflow } from '@/workflows/order-workflow'
+import type { OrderWorkflow } from '@/workflows/order-workflow';
 
 const sub = ablaufClient.subscribe<typeof OrderWorkflow>('order-123', (data) => {
-  // data: { type: 'progress', percent: number } | { type: 'status', message: string }
-  if (data.type === 'progress') {
-    updateProgressBar(data.percent)
-  }
-})
+	// data: { type: 'progress', percent: number } | { type: 'status', message: string }
+	if (data.type === 'progress') {
+		updateProgressBar(data.percent);
+	}
+});
 
-sub.on('error', (e) => showReconnecting())
-sub.on('close', () => showDone())
-sub.unsubscribe()
+sub.on('error', (e) => showReconnecting());
+sub.on('close', () => showDone());
+sub.unsubscribe();
 ```
 
 Constructs URL as `${baseUrl}/${workflowId}/sse`, auto-reconnects with backoff on connection drop, and the server `close` event triggers cleanup.

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Possible states of a workflow instance during its lifecycle.
@@ -12,7 +12,7 @@ import { z } from "zod";
  * - `"waiting"` — Blocked on an external event via `step.waitForEvent()`.
  * - `"terminated"` — Manually terminated; cannot be resumed.
  */
-export const workflowStatusSchema = z.enum(["created", "running", "completed", "errored", "paused", "sleeping", "waiting", "terminated"]);
+export const workflowStatusSchema = z.enum(['created', 'running', 'completed', 'errored', 'paused', 'sleeping', 'waiting', 'terminated']);
 export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
 
 /**
@@ -22,7 +22,7 @@ export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
  * - `"linear"` — Delay increases linearly (`delay * attempt`).
  * - `"exponential"` — Delay doubles each attempt (`delay * 2^attempt`).
  */
-export type BackoffStrategy = "fixed" | "linear" | "exponential";
+export type BackoffStrategy = 'fixed' | 'linear' | 'exponential';
 
 /** Configuration for step retry behavior. */
 export interface RetryConfig {
@@ -59,12 +59,12 @@ type SSEUpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
 /** Zod schema map for validating incoming workflow events at runtime. */
 export type WorkflowEventSchemas<Events extends object> = {
-	[K in EventKey<Events>]: import("zod").z.ZodType<Events[K]>;
+	[K in EventKey<Events>]: import('zod').z.ZodType<Events[K]>;
 };
 
 /** Zod schema map for validating SSE updates emitted by a workflow. */
 export type WorkflowSSESchemas<Updates extends object> = {
-	[K in SSEUpdateKey<Updates>]: import("zod").z.ZodType<Updates[K]>;
+	[K in SSEUpdateKey<Updates>]: import('zod').z.ZodType<Updates[K]>;
 };
 
 /**
@@ -85,8 +85,8 @@ export type WorkflowEventProps<Events extends object> = [EventKey<Events>] exten
  */
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	limit: 3,
-	delay: "1s",
-	backoff: "exponential",
+	delay: '1s',
+	backoff: 'exponential',
 };
 
 /**
@@ -151,10 +151,7 @@ export interface Step<Events extends object = {}> {
 	 * const approval = await step.waitForEvent("approval", { timeout: "24h" });
 	 * ```
 	 */
-	waitForEvent<K extends Extract<keyof Events, string>>(
-		name: K,
-		options?: StepWaitOptions,
-	): Promise<Events[K]>;
+	waitForEvent<K extends Extract<keyof Events, string>>(name: K, options?: StepWaitOptions): Promise<Events[K]>;
 }
 
 /**
@@ -176,7 +173,7 @@ export interface WorkflowClass<
 	/** Unique string identifier for this workflow type (e.g., `"order-processing"`). */
 	type: Type;
 	/** Zod schema for validating the input payload at runtime. */
-	inputSchema: import("zod").z.ZodType<Payload>;
+	inputSchema: import('zod').z.ZodType<Payload>;
 	/** Map of event names to Zod schemas for validating event payloads. */
 	events: WorkflowEventSchemas<Events>;
 	/** Optional default configuration (e.g., retry settings) for all steps. */
@@ -188,12 +185,7 @@ export interface WorkflowClass<
 }
 
 /** Instance of a workflow class with the `run()` method containing workflow logic. */
-export interface WorkflowInstance<
-	Payload = unknown,
-	Result = unknown,
-	Events extends object = {},
-	SSEUpdates extends object = {},
-> {
+export interface WorkflowInstance<Payload = unknown, Result = unknown, Events extends object = {}, SSEUpdates extends object = {}> {
 	/**
 	 * Execute the workflow logic using durable step primitives.
 	 *
@@ -228,13 +220,17 @@ export const stepInfoSchema = z.object({
 	/** Error stack trace from the most recent failure, or `null`. */
 	errorStack: z.string().nullable(),
 	/** History of failed retry attempts, or `null` if no retries occurred. */
-	retryHistory: z.array(z.object({
-		attempt: z.number(),
-		error: z.string(),
-		errorStack: z.string().nullable(),
-		timestamp: z.number(),
-		duration: z.number(),
-	})).nullable(),
+	retryHistory: z
+		.array(
+			z.object({
+				attempt: z.number(),
+				error: z.string(),
+				errorStack: z.string().nullable(),
+				timestamp: z.number(),
+				duration: z.number(),
+			}),
+		)
+		.nullable(),
 });
 
 /** Detailed information about a single step's execution. */
@@ -286,11 +282,10 @@ export interface WorkflowRunnerEventProps {
 /**
  * Type-safe version of {@link WorkflowStatusResponse} with narrowed `type`, `payload`, and `result`.
  */
-export type WorkflowStatusResponseFor<
-	Payload = unknown,
-	Result = unknown,
-	Type extends string = string,
-> = Omit<WorkflowStatusResponse, "type" | "payload" | "result"> & {
+export type WorkflowStatusResponseFor<Payload = unknown, Result = unknown, Type extends string = string> = Omit<
+	WorkflowStatusResponse,
+	'type' | 'payload' | 'result'
+> & {
 	type: Type;
 	payload: Payload;
 	result: Result | null;
@@ -344,12 +339,10 @@ export interface WorkflowRunnerStub {
 /**
  * Type-safe version of {@link WorkflowRunnerStub} with narrowed `getStatus()` and `deliverEvent()`.
  */
-export type TypedWorkflowRunnerStub<
-	Payload,
-	Result,
-	Events extends object,
-	Type extends string = string,
-> = Omit<WorkflowRunnerStub, "getStatus" | "deliverEvent"> & {
+export type TypedWorkflowRunnerStub<Payload, Result, Events extends object, Type extends string = string> = Omit<
+	WorkflowRunnerStub,
+	'getStatus' | 'deliverEvent'
+> & {
 	getStatus(): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>;
 	deliverEvent(props: WorkflowEventProps<Events>): Promise<void>;
 };

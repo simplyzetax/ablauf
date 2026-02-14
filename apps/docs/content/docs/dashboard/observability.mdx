@@ -15,18 +15,18 @@ Ablauf tracks all workflow instances by type, allowing you to query and filter t
 
 ```ts
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [OrderWorkflow, PaymentWorkflow],
-  observability: true, // enabled by default
+	workflows: [OrderWorkflow, PaymentWorkflow],
+	observability: true, // enabled by default
 });
 
 // List all instances of a workflow type
-const orders = await ablauf.list("process-order");
+const orders = await ablauf.list('process-order');
 
 // Filter by status
-const running = await ablauf.list("process-order", { status: "running" });
+const running = await ablauf.list('process-order', { status: 'running' });
 
 // Limit results (sorted by updatedAt, newest first)
-const recent = await ablauf.list("process-order", { limit: 10 });
+const recent = await ablauf.list('process-order', { limit: 10 });
 ```
 
 ### Response Format
@@ -35,10 +35,10 @@ Each entry in the list is a `WorkflowIndexEntry`:
 
 ```ts
 {
-  id: string;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
+	id: string;
+	status: string;
+	createdAt: number;
+	updatedAt: number;
 }
 ```
 
@@ -52,15 +52,16 @@ By default, Ablauf uses a single shard per workflow type. For high-volume workfl
 
 ```ts
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [
-    [HighVolumeWorkflow, { shards: 8 }],
-    [LowVolumeWorkflow, { shards: 1 }], // default
-  ],
+	workflows: [
+		[HighVolumeWorkflow, { shards: 8 }],
+		[LowVolumeWorkflow, { shards: 1 }], // default
+	],
 });
 ```
 
 <Callout type="info">
-More shards = better write throughput for high-volume workflow types, but queries need to fan out to all shards. Start with the default (1) and scale up as needed.
+	More shards = better write throughput for high-volume workflow types, but queries need to fan out to all shards. Start with the default
+	(1) and scale up as needed.
 </Callout>
 
 ## Built-in Dashboard
@@ -78,29 +79,30 @@ npm install @der-ablauf/dashboard
 The dashboard needs an RPC endpoint to communicate with your worker. Add this to your worker:
 
 ```ts
-import { Ablauf } from "@der-ablauf/workflows";
-import { Hono } from "hono";
+import { Ablauf } from '@der-ablauf/workflows';
+import { Hono } from 'hono';
 
 const app = new Hono();
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [OrderWorkflow, PaymentWorkflow],
+	workflows: [OrderWorkflow, PaymentWorkflow],
 });
 
 const rpcHandler = ablauf.createRPCHandler();
 
-app.use("/__ablauf/*", async (c, next) => {
-  const { matched, response } = await rpcHandler.handle(c.req.raw, {
-    prefix: "/__ablauf",
-    context: ablauf.getDashboardContext(),
-  });
-  if (matched) return c.newResponse(response.body, response);
-  await next();
+app.use('/__ablauf/*', async (c, next) => {
+	const { matched, response } = await rpcHandler.handle(c.req.raw, {
+		prefix: '/__ablauf',
+		context: ablauf.getDashboardContext(),
+	});
+	if (matched) return c.newResponse(response.body, response);
+	await next();
 });
 ```
 
 <Callout type="warn">
-The `/__ablauf` prefix can be anything you want, but make sure it matches when you run the dashboard CLI. Also, **don't expose this in production** without adding authentication — it provides full read access to all workflow data.
+	The `/__ablauf` prefix can be anything you want, but make sure it matches when you run the dashboard CLI. Also, **don't expose this in
+	production** without adding authentication — it provides full read access to all workflow data.
 </Callout>
 
 ### Running the Dashboard
@@ -131,8 +133,8 @@ If you don't need the list/dashboard features, you can disable observability to 
 
 ```ts
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [OrderWorkflow],
-  observability: false,
+	workflows: [OrderWorkflow],
+	observability: false,
 });
 
 // ablauf.list() will throw ObservabilityDisabledError

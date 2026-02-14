@@ -14,7 +14,7 @@ The function can be synchronous or asynchronous, but its return value must be JS
 ## Basic Usage
 
 ```ts
-const result = await step.do("fetch-user", async () => {
+const result = await step.do('fetch-user', async () => {
 	const res = await fetch(`https://api.example.com/users/${userId}`);
 	return res.json();
 });
@@ -25,7 +25,8 @@ console.log(result.name); // User data from the API
 On the first execution, the function runs and the result is persisted. On every subsequent replay of the workflow, the cached result is returned instantly without calling the API again.
 
 <Callout type="info">
-**step.do() is idempotent by design.** If your workflow crashes mid-execution and replays, completed steps return their cached results instantly. Your flaky API only gets called once (unless it fails and retries are configured).
+	**step.do() is idempotent by design.** If your workflow crashes mid-execution and replays, completed steps return their cached results
+	instantly. Your flaky API only gets called once (unless it fails and retries are configured).
 </Callout>
 
 ## Important Rules
@@ -36,12 +37,12 @@ Step names must be unique within a workflow run. No two calls to `step.do()`, `s
 
 ```ts
 // ❌ This will throw DuplicateStepError
-await step.do("fetch-data", async () => getUserData());
-await step.do("fetch-data", async () => getProductData());
+await step.do('fetch-data', async () => getUserData());
+await step.do('fetch-data', async () => getProductData());
 
 // ✅ This is fine
-await step.do("fetch-user-data", async () => getUserData());
-await step.do("fetch-product-data", async () => getProductData());
+await step.do('fetch-user-data', async () => getUserData());
+await step.do('fetch-product-data', async () => getProductData());
 ```
 
 ### JSON-Serializable Results
@@ -50,16 +51,16 @@ The function's return value must be JSON-serializable. No functions, no `Date` o
 
 ```ts
 // ❌ Not serializable
-await step.do("bad-step", () => ({
-	callback: () => console.log("nope"),
+await step.do('bad-step', () => ({
+	callback: () => console.log('nope'),
 	date: new Date(),
 }));
 
 // ✅ Serializable
-await step.do("good-step", () => ({
-	message: "Hello",
+await step.do('good-step', () => ({
+	message: 'Hello',
 	timestamp: Date.now(),
-	data: { nested: "objects are fine" },
+	data: { nested: 'objects are fine' },
 }));
 ```
 
@@ -68,13 +69,13 @@ await step.do("good-step", () => ({
 Side effects in the function body only execute once, even if the workflow replays many times. This is exactly what you want for API calls, database writes, or sending emails.
 
 ```ts
-await step.do("send-welcome-email", async () => {
+await step.do('send-welcome-email', async () => {
 	// This email is sent exactly once, even if the workflow
 	// crashes and replays 100 times
 	await sendEmail({
 		to: user.email,
-		subject: "Welcome!",
-		body: "Thanks for signing up!",
+		subject: 'Welcome!',
+		body: 'Thanks for signing up!',
 	});
 	return { sent: true, to: user.email };
 });
@@ -87,12 +88,12 @@ Don't put non-deterministic logic like `Date.now()` or `Math.random()` outside o
 ```ts
 // ❌ Bad: timestamp changes on every replay
 const timestamp = Date.now();
-await step.do("save-with-timestamp", async () => {
+await step.do('save-with-timestamp', async () => {
 	await saveToDatabase({ timestamp }); // Different value each replay!
 });
 
 // ✅ Good: timestamp is captured inside the step
-const data = await step.do("save-with-timestamp", async () => {
+const data = await step.do('save-with-timestamp', async () => {
 	const timestamp = Date.now();
 	await saveToDatabase({ timestamp });
 	return { timestamp };
@@ -104,17 +105,21 @@ const data = await step.do("save-with-timestamp", async () => {
 Steps can automatically retry on failure using Durable Object alarms. No blocking waits, no wasted resources.
 
 ```ts
-const data = await step.do("call-flaky-api", async () => {
-	const res = await fetch("https://flaky.api/data");
-	if (!res.ok) throw new Error("API failed");
-	return res.json();
-}, {
-	retries: {
-		limit: 5,
-		delay: "2s",
-		backoff: "exponential",
+const data = await step.do(
+	'call-flaky-api',
+	async () => {
+		const res = await fetch('https://flaky.api/data');
+		if (!res.ok) throw new Error('API failed');
+		return res.json();
 	},
-});
+	{
+		retries: {
+			limit: 5,
+			delay: '2s',
+			backoff: 'exponential',
+		},
+	},
+);
 ```
 
 ### Retry Options
@@ -124,7 +129,11 @@ const data = await step.do("call-flaky-api", async () => {
 Maximum number of retry attempts (including the initial attempt). Default: `3`.
 
 ```ts
-{ retries: { limit: 5 } } // Try up to 5 times total
+{
+	retries: {
+		limit: 5;
+	}
+} // Try up to 5 times total
 ```
 
 #### `delay`
@@ -132,6 +141,7 @@ Maximum number of retry attempts (including the initial attempt). Default: `3`.
 Base delay between retries, specified as a duration string. Default: `"1s"`.
 
 Valid formats:
+
 - `"500ms"` — milliseconds
 - `"30s"` — seconds
 - `"5m"` — minutes
@@ -139,7 +149,11 @@ Valid formats:
 - `"7d"` — days
 
 ```ts
-{ retries: { delay: "5s" } } // Wait 5 seconds between retries
+{
+	retries: {
+		delay: '5s';
+	}
+} // Wait 5 seconds between retries
 ```
 
 #### `backoff`
@@ -167,11 +181,15 @@ When retries are exhausted, the step throws `StepRetryExhaustedError`. This erro
 
 ```ts
 try {
-	await step.do("impossible-task", async () => {
-		throw new Error("Always fails");
-	}, {
-		retries: { limit: 3 },
-	});
+	await step.do(
+		'impossible-task',
+		async () => {
+			throw new Error('Always fails');
+		},
+		{
+			retries: { limit: 3 },
+		},
+	);
 } catch (error) {
 	// This won't catch the error — retries happen across
 	// multiple workflow executions using DO alarms

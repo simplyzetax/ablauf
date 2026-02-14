@@ -1,6 +1,6 @@
-import type { z } from "zod";
-import { BaseWorkflow } from "./base-workflow";
-import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass } from "./types";
+import type { z } from 'zod';
+import { BaseWorkflow } from './base-workflow';
+import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass } from './types';
 
 /**
  * Options for defining a workflow using the functional API.
@@ -36,11 +36,7 @@ interface DefineWorkflowOptions<
 	run: (
 		step: Step<{ [K in keyof Events]: z.infer<Events[K]> }>,
 		payload: z.infer<Input>,
-		sse: SSE<
-			SSEUpdates extends Record<string, z.ZodType>
-				? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> }
-				: never
-		>,
+		sse: SSE<SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never>,
 	) => Promise<Result>;
 }
 
@@ -75,15 +71,11 @@ export function defineWorkflow<
 	Result,
 	{ [K in keyof Events]: z.infer<Events[K]> },
 	Type,
-	SSEUpdates extends Record<string, z.ZodType>
-		? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> }
-		: never
+	SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never
 > {
 	type InferredPayload = z.infer<Input>;
 	type InferredEvents = { [K in keyof Events]: z.infer<Events[K]> };
-	type InferredSSE = SSEUpdates extends Record<string, z.ZodType>
-		? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> }
-		: never;
+	type InferredSSE = SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never;
 
 	const workflow = class extends BaseWorkflow<InferredPayload, Result, InferredEvents, InferredSSE> {
 		static type = options.type;
@@ -98,13 +90,7 @@ export function defineWorkflow<
 	};
 
 	// Set a readable name for debugging
-	Object.defineProperty(workflow, "name", { value: `Workflow(${options.type})` });
+	Object.defineProperty(workflow, 'name', { value: `Workflow(${options.type})` });
 
-	return workflow as unknown as WorkflowClass<
-		z.infer<Input>,
-		Result,
-		InferredEvents,
-		Type,
-		InferredSSE
-	>;
+	return workflow as unknown as WorkflowClass<z.infer<Input>, Result, InferredEvents, Type, InferredSSE>;
 }

@@ -1,5 +1,5 @@
-import { z } from "zod";
-import type { Step, SSE, WorkflowDefaults } from "./types";
+import { z } from 'zod';
+import type { Step, SSE, WorkflowDefaults } from './types';
 
 /**
  * Abstract base class for class-based workflow definitions.
@@ -28,12 +28,7 @@ import type { Step, SSE, WorkflowDefaults } from "./types";
  * }
  * ```
  */
-export abstract class BaseWorkflow<
-	Payload = unknown,
-	Result = unknown,
-	Events extends object = {},
-	SSEUpdates extends object = {},
-> {
+export abstract class BaseWorkflow<Payload = unknown, Result = unknown, Events extends object = {}, SSEUpdates extends object = {}> {
 	/** Unique string identifier for this workflow type (e.g., `"process-order"`). */
 	static type: string;
 	/** Zod schema for validating the input payload at runtime. Defaults to `z.unknown()`. */

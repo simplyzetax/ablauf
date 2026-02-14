@@ -22,12 +22,12 @@ Three layers, each building on the previous:
 
 ### `stepsTable` — new columns
 
-| Column | Type | Purpose |
-|--------|------|---------|
-| `startedAt` | `integer` | Timestamp when step execution began (not replay cache hit) |
-| `duration` | `integer` | Milliseconds of actual execution time |
-| `errorStack` | `text` | Full stack trace on failure (separate from short `error` message) |
-| `retryHistory` | `text` | JSON array of `{ attempt, error, errorStack, timestamp, duration }` |
+| Column         | Type      | Purpose                                                             |
+| -------------- | --------- | ------------------------------------------------------------------- |
+| `startedAt`    | `integer` | Timestamp when step execution began (not replay cache hit)          |
+| `duration`     | `integer` | Milliseconds of actual execution time                               |
+| `errorStack`   | `text`    | Full stack trace on failure (separate from short `error` message)   |
+| `retryHistory` | `text`    | JSON array of `{ attempt, error, errorStack, timestamp, duration }` |
 
 Existing columns (`status`, `result`, `error`, `attempts`, `wakeAt`, `completedAt`) are unchanged.
 
@@ -57,9 +57,9 @@ For retry tracking: each failed attempt appends to the `retryHistory` array. On 
 Users mount this in their worker:
 
 ```typescript
-import { createDashboardHandler } from "@der-ablauf/workflows";
+import { createDashboardHandler } from '@der-ablauf/workflows';
 
-app.get("/__ablauf/*", createDashboardHandler({ binding: "WORKFLOW_RUNNER" }));
+app.get('/__ablauf/*', createDashboardHandler({ binding: 'WORKFLOW_RUNNER' }));
 ```
 
 ### Endpoints

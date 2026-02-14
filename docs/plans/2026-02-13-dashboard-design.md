@@ -83,15 +83,19 @@ Reactive store tracking last successful call timestamp + errors. Top bar reads f
 ## Data Schema (all fields used)
 
 ### Workflow List Item
+
 - id, type, status, createdAt, updatedAt
 
 ### Workflow Detail (WorkflowStatusResponse)
+
 - id, type, status, payload, result, error, createdAt, updatedAt
 - steps[]: name, type, status, attempts, result, error, completedAt, startedAt, duration, errorStack, retryHistory
 
 ### Timeline
+
 - id, type, status
 - timeline[]: name, type, status, startedAt, duration, attempts, error, retryHistory
 
 ### Retry History Entry
+
 - attempt, error, errorStack, timestamp, duration

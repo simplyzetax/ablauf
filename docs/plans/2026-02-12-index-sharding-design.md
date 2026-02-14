@@ -28,12 +28,12 @@ FNV-1a hash of the workflow ID, mod shard count:
 
 ```typescript
 function shardIndex(workflowId: string, shardCount: number): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < workflowId.length; i++) {
-    hash ^= workflowId.charCodeAt(i);
-    hash = (hash * 0x01000193) >>> 0;
-  }
-  return hash % shardCount;
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < workflowId.length; i++) {
+		hash ^= workflowId.charCodeAt(i);
+		hash = (hash * 0x01000193) >>> 0;
+	}
+	return hash % shardCount;
 }
 ```
 
@@ -42,8 +42,8 @@ function shardIndex(workflowId: string, shardCount: number): number {
 Per-type in the registry, defaulting to 1:
 
 ```typescript
-registry.register("payment", paymentWorkflow, { shards: 4 });
-registry.register("notification", notificationWorkflow); // defaults to 1
+registry.register('payment', paymentWorkflow, { shards: 4 });
+registry.register('notification', notificationWorkflow); // defaults to 1
 ```
 
 ### Write Path
@@ -115,7 +115,7 @@ async list(type: string, filters?: WorkflowIndexListFilters): Promise<WorkflowIn
 To increase shards (e.g., 4 to 8), set `previousShards` temporarily:
 
 ```typescript
-registry.register("payment", paymentWorkflow, { shards: 8, previousShards: 4 });
+registry.register('payment', paymentWorkflow, { shards: 8, previousShards: 4 });
 ```
 
 - **Writes** always use the current shard count

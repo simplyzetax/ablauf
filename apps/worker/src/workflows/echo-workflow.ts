@@ -1,11 +1,11 @@
-import { z } from "zod";
-import { defineWorkflow } from "@der-ablauf/workflows";
+import { z } from 'zod';
+import { defineWorkflow } from '@der-ablauf/workflows';
 
 export const EchoWorkflow = defineWorkflow({
-	type: "echo",
+	type: 'echo',
 	input: z.object({ message: z.string() }),
 	run: async (step, payload) => {
-		return await step.do("echo", async () => ({
+		return await step.do('echo', async () => ({
 			original: payload.message,
 			echoed: payload.message,
 			timestamp: Date.now(),

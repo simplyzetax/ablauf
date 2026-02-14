@@ -12,7 +12,12 @@
 	"bin": {
 		"ablauf-dashboard": "./src/serve.ts"
 	},
-	"files": ["src/", "dist/", "vite.config.ts", "tsconfig.json"],
+	"files": [
+		"src/",
+		"dist/",
+		"vite.config.ts",
+		"tsconfig.json"
+	],
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",

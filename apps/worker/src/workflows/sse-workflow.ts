@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { defineWorkflow } from "@der-ablauf/workflows";
+import { z } from 'zod';
+import { defineWorkflow } from '@der-ablauf/workflows';
 
 const inputSchema = z.object({ itemCount: z.number() });
 
@@ -9,23 +9,23 @@ const sseUpdates = {
 };
 
 export const SSEWorkflow = defineWorkflow({
-	type: "sse-test",
+	type: 'sse-test',
 	input: inputSchema,
 	sseUpdates,
 	run: async (step, payload, sse) => {
-		sse.broadcast("progress", { percent: 0 });
+		sse.broadcast('progress', { percent: 0 });
 
-		const half = await step.do("first-half", async () => {
+		const half = await step.do('first-half', async () => {
 			return Math.floor(payload.itemCount / 2);
 		});
 
-		sse.broadcast("progress", { percent: 50 });
+		sse.broadcast('progress', { percent: 50 });
 
-		await step.do("second-half", async () => {
+		await step.do('second-half', async () => {
 			return payload.itemCount - half;
 		});
 
-		sse.emit("done", { message: `Processed ${payload.itemCount} items` });
+		sse.emit('done', { message: `Processed ${payload.itemCount} items` });
 
 		return { processed: payload.itemCount };
 	},
