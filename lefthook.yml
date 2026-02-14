@@ -8,7 +8,7 @@ pre-commit:
       glob: '*.{ts,tsx}'
 
     - name: format
-      run: bunx prettier --check {staged_files}
+      run: bunx oxfmt --check {staged_files}
       glob: '*.{ts,tsx,json,yml,yaml,css}'
 
 pre-push:
