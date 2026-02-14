@@ -3,7 +3,7 @@ title: Introduction
 description: "Durable workflows on the edge. No external queues, no infrastructure headaches \u2014 just workflows that survive anything."
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
+import { Callout } from 'fumadocs-ui/components/callout';
 
 # Introduction
 
@@ -22,7 +22,8 @@ Here's what you get:
 - **Edge-native**: Runs on Cloudflare Workers. Your workflows live close to your users.
 
 <Callout type="info">
-Ablauf is built on Cloudflare Durable Objects, which give you consistent SQLite storage and automatic failover. Your workflow state is safe.
+	Ablauf is built on Cloudflare Durable Objects, which give you consistent SQLite storage and automatic failover. Your workflow state is
+	safe.
 </Callout>
 
 ## Quick Example
@@ -30,43 +31,43 @@ Ablauf is built on Cloudflare Durable Objects, which give you consistent SQLite 
 Here's a workflow that processes a payment with retries, waits for confirmation, and sends a receipt:
 
 ```ts
-import { defineWorkflow } from "@der-ablauf/workflows";
-import { z } from "zod";
+import { defineWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
 
 const PaymentWorkflow = defineWorkflow({
-  type: "payment",
-  input: z.object({
-    orderId: z.string(),
-    amount: z.number(),
-  }),
-  events: {
-    confirmed: z.object({ transactionId: z.string() }),
-  },
-  run: async (step, payload) => {
-    // This step retries on failure
-    const charge = await step.do("charge-card", async () => {
-      return await stripe.charges.create({
-        amount: payload.amount,
-        currency: "usd",
-      });
-    });
+	type: 'payment',
+	input: z.object({
+		orderId: z.string(),
+		amount: z.number(),
+	}),
+	events: {
+		confirmed: z.object({ transactionId: z.string() }),
+	},
+	run: async (step, payload) => {
+		// This step retries on failure
+		const charge = await step.do('charge-card', async () => {
+			return await stripe.charges.create({
+				amount: payload.amount,
+				currency: 'usd',
+			});
+		});
 
-    // Wait for external confirmation (webhook, user action, etc.)
-    const confirmation = await step.waitForEvent("confirmed", {
-      timeout: "5m",
-    });
+		// Wait for external confirmation (webhook, user action, etc.)
+		const confirmation = await step.waitForEvent('confirmed', {
+			timeout: '5m',
+		});
 
-    // Send receipt
-    await step.do("send-receipt", async () => {
-      await sendEmail({
-        to: payload.orderId,
-        subject: "Payment received!",
-        transactionId: confirmation.transactionId,
-      });
-    });
+		// Send receipt
+		await step.do('send-receipt', async () => {
+			await sendEmail({
+				to: payload.orderId,
+				subject: 'Payment received!',
+				transactionId: confirmation.transactionId,
+			});
+		});
 
-    return { status: "complete", charge };
-  },
+		return { status: 'complete', charge };
+	},
 });
 ```
 
@@ -84,7 +85,8 @@ Ablauf uses **replay-based execution**. Every time a workflow wakes up (on a new
 This model is simple, predictable, and **correct**. No manual state management. No race conditions.
 
 <Callout type="warn">
-Because workflows replay, your step functions must be **deterministic**. Don't use `Math.random()` or `Date.now()` directly—use them inside a `step.do()` block so the result gets cached.
+	Because workflows replay, your step functions must be **deterministic**. Don't use `Math.random()` or `Date.now()` directly—use them
+	inside a `step.do()` block so the result gets cached.
 </Callout>
 
 ## Built on Cloudflare
@@ -110,4 +112,4 @@ Want to dive deeper? Check out:
 
 ---
 
-**Fun fact**: "Ablauf" is German for "process" or "sequence". It's pronounced *AH-blowf*. Now you know.
+**Fun fact**: "Ablauf" is German for "process" or "sequence". It's pronounced _AH-blowf_. Now you know.

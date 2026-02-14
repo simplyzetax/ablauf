@@ -30,11 +30,8 @@ new Ablauf(binding: DurableObjectNamespace, config?: AblaufConfig)
 
 ```ts
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
-  workflows: [
-    OrderWorkflow,
-    [HighVolumeWorkflow, { shards: 8 }],
-  ],
-  observability: true,
+	workflows: [OrderWorkflow, [HighVolumeWorkflow, { shards: 8 }]],
+	observability: true,
 });
 ```
 
@@ -108,9 +105,9 @@ sendEvent<Payload, Result, Events extends object, Type extends string>(
 
 ```ts
 await ablauf.sendEvent(OrderWorkflow, {
-  id: "order-123",
-  event: "payment-received",
-  payload: { amount: 99.99, transactionId: "tx-456" },
+	id: 'order-123',
+	event: 'payment-received',
+	payload: { amount: 99.99, transactionId: 'tx-456' },
 });
 ```
 
@@ -144,10 +141,10 @@ A `WorkflowStatusResponse` with the current state, payload, result, steps, and m
 
 ```ts
 // Untyped
-const status = await ablauf.status("order-123");
+const status = await ablauf.status('order-123');
 
 // Typed
-const status = await ablauf.status("order-123", OrderWorkflow);
+const status = await ablauf.status('order-123', OrderWorkflow);
 // status.payload is typed as OrderPayload
 // status.result is typed as OrderResult | null
 ```
@@ -217,9 +214,9 @@ waitForUpdate<...>(
 
 ```ts
 const progress = await ablauf.waitForUpdate(OrderWorkflow, {
-  id: "order-123",
-  update: "progress",
-  timeout: "30s",
+	id: 'order-123',
+	update: 'progress',
+	timeout: '30s',
 });
 ```
 
@@ -249,8 +246,8 @@ list(
 **Example:**
 
 ```ts
-const running = await ablauf.list("process-order", { status: "running" });
-const recent = await ablauf.list("process-order", { limit: 10 });
+const running = await ablauf.list('process-order', { status: 'running' });
+const recent = await ablauf.list('process-order', { limit: 10 });
 ```
 
 ---
@@ -280,13 +277,13 @@ Returns an oRPC handler for the dashboard API.
 ```ts
 const rpcHandler = ablauf.createRPCHandler();
 
-app.use("/__ablauf/*", async (c, next) => {
-  const { matched, response } = await rpcHandler.handle(c.req.raw, {
-    prefix: "/__ablauf",
-    context: ablauf.getDashboardContext(),
-  });
-  if (matched) return c.newResponse(response.body, response);
-  await next();
+app.use('/__ablauf/*', async (c, next) => {
+	const { matched, response } = await rpcHandler.handle(c.req.raw, {
+		prefix: '/__ablauf',
+		context: ablauf.getDashboardContext(),
+	});
+	if (matched) return c.newResponse(response.body, response);
+	await next();
 });
 ```
 
@@ -336,14 +333,14 @@ Options for `step.waitForEvent()`:
 
 ```ts
 type WorkflowStatus =
-  | "created"    // Initial state after creation
-  | "running"    // Actively executing steps
-  | "completed"  // All steps finished successfully
-  | "errored"    // A step or validation error occurred
-  | "paused"     // Manually paused via pause()
-  | "sleeping"   // Waiting for a step.sleep() timer
-  | "waiting"    // Waiting for a step.waitForEvent() delivery
-  | "terminated" // Permanently stopped via terminate()
+	| 'created' // Initial state after creation
+	| 'running' // Actively executing steps
+	| 'completed' // All steps finished successfully
+	| 'errored' // A step or validation error occurred
+	| 'paused' // Manually paused via pause()
+	| 'sleeping' // Waiting for a step.sleep() timer
+	| 'waiting' // Waiting for a step.waitForEvent() delivery
+	| 'terminated'; // Permanently stopped via terminate()
 ```
 
 ---
@@ -392,23 +389,23 @@ Ablauf uses human-readable duration strings in several places (e.g., `step.sleep
 
 ### Supported Formats
 
-| Format | Example | Description |
-|--------|---------|-------------|
-| `Nms` | `"500ms"` | Milliseconds |
-| `Ns` | `"30s"` | Seconds |
-| `Nm` | `"5m"` | Minutes |
-| `Nh` | `"1h"` | Hours |
-| `Nd` | `"7d"` | Days |
+| Format | Example   | Description  |
+| ------ | --------- | ------------ |
+| `Nms`  | `"500ms"` | Milliseconds |
+| `Ns`   | `"30s"`   | Seconds      |
+| `Nm`   | `"5m"`    | Minutes      |
+| `Nh`   | `"1h"`    | Hours        |
+| `Nd`   | `"7d"`    | Days         |
 
 ### Examples
 
 ```ts
-await step.sleep("cooldown", "30s"); // 30 seconds
-await step.sleep("backoff", "5m");   // 5 minutes
-await step.sleep("daily", "1h");     // 1 hour
+await step.sleep('cooldown', '30s'); // 30 seconds
+await step.sleep('backoff', '5m'); // 5 minutes
+await step.sleep('daily', '1h'); // 1 hour
 
-const result = await step.waitForEvent("payment-received", {
-  timeout: "10m", // 10 minutes
+const result = await step.waitForEvent('payment-received', {
+	timeout: '10m', // 10 minutes
 });
 ```
 
@@ -422,22 +419,22 @@ const result = await step.waitForEvent("payment-received", {
 
 All errors thrown by Ablauf extend `WorkflowError`, which extends Hono's `HTTPException`. Every error has a `code`, `status`, `source`, and `message`.
 
-| Error Class | Code | Status | Source |
-|-------------|------|--------|--------|
-| `WorkflowNotFoundError` | `WORKFLOW_NOT_FOUND` | 404 | api |
-| `ResourceNotFoundError` | `RESOURCE_NOT_FOUND` | 404 | api |
-| `WorkflowAlreadyExistsError` | `WORKFLOW_ALREADY_EXISTS` | 409 | engine |
-| `WorkflowTypeUnknownError` | `WORKFLOW_TYPE_UNKNOWN` | 400 | api |
-| `PayloadValidationError` | `VALIDATION_ERROR` | 400 | validation |
-| `EventValidationError` | `EVENT_INVALID` | 400 | validation |
-| `StepFailedError` | `STEP_FAILED` | 500 | step |
-| `StepRetryExhaustedError` | `STEP_RETRY_EXHAUSTED` | 500 | step |
-| `EventTimeoutError` | `EVENT_TIMEOUT` | 408 | engine |
-| `UpdateTimeoutError` | `UPDATE_TIMEOUT` | 408 | engine |
-| `WorkflowNotRunningError` | `WORKFLOW_NOT_RUNNING` | 409 | engine |
-| `DuplicateStepError` | `VALIDATION_ERROR` | 400 | engine |
-| `InvalidDurationError` | `VALIDATION_ERROR` | 400 | validation |
-| `ObservabilityDisabledError` | `OBSERVABILITY_DISABLED` | 400 | api |
+| Error Class                  | Code                      | Status | Source     |
+| ---------------------------- | ------------------------- | ------ | ---------- |
+| `WorkflowNotFoundError`      | `WORKFLOW_NOT_FOUND`      | 404    | api        |
+| `ResourceNotFoundError`      | `RESOURCE_NOT_FOUND`      | 404    | api        |
+| `WorkflowAlreadyExistsError` | `WORKFLOW_ALREADY_EXISTS` | 409    | engine     |
+| `WorkflowTypeUnknownError`   | `WORKFLOW_TYPE_UNKNOWN`   | 400    | api        |
+| `PayloadValidationError`     | `VALIDATION_ERROR`        | 400    | validation |
+| `EventValidationError`       | `EVENT_INVALID`           | 400    | validation |
+| `StepFailedError`            | `STEP_FAILED`             | 500    | step       |
+| `StepRetryExhaustedError`    | `STEP_RETRY_EXHAUSTED`    | 500    | step       |
+| `EventTimeoutError`          | `EVENT_TIMEOUT`           | 408    | engine     |
+| `UpdateTimeoutError`         | `UPDATE_TIMEOUT`          | 408    | engine     |
+| `WorkflowNotRunningError`    | `WORKFLOW_NOT_RUNNING`    | 409    | engine     |
+| `DuplicateStepError`         | `VALIDATION_ERROR`        | 400    | engine     |
+| `InvalidDurationError`       | `VALIDATION_ERROR`        | 400    | validation |
+| `ObservabilityDisabledError` | `OBSERVABILITY_DISABLED`  | 400    | api        |
 
 ### Error JSON Shape
 
@@ -445,12 +442,12 @@ All `WorkflowError` instances serialize to:
 
 ```json
 {
-  "error": {
-    "code": "WORKFLOW_NOT_FOUND",
-    "message": "Workflow \"order-123\" not found",
-    "status": 404,
-    "source": "api"
-  }
+	"error": {
+		"code": "WORKFLOW_NOT_FOUND",
+		"message": "Workflow \"order-123\" not found",
+		"status": 404,
+		"source": "api"
+	}
 }
 ```
 
@@ -460,10 +457,10 @@ Across Durable Object RPC boundaries, errors lose their class identity. Use `err
 
 ```ts
 try {
-  await ablauf.status("order-123");
+	await ablauf.status('order-123');
 } catch (e) {
-  if (e instanceof WorkflowError && e.code === "WORKFLOW_NOT_FOUND") {
-    // handle not found
-  }
+	if (e instanceof WorkflowError && e.code === 'WORKFLOW_NOT_FOUND') {
+		// handle not found
+	}
 }
 ```

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import path from "node:path";
+import path from 'node:path';
 
 const args = process.argv.slice(2);
 
@@ -9,14 +9,14 @@ function getArg(name: string): string | undefined {
 	return idx !== -1 ? args[idx + 1] : undefined;
 }
 
-const url = getArg("url");
-const port = Number(getArg("port") ?? "4100");
+const url = getArg('url');
+const port = Number(getArg('port') ?? '4100');
 
 if (!url) {
-	console.error("Usage: ablauf-dashboard --url <worker-url> [--port <port>]");
-	console.error("");
-	console.error("  --url   Worker URL (required), e.g. http://localhost:8787");
-	console.error("  --port  Dashboard port (default: 4100)");
+	console.error('Usage: ablauf-dashboard --url <worker-url> [--port <port>]');
+	console.error('');
+	console.error('  --url   Worker URL (required), e.g. http://localhost:8787');
+	console.error('  --port  Dashboard port (default: 4100)');
 	process.exit(1);
 }
 
@@ -24,7 +24,7 @@ process.env.VITE_ABLAUF_API_URL = url;
 
 // Try loading inlined asset map (compiled binary), fall back to filesystem
 let assetMap: Record<string, { content: string; type: string }> | null = null;
-const assetMapPath = path.join(import.meta.dir, "..", "dist", "_asset-map.json");
+const assetMapPath = path.join(import.meta.dir, '..', 'dist', '_asset-map.json');
 try {
 	const file = Bun.file(assetMapPath);
 	if (await file.exists()) {
@@ -34,21 +34,21 @@ try {
 	// No asset map — serve from filesystem
 }
 
-const clientDir = path.join(import.meta.dir, "..", "dist", "client");
+const clientDir = path.join(import.meta.dir, '..', 'dist', 'client');
 
 const contentTypes: Record<string, string> = {
-	".js": "application/javascript",
-	".css": "text/css",
-	".html": "text/html",
-	".json": "application/json",
-	".png": "image/png",
-	".svg": "image/svg+xml",
-	".ico": "image/x-icon",
-	".woff2": "font/woff2",
+	'.js': 'application/javascript',
+	'.css': 'text/css',
+	'.html': 'text/html',
+	'.json': 'application/json',
+	'.png': 'image/png',
+	'.svg': 'image/svg+xml',
+	'.ico': 'image/x-icon',
+	'.woff2': 'font/woff2',
 };
 
 // Import the TanStack Start SSR server
-const { default: server } = await import("../dist/server/server.js");
+const { default: server } = await import('../dist/server/server.js');
 
 Bun.serve({
 	port,
@@ -57,16 +57,14 @@ Bun.serve({
 		const pathname = reqUrl.pathname;
 
 		// Serve static client assets
-		if (pathname.startsWith("/assets/") || pathname === "/favicon.ico") {
+		if (pathname.startsWith('/assets/') || pathname === '/favicon.ico') {
 			// Try inlined assets first (compiled binary)
 			if (assetMap && assetMap[pathname]) {
 				const asset = assetMap[pathname];
-				return new Response(Buffer.from(asset.content, "base64"), {
+				return new Response(Buffer.from(asset.content, 'base64'), {
 					headers: {
-						"Content-Type": asset.type,
-						"Cache-Control": pathname.startsWith("/assets/")
-							? "public, max-age=31536000, immutable"
-							: "no-cache",
+						'Content-Type': asset.type,
+						'Cache-Control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
 					},
 				});
 			}
@@ -78,10 +76,8 @@ Bun.serve({
 				const ext = path.extname(filePath);
 				return new Response(file, {
 					headers: {
-						"Content-Type": contentTypes[ext] ?? "application/octet-stream",
-						"Cache-Control": pathname.startsWith("/assets/")
-							? "public, max-age=31536000, immutable"
-							: "no-cache",
+						'Content-Type': contentTypes[ext] ?? 'application/octet-stream',
+						'Cache-Control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
 					},
 				});
 			}

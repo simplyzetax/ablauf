@@ -15,6 +15,7 @@
 ### Task 1: Add `sse_messages` Table to DB Schema
 
 **Files:**
+
 - Modify: `packages/workflows/src/db/schema.ts`
 
 **Step 1: Add the `sseMessagesTable` to the schema**
@@ -22,10 +23,10 @@
 Add after `stepsTable`:
 
 ```ts
-export const sseMessagesTable = sqliteTable("sse_messages", {
-	seq: integer("seq").primaryKey({ autoIncrement: true }),
-	data: text("data").notNull(),
-	createdAt: integer("created_at").notNull(),
+export const sseMessagesTable = sqliteTable('sse_messages', {
+	seq: integer('seq').primaryKey({ autoIncrement: true }),
+	data: text('data').notNull(),
+	createdAt: integer('created_at').notNull(),
 });
 ```
 
@@ -44,7 +45,7 @@ The `drizzle-kit generate` command should update `drizzle/meta/_journal.json` an
 In `packages/workflows/src/index.ts`, add `sseMessagesTable` to the existing `schema` export line:
 
 ```ts
-export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from "./db/schema";
+export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from './db/schema';
 ```
 
 **Step 5: Commit**
@@ -59,6 +60,7 @@ git commit -m "feat(sse): add sse_messages table for persisted SSE events"
 ### Task 2: Add SSE Types
 
 **Files:**
+
 - Modify: `packages/workflows/src/engine/types.ts`
 - Modify: `packages/workflows/src/index.ts`
 
@@ -79,12 +81,7 @@ export interface SSE<T = never> {
 In `packages/workflows/src/engine/types.ts`, update the `WorkflowInstance` interface:
 
 ```ts
-export interface WorkflowInstance<
-	Payload = unknown,
-	Result = unknown,
-	Events extends object = {},
-	SSEUpdates = never,
-> {
+export interface WorkflowInstance<Payload = unknown, Result = unknown, Events extends object = {}, SSEUpdates = never> {
 	run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }
 ```
@@ -100,10 +97,10 @@ export interface WorkflowClass<
 	SSEUpdates = never,
 > {
 	type: Type;
-	inputSchema: import("zod").z.ZodType<Payload>;
+	inputSchema: import('zod').z.ZodType<Payload>;
 	events: WorkflowEventSchemas<Events>;
 	defaults?: Partial<WorkflowDefaults>;
-	sseUpdates?: import("zod").z.ZodType<SSEUpdates>;
+	sseUpdates?: import('zod').z.ZodType<SSEUpdates>;
 	new (): WorkflowInstance<Payload, Result, Events, SSEUpdates>;
 }
 ```
@@ -113,7 +110,7 @@ export interface WorkflowClass<
 Add to the types export block in `packages/workflows/src/index.ts`:
 
 ```ts
-export type { SSE } from "./engine/types";
+export type { SSE } from './engine/types';
 ```
 
 **Step 5: Run type check**
@@ -134,6 +131,7 @@ git commit -m "feat(sse): add SSE interface and update WorkflowClass/WorkflowIns
 ### Task 3: Implement `SSEContext`
 
 **Files:**
+
 - Create: `packages/workflows/src/engine/sse.ts`
 - Modify: `packages/workflows/src/index.ts`
 
@@ -142,10 +140,10 @@ git commit -m "feat(sse): add SSE interface and update WorkflowClass/WorkflowIns
 Create `packages/workflows/src/engine/sse.ts`:
 
 ```ts
-import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
-import type { z } from "zod";
-import { sseMessagesTable } from "../db/schema";
-import type { SSE } from "./types";
+import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
+import type { z } from 'zod';
+import { sseMessagesTable } from '../db/schema';
+import type { SSE } from './types';
 
 export class SSEContext<T = never> implements SSE<T> {
 	private writers = new Set<WritableStreamDefaultWriter>();
@@ -192,10 +190,13 @@ export class SSEContext<T = never> implements SSE<T> {
 		// Always persist, even on replay (idempotent via step tracking upstream)
 		// Actually on replay the emit was already persisted, so skip
 		if (!this.isReplay) {
-			this.db.insert(sseMessagesTable).values({
-				data: JSON.stringify(data),
-				createdAt: Date.now(),
-			}).run();
+			this.db
+				.insert(sseMessagesTable)
+				.values({
+					data: JSON.stringify(data),
+					createdAt: Date.now(),
+				})
+				.run();
 		}
 	}
 
@@ -203,7 +204,7 @@ export class SSEContext<T = never> implements SSE<T> {
 		if (this.closed) return;
 		this.closed = true;
 		const encoder = new TextEncoder();
-		const closeMsg = encoder.encode("event: close\ndata: {}\n\n");
+		const closeMsg = encoder.encode('event: close\ndata: {}\n\n');
 		for (const writer of this.writers) {
 			try {
 				writer.write(closeMsg);
@@ -254,7 +255,7 @@ export class NoOpSSEContext implements SSE<never> {
 Add to `packages/workflows/src/index.ts`:
 
 ```ts
-export { SSEContext } from "./engine/sse";
+export { SSEContext } from './engine/sse';
 ```
 
 **Step 3: Commit**
@@ -269,20 +270,16 @@ git commit -m "feat(sse): implement SSEContext with broadcast, emit, and close"
 ### Task 4: Update `BaseWorkflow` to Accept `sse` Parameter
 
 **Files:**
+
 - Modify: `packages/workflows/src/engine/base-workflow.ts`
 
 **Step 1: Update `BaseWorkflow` class**
 
 ```ts
-import { z } from "zod";
-import type { Step, SSE, WorkflowDefaults } from "./types";
+import { z } from 'zod';
+import type { Step, SSE, WorkflowDefaults } from './types';
 
-export abstract class BaseWorkflow<
-	Payload = unknown,
-	Result = unknown,
-	Events extends object = {},
-	SSEUpdates = never,
-> {
+export abstract class BaseWorkflow<Payload = unknown, Result = unknown, Events extends object = {}, SSEUpdates = never> {
 	static type: string;
 	static inputSchema: z.ZodType<unknown> = z.unknown();
 	static events: Record<string, z.ZodType<unknown>> = {};
@@ -305,9 +302,11 @@ git commit -m "feat(sse): update BaseWorkflow with sseUpdates and sse parameter"
 ### Task 5: Wire SSE into `WorkflowRunner`
 
 **Files:**
+
 - Modify: `packages/workflows/src/engine/workflow-runner.ts`
 
 This is the largest task. The workflow runner needs to:
+
 1. Store an `SSEContext` instance on the DO
 2. Create it during `replay()` with the correct replay flag
 3. Expose a `connectSSE()` RPC method
@@ -318,7 +317,7 @@ This is the largest task. The workflow runner needs to:
 At the top of `workflow-runner.ts`, add:
 
 ```ts
-import { SSEContext, NoOpSSEContext } from "./sse";
+import { SSEContext, NoOpSSEContext } from './sse';
 ```
 
 Inside the `WorkflowRunner` class (after the `private workflowId` field), add:
@@ -409,6 +408,7 @@ git commit -m "feat(sse): wire SSEContext into WorkflowRunner with connectSSE RP
 ### Task 6: Add Replay Boundary Detection to `StepContext`
 
 **Files:**
+
 - Modify: `packages/workflows/src/engine/step.ts`
 
 **Step 1: Add `onFirstExecution` callback to `StepContext`**
@@ -449,6 +449,7 @@ git commit -m "feat(sse): add onFirstExecution callback for replay boundary dete
 ### Task 7: Add `createSSEStream` Helper
 
 **Files:**
+
 - Create: `packages/workflows/src/sse-stream.ts`
 - Modify: `packages/workflows/src/index.ts`
 
@@ -457,15 +458,10 @@ git commit -m "feat(sse): add onFirstExecution callback for replay boundary dete
 Create `packages/workflows/src/sse-stream.ts`:
 
 ```ts
-import type { WorkflowRunnerStub } from "./engine/types";
+import type { WorkflowRunnerStub } from './engine/types';
 
-export function createSSEStream(
-	binding: DurableObjectNamespace,
-	workflowId: string,
-): Response {
-	const stub = binding.get(
-		binding.idFromName(workflowId),
-	) as unknown as WorkflowRunnerStub;
+export function createSSEStream(binding: DurableObjectNamespace, workflowId: string): Response {
+	const stub = binding.get(binding.idFromName(workflowId)) as unknown as WorkflowRunnerStub;
 
 	const upstream = stub.connectSSE();
 
@@ -473,22 +469,32 @@ export function createSSEStream(
 	// We use a TransformStream to handle the async nature of connectSSE()
 	const { readable, writable } = new TransformStream();
 
-	upstream.then(async (stream) => {
-		try {
-			await stream.pipeTo(writable);
-		} catch {
-			// Client disconnected
-			try { writable.close(); } catch { /* already closed */ }
-		}
-	}).catch(() => {
-		try { writable.close(); } catch { /* already closed */ }
-	});
+	upstream
+		.then(async (stream) => {
+			try {
+				await stream.pipeTo(writable);
+			} catch {
+				// Client disconnected
+				try {
+					writable.close();
+				} catch {
+					/* already closed */
+				}
+			}
+		})
+		.catch(() => {
+			try {
+				writable.close();
+			} catch {
+				/* already closed */
+			}
+		});
 
 	return new Response(readable, {
 		headers: {
-			"Content-Type": "text/event-stream",
-			"Cache-Control": "no-cache",
-			"Connection": "keep-alive",
+			'Content-Type': 'text/event-stream',
+			'Cache-Control': 'no-cache',
+			Connection: 'keep-alive',
 		},
 	});
 }
@@ -499,7 +505,7 @@ export function createSSEStream(
 Add to `packages/workflows/src/index.ts`:
 
 ```ts
-export { createSSEStream } from "./sse-stream";
+export { createSSEStream } from './sse-stream';
 ```
 
 **Step 3: Commit**
@@ -514,6 +520,7 @@ git commit -m "feat(sse): add createSSEStream helper returning raw Response"
 ### Task 8: Update Existing Workflows to Match New Signature
 
 **Files:**
+
 - Modify: `apps/worker/src/workflows/test-workflow.ts`
 - Modify: `apps/worker/src/workflows/echo-workflow.ts`
 - Modify: `apps/worker/src/workflows/failing-step-workflow.ts`
@@ -525,7 +532,7 @@ The `run()` signature now requires a third `sse` parameter. Existing workflows t
 Add `SSE` import and update the `run()` signature:
 
 ```ts
-import type { Step, SSE } from "@der-ablauf/workflows";
+import type { Step, SSE } from '@der-ablauf/workflows';
 ```
 
 ```ts
@@ -535,7 +542,7 @@ async run(step: Step<TestEvents>, payload: TestPayload, _sse: SSE<never>): Promi
 **Step 2: Update `EchoWorkflow`**
 
 ```ts
-import type { Step, SSE } from "@der-ablauf/workflows";
+import type { Step, SSE } from '@der-ablauf/workflows';
 ```
 
 ```ts
@@ -545,7 +552,7 @@ async run(step: Step, payload: EchoPayload, _sse: SSE<never>): Promise<EchoResul
 **Step 3: Update `FailingStepWorkflow`**
 
 ```ts
-import type { Step, SSE } from "@der-ablauf/workflows";
+import type { Step, SSE } from '@der-ablauf/workflows';
 ```
 
 ```ts
@@ -570,6 +577,7 @@ git commit -m "feat(sse): update existing workflows to accept sse parameter"
 ### Task 9: Add SSE Integration Tests
 
 **Files:**
+
 - Create: `apps/worker/src/workflows/sse-workflow.ts`
 - Create: `apps/worker/src/__tests__/sse.test.ts`
 - Modify: `apps/worker/src/index.ts` (add SSE workflow to registry)
@@ -579,16 +587,16 @@ git commit -m "feat(sse): update existing workflows to accept sse parameter"
 Create `apps/worker/src/workflows/sse-workflow.ts`:
 
 ```ts
-import { z } from "zod";
-import { BaseWorkflow } from "@der-ablauf/workflows";
-import type { Step, SSE } from "@der-ablauf/workflows";
+import { z } from 'zod';
+import { BaseWorkflow } from '@der-ablauf/workflows';
+import type { Step, SSE } from '@der-ablauf/workflows';
 
 const inputSchema = z.object({ itemCount: z.number() });
 type SSEPayload = z.infer<typeof inputSchema>;
 
-const sseUpdates = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("progress"), percent: z.number() }),
-	z.object({ type: z.literal("done"), message: z.string() }),
+const sseUpdates = z.discriminatedUnion('type', [
+	z.object({ type: z.literal('progress'), percent: z.number() }),
+	z.object({ type: z.literal('done'), message: z.string() }),
 ]);
 type SSEUpdates = z.infer<typeof sseUpdates>;
 
@@ -597,24 +605,24 @@ interface SSEResult {
 }
 
 export class SSEWorkflow extends BaseWorkflow<SSEPayload, SSEResult, {}, SSEUpdates> {
-	static type = "sse-test" as const;
+	static type = 'sse-test' as const;
 	static inputSchema = inputSchema;
 	static sseUpdates = sseUpdates;
 
 	async run(step: Step, payload: SSEPayload, sse: SSE<SSEUpdates>): Promise<SSEResult> {
-		sse.broadcast({ type: "progress", percent: 0 });
+		sse.broadcast({ type: 'progress', percent: 0 });
 
-		const half = await step.do("first-half", async () => {
+		const half = await step.do('first-half', async () => {
 			return Math.floor(payload.itemCount / 2);
 		});
 
-		sse.broadcast({ type: "progress", percent: 50 });
+		sse.broadcast({ type: 'progress', percent: 50 });
 
-		await step.do("second-half", async () => {
+		await step.do('second-half', async () => {
 			return payload.itemCount - half;
 		});
 
-		sse.emit({ type: "done", message: `Processed ${payload.itemCount} items` });
+		sse.emit({ type: 'done', message: `Processed ${payload.itemCount} items` });
 
 		return { processed: payload.itemCount };
 	}
@@ -626,7 +634,7 @@ export class SSEWorkflow extends BaseWorkflow<SSEPayload, SSEResult, {}, SSEUpda
 In `apps/worker/src/index.ts`, add:
 
 ```ts
-import { SSEWorkflow } from "./workflows/sse-workflow";
+import { SSEWorkflow } from './workflows/sse-workflow';
 ```
 
 Add `SSEWorkflow` to the `workflows` array:
@@ -640,38 +648,36 @@ const workflows = [TestWorkflow, FailingStepWorkflow, EchoWorkflow, SSEWorkflow]
 Create `apps/worker/src/__tests__/sse.test.ts`:
 
 ```ts
-import { env, runDurableObjectAlarm } from "cloudflare:test";
-import { describe, it, expect } from "vitest";
+import { env, runDurableObjectAlarm } from 'cloudflare:test';
+import { describe, it, expect } from 'vitest';
 
-import { Ablauf } from "@der-ablauf/workflows";
-import type { WorkflowRunnerStub } from "@der-ablauf/workflows";
-import { SSEWorkflow } from "../workflows/sse-workflow";
+import { Ablauf } from '@der-ablauf/workflows';
+import type { WorkflowRunnerStub } from '@der-ablauf/workflows';
+import { SSEWorkflow } from '../workflows/sse-workflow';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
-describe("SSE", () => {
-	it("workflow completes and persists emit messages", async () => {
+describe('SSE', () => {
+	it('workflow completes and persists emit messages', async () => {
 		const stub = await ablauf.create(SSEWorkflow, {
-			id: "sse-1",
+			id: 'sse-1',
 			payload: { itemCount: 10 },
 		});
 
 		const status = await stub.getStatus();
-		expect(status.status).toBe("completed");
+		expect(status.status).toBe('completed');
 		expect(status.result).toEqual({ processed: 10 });
 	});
 
-	it("connectSSE returns a readable stream with persisted messages", async () => {
+	it('connectSSE returns a readable stream with persisted messages', async () => {
 		// Create and complete a workflow first
 		await ablauf.create(SSEWorkflow, {
-			id: "sse-stream-1",
+			id: 'sse-stream-1',
 			payload: { itemCount: 6 },
 		});
 
 		// Now connect via SSE — should get the persisted emit message
-		const rawStub = env.WORKFLOW_RUNNER.get(
-			env.WORKFLOW_RUNNER.idFromName("sse-stream-1"),
-		) as unknown as WorkflowRunnerStub;
+		const rawStub = env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName('sse-stream-1')) as unknown as WorkflowRunnerStub;
 
 		const stream = await rawStub.connectSSE();
 		const reader = stream.getReader();
@@ -681,21 +687,19 @@ describe("SSE", () => {
 		const { value } = await reader.read();
 		const text = decoder.decode(value);
 		expect(text).toContain('"type":"done"');
-		expect(text).toContain("Processed 6 items");
+		expect(text).toContain('Processed 6 items');
 
 		reader.releaseLock();
 	});
 
-	it("broadcast messages are not persisted (fire-and-forget)", async () => {
+	it('broadcast messages are not persisted (fire-and-forget)', async () => {
 		await ablauf.create(SSEWorkflow, {
-			id: "sse-broadcast-1",
+			id: 'sse-broadcast-1',
 			payload: { itemCount: 4 },
 		});
 
 		// Connect SSE after completion — should only see emit messages, not broadcast
-		const rawStub = env.WORKFLOW_RUNNER.get(
-			env.WORKFLOW_RUNNER.idFromName("sse-broadcast-1"),
-		) as unknown as WorkflowRunnerStub;
+		const rawStub = env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName('sse-broadcast-1')) as unknown as WorkflowRunnerStub;
 
 		const stream = await rawStub.connectSSE();
 		const reader = stream.getReader();
@@ -728,6 +732,7 @@ git commit -m "test(sse): add SSE workflow and integration tests"
 ### Task 10: Add SSE Route to Demo Worker
 
 **Files:**
+
 - Modify: `apps/worker/src/index.ts`
 
 **Step 1: Add an SSE endpoint using `createSSEStream`**
@@ -735,14 +740,14 @@ git commit -m "test(sse): add SSE workflow and integration tests"
 Add to imports:
 
 ```ts
-import { createSSEStream } from "@der-ablauf/workflows";
+import { createSSEStream } from '@der-ablauf/workflows';
 ```
 
 Add a new route after the existing `/echo` route:
 
 ```ts
-app.get("/workflows/:id/sse", (c) => {
-	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param("id"));
+app.get('/workflows/:id/sse', (c) => {
+	return createSSEStream(c.env.WORKFLOW_RUNNER, c.req.param('id'));
 });
 ```
 
@@ -762,6 +767,7 @@ git commit -m "feat(sse): add SSE endpoint to demo worker"
 ### Task 11: Create `@der-ablauf/client` Package
 
 **Files:**
+
 - Create: `packages/client/package.json`
 - Create: `packages/client/tsconfig.json`
 - Create: `packages/client/src/index.ts`
@@ -804,11 +810,9 @@ git commit -m "feat(sse): add SSE endpoint to demo worker"
 **Step 3: Create `packages/client/src/types.ts`**
 
 ```ts
-import type { z } from "zod";
+import type { z } from 'zod';
 
-export type InferSSEUpdates<W> = W extends { sseUpdates: z.ZodType<infer T> }
-	? T
-	: never;
+export type InferSSEUpdates<W> = W extends { sseUpdates: z.ZodType<infer T> } ? T : never;
 
 export interface AblaufClientConfig {
 	/** Base URL for SSE endpoints (e.g. "/api/workflows" or "https://api.example.com/workflows") */
@@ -820,8 +824,8 @@ export interface AblaufClientConfig {
 }
 
 export interface Subscription<T> {
-	on(event: "error", handler: (error: Event | Error) => void): Subscription<T>;
-	on(event: "close", handler: () => void): Subscription<T>;
+	on(event: 'error', handler: (error: Event | Error) => void): Subscription<T>;
+	on(event: 'close', handler: () => void): Subscription<T>;
 	unsubscribe(): void;
 }
 
@@ -838,12 +842,9 @@ export interface SSEParserCallbacks {
 	onError(error: Error): void;
 }
 
-export async function parseSSEStream(
-	reader: ReadableStreamDefaultReader<Uint8Array>,
-	callbacks: SSEParserCallbacks,
-): Promise<void> {
+export async function parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>, callbacks: SSEParserCallbacks): Promise<void> {
 	const decoder = new TextDecoder();
-	let buffer = "";
+	let buffer = '';
 
 	try {
 		while (true) {
@@ -851,23 +852,23 @@ export async function parseSSEStream(
 			if (done) break;
 
 			buffer += decoder.decode(value, { stream: true });
-			const lines = buffer.split("\n");
-			buffer = lines.pop() ?? "";
+			const lines = buffer.split('\n');
+			buffer = lines.pop() ?? '';
 
-			let currentData = "";
-			let currentEvent = "";
+			let currentData = '';
+			let currentEvent = '';
 
 			for (const line of lines) {
-				if (line.startsWith("data: ")) {
+				if (line.startsWith('data: ')) {
 					currentData = line.slice(6);
-				} else if (line.startsWith("event: ")) {
+				} else if (line.startsWith('event: ')) {
 					currentEvent = line.slice(7);
-				} else if (line === "") {
+				} else if (line === '') {
 					if (currentData) {
 						callbacks.onMessage(currentData, currentEvent || undefined);
 					}
-					currentData = "";
-					currentEvent = "";
+					currentData = '';
+					currentEvent = '';
 				}
 			}
 		}
@@ -880,17 +881,12 @@ export async function parseSSEStream(
 **Step 5: Create `packages/client/src/client.ts`**
 
 ```ts
-import type {
-	AblaufClientConfig,
-	InferSSEUpdates,
-	Subscription,
-	SSECallback,
-} from "./types";
-import { parseSSEStream } from "./sse-parser";
+import type { AblaufClientConfig, InferSSEUpdates, Subscription, SSECallback } from './types';
+import { parseSSEStream } from './sse-parser';
 
 export function createAblaufClient(config: AblaufClientConfig) {
 	return {
-		subscribe<W extends { sseUpdates?: import("zod").z.ZodType<unknown> }>(
+		subscribe<W extends { sseUpdates?: import('zod').z.ZodType<unknown> }>(
 			workflowId: string,
 			callback?: SSECallback<InferSSEUpdates<W>>,
 		): Subscription<InferSSEUpdates<W>> {
@@ -904,7 +900,7 @@ export function createAblaufClient(config: AblaufClientConfig) {
 				try {
 					const response = await fetch(`${config.url}/${workflowId}/sse`, {
 						headers: config.headers,
-						credentials: config.withCredentials ? "include" : "same-origin",
+						credentials: config.withCredentials ? 'include' : 'same-origin',
 						signal: abortController.signal,
 					});
 
@@ -915,7 +911,7 @@ export function createAblaufClient(config: AblaufClientConfig) {
 					const reader = response.body.getReader();
 					await parseSSEStream(reader, {
 						onMessage(data: string, event?: string) {
-							if (event === "close") {
+							if (event === 'close') {
 								shouldReconnect = false;
 								closeHandler?.();
 								return;
@@ -949,8 +945,8 @@ export function createAblaufClient(config: AblaufClientConfig) {
 
 			const subscription: Subscription<T> = {
 				on(event: string, handler: (arg?: unknown) => void) {
-					if (event === "error") errorHandler = handler as (e: Event | Error) => void;
-					if (event === "close") closeHandler = handler as () => void;
+					if (event === 'error') errorHandler = handler as (e: Event | Error) => void;
+					if (event === 'close') closeHandler = handler as () => void;
 					return subscription;
 				},
 				unsubscribe() {
@@ -968,8 +964,8 @@ export function createAblaufClient(config: AblaufClientConfig) {
 **Step 6: Create `packages/client/src/index.ts`**
 
 ```ts
-export { createAblaufClient } from "./client";
-export type { AblaufClientConfig, Subscription, InferSSEUpdates, SSECallback } from "./types";
+export { createAblaufClient } from './client';
+export type { AblaufClientConfig, Subscription, InferSSEUpdates, SSECallback } from './types';
 ```
 
 **Step 7: Install dependencies**
@@ -1016,8 +1012,8 @@ git commit -m "chore(sse): final integration fixes"
 
 ## Summary of Changes
 
-| Package | Files Modified | Files Created |
-|---------|---------------|---------------|
-| `@der-ablauf/workflows` | `base-workflow.ts`, `types.ts`, `step.ts`, `workflow-runner.ts`, `schema.ts`, `index.ts` | `sse.ts`, `sse-stream.ts`, migration SQL |
-| `@der-ablauf/client` | — | `package.json`, `tsconfig.json`, `index.ts`, `client.ts`, `types.ts`, `sse-parser.ts` |
-| `@der-ablauf/worker` | `index.ts`, all 3 existing workflows | `sse-workflow.ts`, `sse.test.ts` |
+| Package                 | Files Modified                                                                           | Files Created                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `@der-ablauf/workflows` | `base-workflow.ts`, `types.ts`, `step.ts`, `workflow-runner.ts`, `schema.ts`, `index.ts` | `sse.ts`, `sse-stream.ts`, migration SQL                                              |
+| `@der-ablauf/client`    | —                                                                                        | `package.json`, `tsconfig.json`, `index.ts`, `client.ts`, `types.ts`, `sse-parser.ts` |
+| `@der-ablauf/worker`    | `index.ts`, all 3 existing workflows                                                     | `sse-workflow.ts`, `sse.test.ts`                                                      |

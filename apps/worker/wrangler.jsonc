@@ -3,40 +3,34 @@
 	"name": "ablauf-worker",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-02-10",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
+	"compatibility_flags": ["nodejs_compat"],
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1,
 		"traces": {
 			"enabled": true,
 			"head_sampling_rate": 1,
-		}
+		},
 	},
 	"durable_objects": {
 		"bindings": [
 			{
 				"class_name": "WorkflowRunner",
-				"name": "WORKFLOW_RUNNER"
-			}
-		]
+				"name": "WORKFLOW_RUNNER",
+			},
+		],
 	},
 	"migrations": [
 		{
-			"new_sqlite_classes": [
-				"WorkflowRunner"
-			],
-			"tag": "v1"
-		}
+			"new_sqlite_classes": ["WorkflowRunner"],
+			"tag": "v1",
+		},
 	],
 	"rules": [
 		{
 			"type": "Text",
-			"globs": [
-				"**/*.sql"
-			],
-			"fallthrough": true
-		}
-	]
+			"globs": ["**/*.sql"],
+			"fallthrough": true,
+		},
+	],
 }

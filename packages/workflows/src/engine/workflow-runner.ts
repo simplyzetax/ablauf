@@ -1,11 +1,11 @@
-import { DurableObject } from "cloudflare:workers";
-import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
-import { migrate } from "drizzle-orm/durable-sqlite/migrator";
-import migrations from "../../drizzle/migrations";
-import { workflowTable, stepsTable, instancesTable } from "../db/schema";
-import { StepContext } from "./step";
-import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from "./interrupts";
-import { SSEContext, NoOpSSEContext } from "./sse";
+import { DurableObject } from 'cloudflare:workers';
+import { drizzle, type DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
+import { migrate } from 'drizzle-orm/durable-sqlite/migrator';
+import migrations from '../../drizzle/migrations';
+import { workflowTable, stepsTable, instancesTable } from '../db/schema';
+import { StepContext } from './step';
+import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from './interrupts';
+import { SSEContext, NoOpSSEContext } from './sse';
 import {
 	WorkflowNotFoundError,
 	WorkflowTypeUnknownError,
@@ -15,9 +15,9 @@ import {
 	WorkflowNotRunningError,
 	WorkflowError,
 	extractZodIssues,
-} from "../errors";
-import { eq, or } from "drizzle-orm";
-import { shardIndex } from "./shard";
+} from '../errors';
+import { eq, or } from 'drizzle-orm';
+import { shardIndex } from './shard';
 import type {
 	WorkflowStatus,
 	WorkflowStatusResponse,
@@ -27,7 +27,7 @@ import type {
 	WorkflowRunnerInitProps,
 	WorkflowClass,
 	WorkflowShardConfig,
-} from "./types";
+} from './types';
 
 /**
  * A workflow class, or a `[WorkflowClass, ShardConfig]` tuple for workflows
@@ -64,7 +64,7 @@ export interface CreateWorkflowRunnerConfig {
  * ```
  */
 export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
-	const bindingName = config.binding ?? "WORKFLOW_RUNNER";
+	const bindingName = config.binding ?? 'WORKFLOW_RUNNER';
 	const observability = config.observability ?? true;
 
 	const registry: Record<string, WorkflowClass> = {};
@@ -107,12 +107,12 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			await this.db.insert(workflowTable).values({
 				workflowId: props.id,
 				type: props.type,
-				status: "running",
+				status: 'running',
 				payload: JSON.stringify(props.payload),
 				createdAt: now,
 				updatedAt: now,
 			});
-			this.updateIndex(props.type, props.id, "running", now);
+			this.updateIndex(props.type, props.id, 'running', now);
 			await this.replay();
 		}
 
@@ -120,7 +120,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			try {
 				const [wf] = await this.db.select().from(workflowTable);
 				if (!wf) {
-					throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+					throw new WorkflowNotFoundError(this.workflowId ?? 'unknown');
 				}
 				const stepRows = await this.db.select().from(stepsTable);
 				const steps = stepRows.map<StepInfo>((s) => ({
@@ -169,7 +169,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		private async _deliverEventInner(props: WorkflowRunnerEventProps): Promise<void> {
 			const [wf] = await this.db.select().from(workflowTable);
 			if (!wf) {
-				throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+				throw new WorkflowNotFoundError(this.workflowId ?? 'unknown');
 			}
 
 			const WorkflowCls = registry[wf.type];
@@ -179,9 +179,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			const schema = WorkflowCls.events?.[props.event];
 			if (!schema) {
-				throw new EventValidationError(props.event, [
-					{ message: `Unknown event "${props.event}" for workflow type "${wf.type}"` },
-				]);
+				throw new EventValidationError(props.event, [{ message: `Unknown event "${props.event}" for workflow type "${wf.type}"` }]);
 			}
 			let payload: unknown;
 			try {
@@ -193,45 +191,45 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			const [step] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, props.event));
 
-			if (!step || step.status !== "waiting") {
-				throw new WorkflowNotRunningError(wf.workflowId, step ? step.status : "no matching step");
+			if (!step || step.status !== 'waiting') {
+				throw new WorkflowNotRunningError(wf.workflowId, step ? step.status : 'no matching step');
 			}
 
 			await this.db
 				.update(stepsTable)
 				.set({
-					status: "completed",
+					status: 'completed',
 					result: JSON.stringify(payload),
 					completedAt: Date.now(),
 				})
 				.where(eq(stepsTable.name, props.event));
 
 			await this.scheduleNextAlarm();
-			await this.setStatus("running");
+			await this.setStatus('running');
 			await this.replay();
 		}
 
 		async pause(): Promise<void> {
 			await this.db.update(workflowTable).set({ paused: true, updatedAt: Date.now() });
-			await this.setStatus("paused");
+			await this.setStatus('paused');
 		}
 
 		async resume(): Promise<void> {
 			await this.db.update(workflowTable).set({ paused: false, updatedAt: Date.now() });
-			await this.setStatus("running");
+			await this.setStatus('running');
 			await this.replay();
 		}
 
 		async terminate(): Promise<void> {
 			await this.ctx.storage.deleteAlarm();
-			await this.setStatus("terminated");
+			await this.setStatus('terminated');
 		}
 
 		async connectSSE(): Promise<ReadableStream> {
 			try {
 				const [wf] = await this.db.select().from(workflowTable);
 				if (!wf) {
-					throw new WorkflowNotFoundError(this.workflowId ?? "unknown");
+					throw new WorkflowNotFoundError(this.workflowId ?? 'unknown');
 				}
 
 				const WorkflowCls = registry[wf.type];
@@ -276,9 +274,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				});
 		}
 
-		async indexList(
-			filters?: { status?: string; limit?: number },
-		): Promise<Array<typeof instancesTable.$inferSelect>> {
+		async indexList(filters?: { status?: string; limit?: number }): Promise<Array<typeof instancesTable.$inferSelect>> {
 			let query = this.db.select().from(instancesTable);
 			if (filters?.status) {
 				query = query.where(eq(instancesTable.status, filters.status)) as typeof query;
@@ -295,22 +291,19 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const pendingSteps = await this.db
 				.select()
 				.from(stepsTable)
-				.where(or(eq(stepsTable.status, "sleeping"), eq(stepsTable.status, "waiting")));
+				.where(or(eq(stepsTable.status, 'sleeping'), eq(stepsTable.status, 'waiting')));
 
 			const now = Date.now();
 
 			for (const step of pendingSteps) {
 				if (step.wakeAt && step.wakeAt <= now) {
-					if (step.status === "sleeping") {
-						await this.db
-							.update(stepsTable)
-							.set({ status: "completed", completedAt: now })
-							.where(eq(stepsTable.name, step.name));
-					} else if (step.status === "waiting") {
+					if (step.status === 'sleeping') {
+						await this.db.update(stepsTable).set({ status: 'completed', completedAt: now }).where(eq(stepsTable.name, step.name));
+					} else if (step.status === 'waiting') {
 						await this.db
 							.update(stepsTable)
 							.set({
-								status: "failed",
+								status: 'failed',
 								error: JSON.stringify(new EventTimeoutError(step.name).toJSON()),
 								completedAt: now,
 							})
@@ -320,7 +313,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			}
 
 			await this.scheduleNextAlarm();
-			await this.setStatus("running");
+			await this.setStatus('running');
 			await this.replay();
 		}
 
@@ -330,9 +323,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			await this.db
 				.update(stepsTable)
 				.set({ wakeAt: 1 })
-				.where(
-					or(eq(stepsTable.status, "sleeping"), eq(stepsTable.status, "waiting"), eq(stepsTable.status, "failed")),
-				);
+				.where(or(eq(stepsTable.status, 'sleeping'), eq(stepsTable.status, 'waiting'), eq(stepsTable.status, 'failed')));
 		}
 
 		// ─── Internal ───
@@ -346,7 +337,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			const WorkflowCls = registry[wf.type];
 			if (!WorkflowCls) {
-				await this.setStatus("errored");
+				await this.setStatus('errored');
 				await this.db.update(workflowTable).set({ error: `Unknown workflow type: "${wf.type}"` });
 				return;
 			}
@@ -368,7 +359,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			}
 
 			if (wf.paused) {
-				await this.setStatus("paused");
+				await this.setStatus('paused');
 				return;
 			}
 
@@ -378,41 +369,36 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					payload = WorkflowCls.inputSchema.parse(wf.payload ? JSON.parse(wf.payload) : undefined);
 				} catch (e) {
 					const issues = extractZodIssues(e);
-					throw new PayloadValidationError("Invalid workflow input", issues);
+					throw new PayloadValidationError('Invalid workflow input', issues);
 				}
 				const sseArg = this.sseCtx ?? new NoOpSSEContext();
 				const result = await instance.run(stepCtx, payload, sseArg);
 				await this.db.update(workflowTable).set({
-					status: "completed",
+					status: 'completed',
 					result: JSON.stringify(result),
 					updatedAt: Date.now(),
 				});
-				this.updateIndex(wf.type, wf.workflowId, "completed", Date.now());
+				this.updateIndex(wf.type, wf.workflowId, 'completed', Date.now());
 				this.sseCtx?.close();
 			} catch (e) {
 				if (e instanceof SleepInterrupt) {
 					await this.ctx.storage.setAlarm(e.wakeAt);
-					await this.setStatus("sleeping");
+					await this.setStatus('sleeping');
 				} else if (e instanceof WaitInterrupt) {
 					if (e.timeoutAt) {
 						await this.ctx.storage.setAlarm(e.timeoutAt);
 					}
-					await this.setStatus("waiting");
+					await this.setStatus('waiting');
 				} else if (e instanceof PauseInterrupt) {
-					await this.setStatus("paused");
+					await this.setStatus('paused');
 				} else if (!isInterrupt(e)) {
-					const errorMsg =
-						e instanceof WorkflowError
-							? JSON.stringify(e.toJSON())
-							: e instanceof Error
-								? e.message
-								: String(e);
+					const errorMsg = e instanceof WorkflowError ? JSON.stringify(e.toJSON()) : e instanceof Error ? e.message : String(e);
 					await this.db.update(workflowTable).set({
-						status: "errored",
+						status: 'errored',
 						error: errorMsg,
 						updatedAt: Date.now(),
 					});
-					this.updateIndex(wf.type, wf.workflowId, "errored", Date.now());
+					this.updateIndex(wf.type, wf.workflowId, 'errored', Date.now());
 					this.sseCtx?.close();
 				}
 			}
@@ -424,9 +410,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const pendingSteps = await this.db
 				.select()
 				.from(stepsTable)
-				.where(
-					or(eq(stepsTable.status, "sleeping"), eq(stepsTable.status, "waiting"), eq(stepsTable.status, "failed")),
-				);
+				.where(or(eq(stepsTable.status, 'sleeping'), eq(stepsTable.status, 'waiting'), eq(stepsTable.status, 'failed')));
 
 			let earliest: number | null = null;
 			for (const step of pendingSteps) {
@@ -457,7 +441,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				}
 			}
 
-			if (status === "completed" || status === "errored" || status === "terminated") {
+			if (status === 'completed' || status === 'errored' || status === 'terminated') {
 				this.sseCtx?.close();
 			}
 		}

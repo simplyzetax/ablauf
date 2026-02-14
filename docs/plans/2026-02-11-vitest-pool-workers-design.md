@@ -7,6 +7,7 @@ Replace HTTP endpoint testing with `@cloudflare/vitest-pool-workers` to test the
 **Dependencies:** `vitest`, `@cloudflare/vitest-pool-workers` (devDependencies)
 
 **Config:** `vitest.config.ts` at project root:
+
 - Uses `defineWorkersConfig` from `@cloudflare/vitest-pool-workers/config`
 - Points to `./wrangler.jsonc` for bindings/DO config
 - `isolatedStorage: true` for clean state per test
@@ -28,6 +29,7 @@ Replace HTTP endpoint testing with `@cloudflare/vitest-pool-workers` to test the
 ## Test Scenarios
 
 ### 1. Happy path
+
 - Initialize with `{ type: "test", id, payload: { name: "Alice" } }`
 - Assert status `sleeping`, step "greet" completed with `"Hello, Alice!"`
 - Call `alarm()` to advance past sleep
@@ -36,10 +38,12 @@ Replace HTTP endpoint testing with `@cloudflare/vitest-pool-workers` to test the
 - Assert status `completed`, result `{ message: "Alice was approved", greeting: "Hello, Alice!" }`
 
 ### 2. Rejection path
+
 - Same as happy path but deliver `{ approved: false }`
 - Assert result `{ message: "Alice was rejected", greeting: "Hello, Alice!" }`
 
 ### 3. Pause/resume
+
 - Initialize, verify sleeping
 - `pause()`, assert status `paused`
 - `resume()`, replay re-hits sleep interrupt, still sleeping
@@ -47,23 +51,28 @@ Replace HTTP endpoint testing with `@cloudflare/vitest-pool-workers` to test the
 - Deliver event, assert completed
 
 ### 4. Terminate
+
 - Initialize, `terminate()`, assert status `terminated`
 
 ### 5. Event timeout
+
 - Initialize, `alarm()` past sleep, assert waiting
 - `alarm()` again (timeout fires), assert approval step failed with timeout error
 
 ### 6. Step retry with backoff
+
 - Register `FailingStepWorkflow` (throws twice, succeeds on third, limit 3)
 - Initialize, assert sleeping (first failure scheduled retry)
 - `alarm()`, assert sleeping (second failure scheduled retry)
 - `alarm()`, assert completed (third attempt succeeds)
 
 ### 7. Idempotent initialize
+
 - Call `initialize()` twice with same params
 - `getStatus()` returns valid state, no errors
 
 ### 8. Unknown workflow type
+
 - Initialize with `type: "nonexistent"`
 - Assert status `errored` with error message about unknown type
 

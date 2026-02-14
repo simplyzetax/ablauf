@@ -3,7 +3,7 @@ title: Client
 description: Connect your frontend to Ablauf workflows with the type-safe browser client.
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
+import { Callout } from 'fumadocs-ui/components/callout';
 
 # Client
 
@@ -16,35 +16,36 @@ npm install @der-ablauf/client
 ```
 
 <Callout type="info">
-The client connects to the oRPC endpoint exposed by your worker. Make sure you've [set up the dashboard API](/docs/server#setting-up-the-dashboard-api) first.
+	The client connects to the oRPC endpoint exposed by your worker. Make sure you've [set up the dashboard
+	API](/docs/server#setting-up-the-dashboard-api) first.
 </Callout>
 
 ## Creating the Client
 
 ```ts
-import { createAblaufClient } from "@der-ablauf/client";
+import { createAblaufClient } from '@der-ablauf/client';
 
 const client = createAblaufClient({
-  url: "https://your-worker.example.com/__ablauf/rpc",
+	url: 'https://your-worker.example.com/__ablauf/rpc',
 });
 ```
 
 ### Configuration Options
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `url` | `string` | Base URL for the oRPC endpoint |
-| `withCredentials` | `boolean` | Include cookies in requests (for auth) |
-| `headers` | `Record<string, string>` | Custom headers to send with every request |
+| Option            | Type                     | Description                               |
+| ----------------- | ------------------------ | ----------------------------------------- |
+| `url`             | `string`                 | Base URL for the oRPC endpoint            |
+| `withCredentials` | `boolean`                | Include cookies in requests (for auth)    |
+| `headers`         | `Record<string, string>` | Custom headers to send with every request |
 
 ```ts
 // With authentication
 const client = createAblaufClient({
-  url: "https://your-worker.example.com/__ablauf/rpc",
-  withCredentials: true,
-  headers: {
-    Authorization: "Bearer your-token",
-  },
+	url: 'https://your-worker.example.com/__ablauf/rpc',
+	withCredentials: true,
+	headers: {
+		Authorization: 'Bearer your-token',
+	},
 });
 ```
 
@@ -58,8 +59,8 @@ const { items } = await client.workflows.list({});
 
 // Filter by type and status
 const { items } = await client.workflows.list({
-  type: "process-order",
-  status: "running",
+	type: 'process-order',
+	status: 'running',
 });
 ```
 
@@ -68,7 +69,7 @@ const { items } = await client.workflows.list({
 Fetch details for a specific workflow:
 
 ```ts
-const workflow = await client.workflows.get({ id: "order-123" });
+const workflow = await client.workflows.get({ id: 'order-123' });
 // workflow.status, workflow.payload, workflow.result, etc.
 ```
 
@@ -77,7 +78,7 @@ const workflow = await client.workflows.get({ id: "order-123" });
 Get the step-by-step execution timeline:
 
 ```ts
-const timeline = await client.workflows.timeline({ id: "order-123" });
+const timeline = await client.workflows.timeline({ id: 'order-123' });
 // Array of step executions with timing, retries, and results
 ```
 
@@ -86,21 +87,21 @@ const timeline = await client.workflows.timeline({ id: "order-123" });
 Subscribe to live updates from a running workflow using Server-Sent Events:
 
 ```ts
-import type { InferSSEUpdates } from "@der-ablauf/client";
-import type { OrderWorkflow } from "./workflows/order";
+import type { InferSSEUpdates } from '@der-ablauf/client';
+import type { OrderWorkflow } from './workflows/order';
 
 // Type-safe SSE subscription
-const stream = client.subscribe<typeof OrderWorkflow>("order-123");
+const stream = client.subscribe<typeof OrderWorkflow>('order-123');
 
 for await (const update of stream) {
-  switch (update.event) {
-    case "progress":
-      console.log("Progress:", update.data);
-      break;
-    case "status":
-      console.log("Status changed:", update.data);
-      break;
-  }
+	switch (update.event) {
+		case 'progress':
+			console.log('Progress:', update.data);
+			break;
+		case 'status':
+			console.log('Status changed:', update.data);
+			break;
+	}
 }
 ```
 
@@ -111,8 +112,8 @@ Cancel subscriptions when they're no longer needed:
 ```ts
 const controller = new AbortController();
 
-const stream = client.subscribe<typeof OrderWorkflow>("order-123", {
-  signal: controller.signal,
+const stream = client.subscribe<typeof OrderWorkflow>('order-123', {
+	signal: controller.signal,
 });
 
 // Later...
@@ -124,8 +125,8 @@ controller.abort();
 Use `InferSSEUpdates` to extract the SSE event types from a workflow class:
 
 ```ts
-import type { InferSSEUpdates } from "@der-ablauf/client";
-import type { OrderWorkflow } from "./workflows/order";
+import type { InferSSEUpdates } from '@der-ablauf/client';
+import type { OrderWorkflow } from './workflows/order';
 
 type OrderUpdates = InferSSEUpdates<typeof OrderWorkflow>;
 // { event: "progress"; data: { percent: number } } | { event: "shipped"; data: { trackingId: string } }
@@ -136,39 +137,39 @@ type OrderUpdates = InferSSEUpdates<typeof OrderWorkflow>;
 Here's how you might use the client in a React component:
 
 ```tsx
-import { useEffect, useState } from "react";
-import { createAblaufClient } from "@der-ablauf/client";
+import { useEffect, useState } from 'react';
+import { createAblaufClient } from '@der-ablauf/client';
 
 const client = createAblaufClient({
-  url: "/__ablauf/rpc",
+	url: '/__ablauf/rpc',
 });
 
 function WorkflowStatus({ id }: { id: string }) {
-  const [status, setStatus] = useState<string>("loading");
+	const [status, setStatus] = useState<string>('loading');
 
-  useEffect(() => {
-    const controller = new AbortController();
+	useEffect(() => {
+		const controller = new AbortController();
 
-    async function subscribe() {
-      const stream = client.subscribe(id, {
-        signal: controller.signal,
-      });
+		async function subscribe() {
+			const stream = client.subscribe(id, {
+				signal: controller.signal,
+			});
 
-      for await (const update of stream) {
-        if (update.event === "status") {
-          setStatus(update.data);
-        }
-      }
-    }
+			for await (const update of stream) {
+				if (update.event === 'status') {
+					setStatus(update.data);
+				}
+			}
+		}
 
-    subscribe().catch(() => {});
-    return () => controller.abort();
-  }, [id]);
+		subscribe().catch(() => {});
+		return () => controller.abort();
+	}, [id]);
 
-  return <div>Status: {status}</div>;
+	return <div>Status: {status}</div>;
 }
 ```
 
 <Callout type="info">
-For a full-featured monitoring UI, check out the [Dashboard](/docs/dashboard) — a ready-made React app for workflow observability.
+	For a full-featured monitoring UI, check out the [Dashboard](/docs/dashboard) — a ready-made React app for workflow observability.
 </Callout>

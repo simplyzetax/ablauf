@@ -17,7 +17,7 @@ Define events in your workflow:
 
 ```ts
 const workflow = defineWorkflow({
-	type: "approval-flow",
+	type: 'approval-flow',
 	input: z.object({ requestId: z.string() }),
 	events: {
 		approval: z.object({
@@ -26,21 +26,21 @@ const workflow = defineWorkflow({
 		}),
 	},
 	run: async (step, payload) => {
-		await step.do("submit-request", async () => {
+		await step.do('submit-request', async () => {
 			await submitForReview(payload.requestId);
 		});
 
 		// Wait up to 48 hours for approval
-		const decision = await step.waitForEvent("approval", {
-			timeout: "48h",
+		const decision = await step.waitForEvent('approval', {
+			timeout: '48h',
 		});
 
 		if (decision.approved) {
-			await step.do("process-approval", async () => {
+			await step.do('process-approval', async () => {
 				await processApproval(payload.requestId, decision.reviewer);
 			});
 		} else {
-			await step.do("handle-rejection", async () => {
+			await step.do('handle-rejection', async () => {
 				await handleRejection(payload.requestId);
 			});
 		}
@@ -58,8 +58,8 @@ Send the event from outside the workflow:
 ```ts
 await ablauf.sendEvent(ApprovalWorkflow, {
 	id: workflowId,
-	event: "approval",
-	payload: { approved: true, reviewer: "jane@example.com" },
+	event: 'approval',
+	payload: { approved: true, reviewer: 'jane@example.com' },
 });
 ```
 
@@ -71,11 +71,11 @@ Events are defined in the workflow's `events` field as a record of Zod schemas:
 
 ```ts
 const workflow = defineWorkflow({
-	type: "order-processing",
+	type: 'order-processing',
 	input: z.object({ orderId: z.string() }),
 	events: {
 		payment: z.object({
-			status: z.enum(["success", "failed"]),
+			status: z.enum(['success', 'failed']),
 			transactionId: z.string(),
 			amount: z.number(),
 		}),
@@ -91,14 +91,14 @@ const workflow = defineWorkflow({
 	},
 	run: async (step, payload) => {
 		// TypeScript knows these are the valid event names
-		const payment = await step.waitForEvent("payment");
+		const payment = await step.waitForEvent('payment');
 		// payment is typed as { status: "success" | "failed", transactionId: string, amount: number }
 
-		if (payment.status === "failed") {
-			return { cancelled: true, reason: "Payment failed" };
+		if (payment.status === 'failed') {
+			return { cancelled: true, reason: 'Payment failed' };
 		}
 
-		const shipment = await step.waitForEvent("shipment");
+		const shipment = await step.waitForEvent('shipment');
 		// shipment is typed as { trackingNumber: string, carrier: string, estimatedDelivery: string }
 
 		return {
@@ -116,8 +116,10 @@ Events are sent using the `sendEvent()` method on your Ablauf instance:
 ```ts
 await ablauf.sendEvent(WorkflowClass, {
 	id: workflowId,
-	event: "event-name",
-	payload: { /* event data matching the schema */ },
+	event: 'event-name',
+	payload: {
+		/* event data matching the schema */
+	},
 });
 ```
 
@@ -126,21 +128,21 @@ The payload is validated against the event's Zod schema. If validation fails, `E
 ```ts
 // ✅ Valid event
 await ablauf.sendEvent(OrderWorkflow, {
-	id: "order-123",
-	event: "payment",
+	id: 'order-123',
+	event: 'payment',
 	payload: {
-		status: "success",
-		transactionId: "txn_abc123",
+		status: 'success',
+		transactionId: 'txn_abc123',
 		amount: 99.99,
 	},
 });
 
 // ❌ Invalid event - missing required field
 await ablauf.sendEvent(OrderWorkflow, {
-	id: "order-123",
-	event: "payment",
+	id: 'order-123',
+	event: 'payment',
 	payload: {
-		status: "success",
+		status: 'success',
 		// Missing transactionId and amount
 	},
 });
@@ -153,21 +155,21 @@ Without a timeout, workflows wait indefinitely for events. This is often exactly
 
 ```ts
 // Wait forever for user approval
-const approval = await step.waitForEvent("user-approval");
+const approval = await step.waitForEvent('user-approval');
 ```
 
 With a timeout, the workflow throws `EventTimeoutError` if the event doesn't arrive in time:
 
 ```ts
 try {
-	const approval = await step.waitForEvent("user-approval", {
-		timeout: "7d",
+	const approval = await step.waitForEvent('user-approval', {
+		timeout: '7d',
 	});
 	// Event arrived within 7 days
 } catch (error) {
-	if (error.code === "event-timeout") {
+	if (error.code === 'event-timeout') {
 		// Event didn't arrive within 7 days
-		await step.do("handle-timeout", async () => {
+		await step.do('handle-timeout', async () => {
 			await sendEscalationEmail();
 		});
 	}
@@ -175,15 +177,17 @@ try {
 ```
 
 <Callout type="warn">
-**Note:** You can't catch `EventTimeoutError` in a try/catch like this in the actual workflow. The error is thrown across workflow replays. If a timeout occurs, the workflow will be marked as failed with the `EventTimeoutError`. Handle timeouts by checking workflow status externally or designing your workflow to avoid them.
+	**Note:** You can't catch `EventTimeoutError` in a try/catch like this in the actual workflow. The error is thrown across workflow
+	replays. If a timeout occurs, the workflow will be marked as failed with the `EventTimeoutError`. Handle timeouts by checking workflow
+	status externally or designing your workflow to avoid them.
 </Callout>
 
 Timeout duration strings use the same format as `step.sleep()`:
 
 ```ts
-await step.waitForEvent("webhook", { timeout: "5m" }); // 5 minutes
-await step.waitForEvent("approval", { timeout: "48h" }); // 2 days
-await step.waitForEvent("payment", { timeout: "30s" }); // 30 seconds
+await step.waitForEvent('webhook', { timeout: '5m' }); // 5 minutes
+await step.waitForEvent('approval', { timeout: '48h' }); // 2 days
+await step.waitForEvent('payment', { timeout: '30s' }); // 30 seconds
 ```
 
 ## How It Works
@@ -229,7 +233,7 @@ Wait for webhook callbacks:
 
 ```ts
 const workflow = defineWorkflow({
-	type: "stripe-checkout",
+	type: 'stripe-checkout',
 	input: z.object({ sessionId: z.string() }),
 	events: {
 		webhookReceived: z.object({
@@ -238,19 +242,19 @@ const workflow = defineWorkflow({
 		}),
 	},
 	run: async (step, payload) => {
-		await step.do("create-checkout", async () => {
+		await step.do('create-checkout', async () => {
 			await stripe.checkout.sessions.create({
 				// ... session config
 			});
 		});
 
 		// Wait for Stripe webhook (up to 1 hour)
-		const webhook = await step.waitForEvent("webhookReceived", {
-			timeout: "1h",
+		const webhook = await step.waitForEvent('webhookReceived', {
+			timeout: '1h',
 		});
 
-		if (webhook.eventType === "checkout.session.completed") {
-			await step.do("fulfill-order", async () => {
+		if (webhook.eventType === 'checkout.session.completed') {
+			await step.do('fulfill-order', async () => {
 				await fulfillOrder(payload.sessionId);
 			});
 		}
@@ -260,12 +264,12 @@ const workflow = defineWorkflow({
 });
 
 // In your webhook handler
-app.post("/webhooks/stripe", async (c) => {
+app.post('/webhooks/stripe', async (c) => {
 	const event = await stripe.webhooks.constructEvent(/* ... */);
 
 	await ablauf.sendEvent(StripeCheckoutWorkflow, {
 		id: event.data.object.id,
-		event: "webhookReceived",
+		event: 'webhookReceived',
 		payload: {
 			eventType: event.type,
 			data: event.data,
@@ -282,7 +286,7 @@ Wait for human decisions:
 
 ```ts
 const workflow = defineWorkflow({
-	type: "expense-approval",
+	type: 'expense-approval',
 	input: z.object({
 		expenseId: z.string(),
 		amount: z.number(),
@@ -296,35 +300,35 @@ const workflow = defineWorkflow({
 		}),
 	},
 	run: async (step, payload) => {
-		await step.do("notify-manager", async () => {
+		await step.do('notify-manager', async () => {
 			await sendEmail({
 				to: getManagerEmail(payload.employee),
-				subject: "Expense Approval Required",
+				subject: 'Expense Approval Required',
 				body: `${payload.employee} submitted an expense for $${payload.amount}`,
 			});
 		});
 
 		// Wait indefinitely for manager decision
-		const decision = await step.waitForEvent("managerDecision");
+		const decision = await step.waitForEvent('managerDecision');
 
 		if (decision.approved) {
-			await step.do("process-reimbursement", async () => {
+			await step.do('process-reimbursement', async () => {
 				await processReimbursement(payload.expenseId, payload.amount);
 			});
 
-			await step.do("notify-employee-approved", async () => {
+			await step.do('notify-employee-approved', async () => {
 				await sendEmail({
 					to: payload.employee,
-					subject: "Expense Approved",
+					subject: 'Expense Approved',
 					body: `Your expense has been approved by ${decision.manager}`,
 				});
 			});
 		} else {
-			await step.do("notify-employee-rejected", async () => {
+			await step.do('notify-employee-rejected', async () => {
 				await sendEmail({
 					to: payload.employee,
-					subject: "Expense Rejected",
-					body: `Your expense was rejected. ${decision.comments || ""}`,
+					subject: 'Expense Rejected',
+					body: `Your expense was rejected. ${decision.comments || ''}`,
 				});
 			});
 		}
@@ -343,7 +347,7 @@ Wait for multiple different events in sequence:
 
 ```ts
 const workflow = defineWorkflow({
-	type: "onboarding-flow",
+	type: 'onboarding-flow',
 	input: z.object({ userId: z.string() }),
 	events: {
 		emailVerified: z.object({ verifiedAt: z.string() }),
@@ -351,25 +355,25 @@ const workflow = defineWorkflow({
 		firstAction: z.object({ action: z.string() }),
 	},
 	run: async (step, payload) => {
-		await step.do("send-verification-email", async () => {
+		await step.do('send-verification-email', async () => {
 			await sendVerificationEmail(payload.userId);
 		});
 
-		await step.waitForEvent("emailVerified", { timeout: "7d" });
+		await step.waitForEvent('emailVerified', { timeout: '7d' });
 
-		await step.do("send-profile-prompt", async () => {
+		await step.do('send-profile-prompt', async () => {
 			await sendProfilePrompt(payload.userId);
 		});
 
-		await step.waitForEvent("profileCompleted", { timeout: "14d" });
+		await step.waitForEvent('profileCompleted', { timeout: '14d' });
 
-		await step.do("send-getting-started-guide", async () => {
+		await step.do('send-getting-started-guide', async () => {
 			await sendGettingStartedGuide(payload.userId);
 		});
 
-		await step.waitForEvent("firstAction", { timeout: "30d" });
+		await step.waitForEvent('firstAction', { timeout: '30d' });
 
-		await step.do("mark-onboarding-complete", async () => {
+		await step.do('mark-onboarding-complete', async () => {
 			await markOnboardingComplete(payload.userId);
 		});
 
@@ -384,12 +388,12 @@ Like all step primitives, event wait step names must be unique:
 
 ```ts
 // ❌ This will throw DuplicateStepError
-await step.waitForEvent("approval");
-await step.waitForEvent("approval");
+await step.waitForEvent('approval');
+await step.waitForEvent('approval');
 
 // ✅ This is fine if you need to wait for the same event type multiple times
-await step.waitForEvent("first-approval");
-await step.waitForEvent("second-approval");
+await step.waitForEvent('first-approval');
+await step.waitForEvent('second-approval');
 ```
 
 ## Type Safety
@@ -416,8 +420,8 @@ payment.unknownField; // ❌ TypeScript error
 The event name is also type-checked:
 
 ```ts
-await step.waitForEvent("payment"); // ✅ "payment" is in the events schema
-await step.waitForEvent("unknown"); // ❌ TypeScript error
+await step.waitForEvent('payment'); // ✅ "payment" is in the events schema
+await step.waitForEvent('unknown'); // ❌ TypeScript error
 ```
 
 This makes it impossible to wait for an event that doesn't exist or to access fields that aren't in the schema. Refactor-friendly and typo-proof.

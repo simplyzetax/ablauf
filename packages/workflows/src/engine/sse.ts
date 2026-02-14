@@ -1,7 +1,7 @@
-import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
-import type { z } from "zod";
-import { sseMessagesTable } from "../db/schema";
-import type { SSE } from "./types";
+import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
+import type { z } from 'zod';
+import { sseMessagesTable } from '../db/schema';
+import type { SSE } from './types';
 
 type UpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
@@ -54,18 +54,21 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 		const parsed = this.validate(name, data);
 		if (!this.isReplay) {
 			this.writeToClients(name, parsed);
-			this.db.insert(sseMessagesTable).values({
-				event: name,
-				data: JSON.stringify(parsed),
-				createdAt: Date.now(),
-			}).run();
+			this.db
+				.insert(sseMessagesTable)
+				.values({
+					event: name,
+					data: JSON.stringify(parsed),
+					createdAt: Date.now(),
+				})
+				.run();
 		}
 	}
 
 	close(): void {
 		if (this.closed) return;
 		this.closed = true;
-		const closeMsg = this.encoder.encode("event: close\ndata: {}\n\n");
+		const closeMsg = this.encoder.encode('event: close\ndata: {}\n\n');
 		for (const writer of this.writers) {
 			try {
 				writer.write(closeMsg);

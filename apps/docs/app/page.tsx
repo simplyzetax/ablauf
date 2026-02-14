@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from 'next/link';
 
 export default function HomePage() {
 	return (
@@ -28,9 +28,7 @@ export default function HomePage() {
 						Get Started
 					</Link>
 				</div>
-				<p className="mt-12 text-sm text-fd-muted-foreground">
-					npm install @der-ablauf/workflows
-				</p>
+				<p className="mt-12 text-sm text-fd-muted-foreground">npm install @der-ablauf/workflows</p>
 			</div>
 		</main>
 	);

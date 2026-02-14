@@ -13,8 +13,8 @@ By default, every step gets **3 retry attempts** with **1 second delay** and **e
 
 ```ts
 // Uses defaults: { limit: 3, delay: "1s", backoff: "exponential" }
-const data = await step.do("fetch-data", async () => {
-	const res = await fetch("https://api.example.com/data");
+const data = await step.do('fetch-data', async () => {
+	const res = await fetch('https://api.example.com/data');
 	if (!res.ok) throw new Error(`HTTP ${res.status}`);
 	return res.json();
 });
@@ -27,16 +27,20 @@ If the step fails all 3 times, it throws `StepRetryExhaustedError` and the workf
 Need more retries for a critical operation? Override the defaults:
 
 ```ts
-const data = await step.do("critical-operation", async () => {
-	// This step gets 10 attempts with 5s delay
-	return await somethingFragile();
-}, {
-	retries: {
-		limit: 10,
-		delay: "5s",
-		backoff: "exponential",
+const data = await step.do(
+	'critical-operation',
+	async () => {
+		// This step gets 10 attempts with 5s delay
+		return await somethingFragile();
 	},
-});
+	{
+		retries: {
+			limit: 10,
+			delay: '5s',
+			backoff: 'exponential',
+		},
+	},
+);
 ```
 
 ## Workflow-Level Defaults
@@ -44,19 +48,25 @@ const data = await step.do("critical-operation", async () => {
 Set default retry config for all steps in a workflow:
 
 ```ts
-import { defineWorkflow } from "@der-ablauf/workflows";
-import { z } from "zod";
+import { defineWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
 
 const MyWorkflow = defineWorkflow({
-	type: "my-workflow",
-	input: z.object({ /* ... */ }),
+	type: 'my-workflow',
+	input: z.object({
+		/* ... */
+	}),
 	defaults: {
-		retries: { limit: 5, delay: "2s", backoff: "linear" },
+		retries: { limit: 5, delay: '2s', backoff: 'linear' },
 	},
 	run: async (step, payload) => {
 		// All steps in this workflow default to 5 attempts with linear backoff
-		await step.do("step-1", async () => { /* ... */ });
-		await step.do("step-2", async () => { /* ... */ });
+		await step.do('step-1', async () => {
+			/* ... */
+		});
+		await step.do('step-2', async () => {
+			/* ... */
+		});
 	},
 });
 ```
@@ -67,11 +77,11 @@ Per-step overrides still work — they take precedence over workflow defaults.
 
 Ablauf supports three backoff strategies:
 
-| Strategy | Formula | Example (1s base delay) |
-|---|---|---|
-| `"fixed"` | `delay` | 1s, 1s, 1s, 1s |
-| `"linear"` | `delay * attempt` | 1s, 2s, 3s, 4s |
-| `"exponential"` | `delay * 2^(attempt-1)` | 1s, 2s, 4s, 8s |
+| Strategy        | Formula                 | Example (1s base delay) |
+| --------------- | ----------------------- | ----------------------- |
+| `"fixed"`       | `delay`                 | 1s, 1s, 1s, 1s          |
+| `"linear"`      | `delay * attempt`       | 1s, 2s, 3s, 4s          |
+| `"exponential"` | `delay * 2^(attempt-1)` | 1s, 2s, 4s, 8s          |
 
 Exponential backoff is usually the right choice — it gives temporary issues time to resolve without hammering a struggling service.
 
@@ -97,7 +107,7 @@ Thrown when a step fails all retry attempts. Contains the original error and ret
 
 ```ts
 try {
-	await step.do("flaky-operation", async () => {
+	await step.do('flaky-operation', async () => {
 		// This might fail...
 	});
 } catch (err) {
@@ -115,8 +125,8 @@ Thrown when `step.waitForEvent()` times out before receiving the expected event.
 
 ```ts
 try {
-	const confirmation = await step.waitForEvent("payment-confirmed", {
-		timeout: "30m",
+	const confirmation = await step.waitForEvent('payment-confirmed', {
+		timeout: '30m',
 	});
 } catch (err) {
 	if (err instanceof EventTimeoutError) {
@@ -133,8 +143,8 @@ Thrown when creating a workflow with invalid input:
 ```ts
 // If the payload doesn't match the input schema
 await ablauf.create(MyWorkflow, {
-	id: "wf-123",
-	payload: { invalid: "data" }, // Throws PayloadValidationError
+	id: 'wf-123',
+	payload: { invalid: 'data' }, // Throws PayloadValidationError
 });
 ```
 
@@ -147,9 +157,11 @@ Thrown when sending an event with invalid payload or unknown event name:
 ```ts
 // Unknown event name or invalid payload shape
 await ablauf.sendEvent(MyWorkflow, {
-	id: "wf-123",
-	event: "unknown-event", // Throws EventValidationError
-	payload: { /* ... */ },
+	id: 'wf-123',
+	event: 'unknown-event', // Throws EventValidationError
+	payload: {
+		/* ... */
+	},
 });
 ```
 
@@ -158,8 +170,12 @@ await ablauf.sendEvent(MyWorkflow, {
 Thrown when two steps in the same workflow have the same name. Step names must be unique within a workflow instance.
 
 ```ts
-await step.do("fetch-data", async () => { /* ... */ });
-await step.do("fetch-data", async () => { /* ... */ }); // Throws DuplicateStepError
+await step.do('fetch-data', async () => {
+	/* ... */
+});
+await step.do('fetch-data', async () => {
+	/* ... */
+}); // Throws DuplicateStepError
 ```
 
 ### `WorkflowNotFoundError`
@@ -169,9 +185,11 @@ Thrown when trying to interact with a workflow instance that doesn't exist:
 ```ts
 // Workflow with this ID doesn't exist
 await ablauf.sendEvent(MyWorkflow, {
-	id: "nonexistent-id", // Throws WorkflowNotFoundError
-	event: "some-event",
-	payload: { /* ... */ },
+	id: 'nonexistent-id', // Throws WorkflowNotFoundError
+	event: 'some-event',
+	payload: {
+		/* ... */
+	},
 });
 ```
 
@@ -180,8 +198,18 @@ await ablauf.sendEvent(MyWorkflow, {
 Thrown when trying to create a workflow with an ID that already exists:
 
 ```ts
-await ablauf.create(MyWorkflow, { id: "wf-123", payload: { /* ... */ } });
-await ablauf.create(MyWorkflow, { id: "wf-123", payload: { /* ... */ } }); // Throws WorkflowAlreadyExistsError
+await ablauf.create(MyWorkflow, {
+	id: 'wf-123',
+	payload: {
+		/* ... */
+	},
+});
+await ablauf.create(MyWorkflow, {
+	id: 'wf-123',
+	payload: {
+		/* ... */
+	},
+}); // Throws WorkflowAlreadyExistsError
 ```
 
 Use `createIfNotExists()` if you want to safely ignore duplicates.
@@ -197,13 +225,17 @@ Use `createIfNotExists()` if you want to safely ignore duplicates.
 **Don't retry non-idempotent operations blindly.** If retrying a step could cause duplicate charges, emails, or data corruption, add idempotency checks inside the step.
 
 ```ts
-await step.do("send-email", async () => {
-	// Check if email was already sent before retrying
-	const alreadySent = await checkEmailLog(userId);
-	if (alreadySent) return;
+await step.do(
+	'send-email',
+	async () => {
+		// Check if email was already sent before retrying
+		const alreadySent = await checkEmailLog(userId);
+		if (alreadySent) return;
 
-	await sendEmail(userId, "Welcome!");
-}, {
-	retries: { limit: 5 },
-});
+		await sendEmail(userId, 'Welcome!');
+	},
+	{
+		retries: { limit: 5 },
+	},
+);
 ```

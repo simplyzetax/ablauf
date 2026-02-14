@@ -3,14 +3,15 @@ title: Functional API (Recommended)
 description: Learn how to define workflows using the functional API with defineWorkflow() for less boilerplate and better type inference.
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
+import { Callout } from 'fumadocs-ui/components/callout';
 
 # Functional API
 
 The functional API using `defineWorkflow()` is the recommended way to define workflows in Ablauf. It provides excellent type inference, minimal boilerplate, and a clean declarative style.
 
 <Callout type="info">
-	**Why functional?** Types are automatically inferred from your schemas, and you get the same power as the class-based API with less code to maintain.
+	**Why functional?** Types are automatically inferred from your schemas, and you get the same power as the class-based API with less code
+	to maintain.
 </Callout>
 
 ## Basic Example
@@ -18,28 +19,28 @@ The functional API using `defineWorkflow()` is the recommended way to define wor
 Here's a simple workflow that processes an order with validation, a cool-down period, and shipping:
 
 ```ts
-import { defineWorkflow } from "@der-ablauf/workflows";
-import { z } from "zod";
+import { defineWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
 
 const OrderWorkflow = defineWorkflow({
-	type: "process-order",
+	type: 'process-order',
 	input: z.object({
 		orderId: z.string(),
 		items: z.array(
 			z.object({
 				name: z.string(),
 				quantity: z.number(),
-			})
+			}),
 		),
 	}),
 	run: async (step, payload) => {
-		const validated = await step.do("validate-order", async () => {
+		const validated = await step.do('validate-order', async () => {
 			return { valid: true, itemCount: payload.items.length };
 		});
 
-		await step.sleep("cool-down", "5s");
+		await step.sleep('cool-down', '5s');
 
-		const shipped = await step.do("ship-order", async () => {
+		const shipped = await step.do('ship-order', async () => {
 			return { trackingId: `TRK-${payload.orderId}` };
 		});
 
@@ -57,12 +58,10 @@ Notice how `payload` is automatically typed based on your `input` schema. No man
 A unique string identifier for your workflow. This is used for routing, listing, and querying workflows.
 
 ```ts
-type: "process-order"
+type: 'process-order';
 ```
 
-<Callout type="warn">
-	Workflow types must be unique across your application. Think of them like route paths.
-</Callout>
+<Callout type="warn">Workflow types must be unique across your application. Think of them like route paths.</Callout>
 
 ### `input` (required)
 
@@ -73,7 +72,7 @@ input: z.object({
 	orderId: z.string(),
 	customerId: z.string().uuid(),
 	amount: z.number().positive(),
-})
+});
 ```
 
 ### `run` (required)
@@ -88,7 +87,7 @@ The main workflow function. It receives three parameters:
 run: async (step, payload, sse) => {
 	// Your workflow logic here
 	return { success: true };
-}
+};
 ```
 
 ### `events` (optional)
@@ -132,11 +131,11 @@ sseUpdates: {
 Here's a more complex workflow demonstrating events, SSE updates, and retry configuration:
 
 ```ts
-import { defineWorkflow } from "@der-ablauf/workflows";
-import { z } from "zod";
+import { defineWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
 
 const ApprovalWorkflow = defineWorkflow({
-	type: "approval",
+	type: 'approval',
 	input: z.object({
 		requestId: z.string(),
 		amount: z.number(),
@@ -154,26 +153,26 @@ const ApprovalWorkflow = defineWorkflow({
 	defaults: {
 		retries: {
 			limit: 5,
-			delay: "2s",
-			backoff: "exponential",
+			delay: '2s',
+			backoff: 'exponential',
 		},
 	},
 	run: async (step, payload, sse) => {
-		sse.broadcast("progress", { message: "Processing request..." });
+		sse.broadcast('progress', { message: 'Processing request...' });
 
-		const check = await step.do("validate", async () => {
+		const check = await step.do('validate', async () => {
 			return payload.amount < 10000;
 		});
 
 		if (!check) {
-			sse.broadcast("progress", {
-				message: "Request requires approval...",
+			sse.broadcast('progress', {
+				message: 'Request requires approval...',
 			});
 		}
 
-		const decision = await step.waitForEvent("decision", { timeout: "24h" });
+		const decision = await step.waitForEvent('decision', { timeout: '24h' });
 
-		sse.emit("complete", { approved: decision.approved });
+		sse.emit('complete', { approved: decision.approved });
 
 		return {
 			approved: decision.approved,
@@ -190,5 +189,6 @@ const ApprovalWorkflow = defineWorkflow({
 If you find yourself needing more structure or additional methods, you can always refactor to the [class-based API](/docs/workflows/class-based) without changing behavior.
 
 <Callout type="info">
-	**Pro tip:** Start with the functional API. You can always refactor to classes later if your workflow logic becomes complex enough to warrant it.
+	**Pro tip:** Start with the functional API. You can always refactor to classes later if your workflow logic becomes complex enough to
+	warrant it.
 </Callout>

@@ -1,4 +1,4 @@
-import { InvalidDurationError } from "../errors";
+import { InvalidDurationError } from '../errors';
 
 /** Multipliers from duration unit to milliseconds. */
 const UNITS: Record<string, number> = {
