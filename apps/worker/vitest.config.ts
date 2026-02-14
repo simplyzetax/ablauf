@@ -6,7 +6,7 @@ export default defineWorkersConfig({
 			optimizer: {
 				ssr: {
 					enabled: true,
-					include: ['@der-ablauf/workflows', '@der-ablauf/client'],
+					include: ['@der-ablauf/workflows', '@der-ablauf/client', '@orpc/server'],
 					esbuildOptions: {
 						loader: {
 							'.sql': 'text',

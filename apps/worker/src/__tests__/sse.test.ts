@@ -72,4 +72,42 @@ describe('SSE', () => {
 
 		expect(done).toEqual({ message: 'Processed 8 items' });
 	});
+
+	it('persisted SSE messages are flushed on connectSSE for completed workflows', async () => {
+		await ablauf.create(SSEWorkflow, {
+			id: 'sse-close-1',
+			payload: { itemCount: 3 },
+		});
+
+		const rawStub = env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName('sse-close-1')) as unknown as WorkflowRunnerStub;
+
+		const stream = await rawStub.connectSSE();
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+
+		// Read the first chunk which should contain flushed persisted messages
+		const { value, done } = await reader.read();
+		expect(done).toBe(false);
+		const text = decoder.decode(value);
+		expect(text).toContain('event: done');
+		expect(text).toContain('Processed 3 items');
+
+		reader.releaseLock();
+	});
+
+	it('connectSSE on workflow without sseUpdates returns empty stream', async () => {
+		const { EchoWorkflow } = await import('../workflows/echo-workflow');
+
+		await new Ablauf(env.WORKFLOW_RUNNER).create(EchoWorkflow, {
+			id: 'sse-no-schema-1',
+			payload: { message: 'no sse' },
+		});
+
+		const rawStub = env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.idFromName('sse-no-schema-1')) as unknown as WorkflowRunnerStub;
+		const stream = await rawStub.connectSSE();
+		const reader = stream.getReader();
+
+		const { done } = await reader.read();
+		expect(done).toBe(true);
+	});
 });

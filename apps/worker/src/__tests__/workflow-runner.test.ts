@@ -8,6 +8,9 @@ import { FailingStepWorkflow } from '../workflows/failing-step-workflow';
 import { EchoWorkflow } from '../workflows/echo-workflow';
 import { DuplicateStepWorkflow } from '../workflows/duplicate-step-workflow';
 import { SSEWorkflow } from '../workflows/sse-workflow';
+import { BackoffConfigWorkflow } from '../workflows/backoff-config-workflow';
+import { NoSchemaWorkflow } from '../workflows/no-schema-workflow';
+import { MultiEventWorkflow } from '../workflows/multi-event-workflow';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -284,6 +287,195 @@ describe('WorkflowRunner', () => {
 			const _stub = await ablauf.create(SSEWorkflow, { id: 'sse-1', payload: { itemCount: 10 } });
 			const event = await ablauf.waitForUpdate(SSEWorkflow, { id: 'sse-1', update: 'done' });
 			expect(event).toEqual({ message: 'Processed 10 items' });
+		});
+	});
+
+	describe('backoff strategies', () => {
+		it('fixed backoff: delay stays constant across retries', async () => {
+			const stub = await ablauf.create(BackoffConfigWorkflow, {
+				id: 'wr-backoff-fixed-1',
+				payload: { failCount: 2, strategy: 'fixed' },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+
+			await advanceAlarm(stub);
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+
+			await advanceAlarm(stub);
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toBe('ok');
+		});
+
+		it('linear backoff: retries with increasing delay', async () => {
+			const stub = await ablauf.create(BackoffConfigWorkflow, {
+				id: 'wr-backoff-linear-1',
+				payload: { failCount: 2, strategy: 'linear' },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+
+			await advanceAlarm(stub);
+			await advanceAlarm(stub);
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toBe('ok');
+		});
+
+		it('exponential backoff: retries with doubling delay', async () => {
+			const stub = await ablauf.create(BackoffConfigWorkflow, {
+				id: 'wr-backoff-exp-1',
+				payload: { failCount: 2, strategy: 'exponential' },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+
+			await advanceAlarm(stub);
+			await advanceAlarm(stub);
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toBe('ok');
+		});
+	});
+
+	describe('step retry exhaustion', () => {
+		it('errors with StepRetryExhaustedError after all attempts fail', async () => {
+			const stub = await ablauf.create(FailingStepWorkflow, {
+				id: 'wr-retry-exhaust-1',
+				payload: { failCount: 100 },
+			});
+
+			await advanceAlarm(stub);
+			await advanceAlarm(stub);
+
+			const status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('errored');
+			expect(status.error).toContain('failed after');
+			expect(status.error).toContain('attempts');
+
+			const failStep = status.steps.find((s: { name: string }) => s.name === 'unreliable');
+			expect(failStep).toBeDefined();
+			expect(failStep!.status).toBe('failed');
+			expect(failStep!.attempts).toBe(3);
+		});
+	});
+
+	describe('terminate edge cases', () => {
+		it('terminates a sleeping workflow', async () => {
+			const stub = await ablauf.create(TestWorkflow, {
+				id: 'wr-term-sleeping-1',
+				payload: { name: 'Sleeping' },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+
+			await stub.terminate();
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('terminated');
+		});
+
+		it('terminates a waiting workflow', async () => {
+			const stub = await ablauf.create(TestWorkflow, {
+				id: 'wr-term-waiting-1',
+				payload: { name: 'Waiting' },
+			});
+
+			await advanceAlarm(stub);
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('waiting');
+
+			await stub.terminate();
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('terminated');
+		});
+	});
+
+	describe('pause edge cases', () => {
+		it('double pause does not corrupt state', async () => {
+			const stub = await ablauf.create(TestWorkflow, {
+				id: 'wr-double-pause-1',
+				payload: { name: 'DoublePause' },
+			});
+
+			await stub.pause();
+			await stub.pause();
+
+			const status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('paused');
+		});
+
+		it('resume on a running workflow is safe', async () => {
+			const stub = await ablauf.create(TestWorkflow, {
+				id: 'wr-resume-running-1',
+				payload: { name: 'ResumeRunning' },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+
+			await stub.resume();
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+		});
+	});
+
+	describe('timestamps', () => {
+		it('sets createdAt and updatedAt on workflow creation', async () => {
+			const before = Date.now();
+			const stub = await ablauf.create(EchoWorkflow, {
+				id: 'wr-timestamps-1',
+				payload: { message: 'ts' },
+			});
+			const after = Date.now();
+
+			const status = await stub.getStatus();
+			expect(status.createdAt).toBeGreaterThanOrEqual(before);
+			expect(status.createdAt).toBeLessThanOrEqual(after);
+			expect(status.updatedAt).toBeGreaterThanOrEqual(status.createdAt);
+		});
+	});
+
+	describe('minimal workflow', () => {
+		it('runs a workflow with no events and minimal input', async () => {
+			const stub = await ablauf.create(NoSchemaWorkflow, {
+				id: 'wr-no-schema-1',
+				payload: {},
+			});
+
+			const status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toBe('done');
+		});
+	});
+
+	describe('multi-event workflow', () => {
+		it('handles multiple sequential waitForEvent calls', async () => {
+			const stub = await ablauf.create(MultiEventWorkflow, {
+				id: 'wr-multi-event-1',
+				payload: { name: 'MultiEvent' },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('waiting');
+
+			await stub.deliverEvent({ event: 'first-approval', payload: { ok: true } });
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('waiting');
+
+			await stub.deliverEvent({ event: 'second-approval', payload: { ok: false } });
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toEqual({
+				greeting: 'Hi, MultiEvent',
+				first: true,
+				second: false,
+			});
 		});
 	});
 });
