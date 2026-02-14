@@ -58,8 +58,8 @@ describe('Replay mechanics', () => {
 		const status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('completed');
 		expect(status.result).toEqual({ a: 43, b: 86, c: 96, d: 'result:96' });
-		expect(typeof status.result.a).toBe('number');
-		expect(typeof status.result.d).toBe('string');
+		expect(typeof status.result!.a).toBe('number');
+		expect(typeof status.result!.d).toBe('string');
 	});
 
 	it('sleep interrupt resumes at the correct step after alarm', async () => {
