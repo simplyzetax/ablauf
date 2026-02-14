@@ -2,5 +2,5 @@
 	"title": "Dashboard",
 	"description": "Monitor and debug your workflows",
 	"root": true,
-	"pages": ["index", "observability", "---API Reference---", "...openapi"]
+	"pages": ["index", "observability", "---API Reference---", "..."]
 }
