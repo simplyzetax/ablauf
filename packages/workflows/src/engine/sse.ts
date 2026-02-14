@@ -5,6 +5,17 @@ import type { SSE } from "./types";
 
 type UpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
+/**
+ * Concrete implementation of the {@link SSE} interface for real-time workflow updates.
+ *
+ * Manages a set of connected SSE writers and supports two modes:
+ * - **Replay mode** (`isReplay = true`): `broadcast()` calls are skipped; `emit()` calls
+ *   only persist without writing to clients (since clients will receive persisted messages
+ *   via {@link SSEContext.flushPersistedMessages | flushPersistedMessages()}).
+ * - **Live mode** (`isReplay = false`): Both `broadcast()` and `emit()` write to connected clients.
+ *
+ * @typeParam Updates - Map of update names to their data types.
+ */
 export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 	private writers = new Set<WritableStreamDefaultWriter>();
 	private closed = false;
@@ -100,7 +111,7 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 	}
 }
 
-/** No-op SSE context for workflows that don't define sseUpdates */
+/** No-op SSE context used when a workflow does not define `sseUpdates`. All methods are silent no-ops. */
 export class NoOpSSEContext implements SSE<never> {
 	broadcast<K extends never>(_name: K, _data: never): void {}
 	emit<K extends never>(_name: K, _data: never): void {}

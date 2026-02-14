@@ -1,37 +1,73 @@
+/**
+ * Possible states of a workflow instance during its lifecycle.
+ *
+ * - `"created"` — Exists but has not started execution yet.
+ * - `"running"` — Actively executing workflow steps.
+ * - `"completed"` — All steps finished; result is available.
+ * - `"errored"` — Failed with an unrecoverable error.
+ * - `"paused"` — Manually paused; will not progress until resumed.
+ * - `"sleeping"` — Waiting for a `step.sleep()` duration to elapse.
+ * - `"waiting"` — Blocked on an external event via `step.waitForEvent()`.
+ * - `"terminated"` — Manually terminated; cannot be resumed.
+ */
 export type WorkflowStatus = "created" | "running" | "completed" | "errored" | "paused" | "sleeping" | "waiting" | "terminated";
 
+/**
+ * Strategy for calculating the delay between retry attempts.
+ *
+ * - `"fixed"` — Same delay every attempt.
+ * - `"linear"` — Delay increases linearly (`delay * attempt`).
+ * - `"exponential"` — Delay doubles each attempt (`delay * 2^attempt`).
+ */
 export type BackoffStrategy = "fixed" | "linear" | "exponential";
 
+/** Configuration for step retry behavior. */
 export interface RetryConfig {
+	/** Maximum number of retry attempts before the step fails permanently. */
 	limit: number;
+	/** Delay between retries as a duration string (e.g., `"1s"`, `"5m"`). */
 	delay: string;
+	/** Strategy for scaling the delay across successive retries. */
 	backoff: BackoffStrategy;
 }
 
+/** Per-step options for `step.do()`. */
 export interface StepDoOptions {
+	/** Partial retry configuration that overrides the workflow-level defaults. */
 	retries?: Partial<RetryConfig>;
 }
 
+/** Options for `step.waitForEvent()`. */
 export interface StepWaitOptions {
+	/** Maximum time to wait as a duration string (e.g., `"5m"`, `"1h"`, `"7d"`). */
 	timeout: string;
 }
 
+/** Default configuration values applied to all steps in a workflow unless overridden. */
 export interface WorkflowDefaults {
+	/** Default retry configuration for all `step.do()` calls. */
 	retries: RetryConfig;
 }
 
+/** Base type for the events map. Maps event names to their payload types. */
 export type WorkflowEvents = Record<string, unknown>;
 type EventKey<Events extends object> = Extract<keyof Events, string>;
 type SSEUpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
+/** Zod schema map for validating incoming workflow events at runtime. */
 export type WorkflowEventSchemas<Events extends object> = {
 	[K in EventKey<Events>]: import("zod").z.ZodType<Events[K]>;
 };
 
+/** Zod schema map for validating SSE updates emitted by a workflow. */
 export type WorkflowSSESchemas<Updates extends object> = {
 	[K in SSEUpdateKey<Updates>]: import("zod").z.ZodType<Updates[K]>;
 };
 
+/**
+ * Discriminated union of `{ event, payload }` objects for delivering events to a workflow.
+ * Resolves to `never` when the workflow defines no events.
+ */
 export type WorkflowEventProps<Events extends object> = [EventKey<Events>] extends [never]
 	? never
 	: {
@@ -41,21 +77,92 @@ export type WorkflowEventProps<Events extends object> = [EventKey<Events>] exten
 			};
 		}[EventKey<Events>];
 
+/**
+ * Default retry configuration: 3 attempts, 1s delay, exponential backoff.
+ */
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	limit: 3,
 	delay: "1s",
 	backoff: "exponential",
 };
 
+/**
+ * Step context passed to a workflow's `run()` method, providing durable step primitives.
+ *
+ * All step methods are replay-safe: on re-execution, completed steps return their
+ * cached results from SQLite rather than re-running.
+ *
+ * @typeParam Events - Map of event names to payload types this workflow can receive.
+ */
 export interface Step<Events extends object = {}> {
+	/**
+	 * Execute a named step with automatic persistence and optional retries.
+	 *
+	 * On first execution the function runs and its result is persisted.
+	 * On replay the cached result is returned without re-executing.
+	 *
+	 * @param name - Unique step name within this workflow run.
+	 * @param fn - The function to execute (sync or async).
+	 * @param options - Optional retry configuration overriding workflow defaults.
+	 * @returns The result of `fn`.
+	 * @throws {@link StepRetryExhaustedError} When all retry attempts are exhausted.
+	 * @throws {@link DuplicateStepError} When another step with the same name exists.
+	 *
+	 * @example
+	 * ```ts
+	 * const user = await step.do("fetch-user", async () => {
+	 *   return await db.getUser(payload.userId);
+	 * });
+	 * ```
+	 */
 	do<T>(name: string, fn: () => Promise<T> | T, options?: StepDoOptions): Promise<T>;
+
+	/**
+	 * Pause workflow execution for a specified duration.
+	 *
+	 * Uses a Durable Object alarm; the workflow status becomes `"sleeping"`.
+	 *
+	 * @param name - Unique step name within this workflow run.
+	 * @param duration - How long to sleep (e.g., `"5s"`, `"10m"`, `"1h"`).
+	 * @throws {@link InvalidDurationError} When the duration string can't be parsed.
+	 *
+	 * @example
+	 * ```ts
+	 * await step.sleep("cooldown", "30s");
+	 * ```
+	 */
 	sleep(name: string, duration: string): Promise<void>;
+
+	/**
+	 * Suspend workflow execution until an external event is delivered.
+	 *
+	 * The workflow status becomes `"waiting"` until the event arrives via `sendEvent()`.
+	 *
+	 * @param name - The event name to wait for (must match a key in the workflow's events map).
+	 * @param options - Optional timeout configuration.
+	 * @returns The validated event payload.
+	 * @throws {@link EventTimeoutError} When the timeout elapses without receiving the event.
+	 *
+	 * @example
+	 * ```ts
+	 * const approval = await step.waitForEvent("approval", { timeout: "24h" });
+	 * ```
+	 */
 	waitForEvent<K extends Extract<keyof Events, string>>(
 		name: K,
 		options?: StepWaitOptions,
 	): Promise<Events[K]>;
 }
 
+/**
+ * Static shape of a workflow definition (class-based or functional).
+ *
+ * @typeParam Payload - Input payload type validated by `inputSchema`.
+ * @typeParam Result - Return type of `run()`.
+ * @typeParam Events - Map of event names to payload types.
+ * @typeParam Type - String literal workflow type identifier.
+ * @typeParam SSEUpdates - Map of SSE update names to data types.
+ */
 export interface WorkflowClass<
 	Payload = unknown,
 	Result = unknown,
@@ -63,60 +170,107 @@ export interface WorkflowClass<
 	Type extends string = string,
 	SSEUpdates extends object = {},
 > {
+	/** Unique string identifier for this workflow type (e.g., `"order-processing"`). */
 	type: Type;
+	/** Zod schema for validating the input payload at runtime. */
 	inputSchema: import("zod").z.ZodType<Payload>;
+	/** Map of event names to Zod schemas for validating event payloads. */
 	events: WorkflowEventSchemas<Events>;
+	/** Optional default configuration (e.g., retry settings) for all steps. */
 	defaults?: Partial<WorkflowDefaults>;
+	/** Optional map of SSE update names to Zod schemas. */
 	sseUpdates?: WorkflowSSESchemas<SSEUpdates>;
+	/** Constructor producing a workflow instance with a `run()` method. */
 	new (): WorkflowInstance<Payload, Result, Events, SSEUpdates>;
 }
 
+/** Instance of a workflow class with the `run()` method containing workflow logic. */
 export interface WorkflowInstance<
 	Payload = unknown,
 	Result = unknown,
 	Events extends object = {},
 	SSEUpdates extends object = {},
 > {
+	/**
+	 * Execute the workflow logic using durable step primitives.
+	 *
+	 * @param step - Step context providing `do()`, `sleep()`, and `waitForEvent()`.
+	 * @param payload - The validated input payload.
+	 * @param sse - SSE context for broadcasting real-time updates.
+	 * @returns The workflow result, persisted upon completion.
+	 */
 	run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }
 
+/** Full status snapshot of a workflow instance. */
 export interface WorkflowStatusResponse {
+	/** Unique identifier of the workflow instance. */
 	id: string;
+	/** Workflow type string. */
 	type: string;
+	/** Current lifecycle status. */
 	status: WorkflowStatus;
+	/** The input payload the workflow was started with. */
 	payload: unknown;
+	/** The final result, or `null` if not yet completed. */
 	result: unknown;
+	/** Error message if errored, otherwise `null`. */
 	error: string | null;
+	/** Ordered list of step execution details. */
 	steps: StepInfo[];
+	/** Unix timestamp (ms) when the instance was created. */
 	createdAt: number;
+	/** Unix timestamp (ms) of the last status update. */
 	updatedAt: number;
 }
 
+/** Detailed information about a single step's execution. */
 export interface StepInfo {
+	/** Unique name of the step. */
 	name: string;
+	/** Step type: `"do"`, `"sleep"`, or `"wait_for_event"`. */
 	type: string;
+	/** Current status (e.g., `"completed"`, `"failed"`, `"sleeping"`, `"waiting"`). */
 	status: string;
+	/** Number of execution attempts (including retries). */
 	attempts: number;
+	/** Persisted result, or `null` if not yet completed. */
 	result: unknown;
+	/** Error message from the most recent failure, or `null`. */
 	error: string | null;
+	/** Unix timestamp (ms) when the step completed, or `null`. */
 	completedAt: number | null;
+	/** Unix timestamp (ms) when the step started, or `null`. */
 	startedAt: number | null;
+	/** Execution duration in milliseconds, or `null`. */
 	duration: number | null;
+	/** Error stack trace from the most recent failure, or `null`. */
 	errorStack: string | null;
+	/** History of failed retry attempts, or `null` if no retries occurred. */
 	retryHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> | null;
 }
 
+/** Properties required to initialize a new workflow instance in the Durable Object. */
 export interface WorkflowRunnerInitProps {
+	/** Workflow type string. */
 	type: string;
+	/** Unique instance identifier. */
 	id: string;
+	/** Input payload for the workflow. */
 	payload: unknown;
 }
 
+/** Properties for delivering an external event to a running workflow. */
 export interface WorkflowRunnerEventProps {
+	/** Event name (must match a key in the workflow's event schema map). */
 	event: string;
+	/** Event payload data. */
 	payload: unknown;
 }
 
+/**
+ * Type-safe version of {@link WorkflowStatusResponse} with narrowed `type`, `payload`, and `result`.
+ */
 export type WorkflowStatusResponseFor<
 	Payload = unknown,
 	Result = unknown,
@@ -127,23 +281,35 @@ export type WorkflowStatusResponseFor<
 	result: Result | null;
 };
 
+/** Compact index entry for listing workflow instances without loading full status. */
 export interface WorkflowIndexEntry {
+	/** Unique identifier of the workflow instance. */
 	id: string;
+	/** Current lifecycle status. */
 	status: string;
+	/** Unix timestamp (ms) when the instance was created. */
 	createdAt: number;
+	/** Unix timestamp (ms) of the last index update. */
 	updatedAt: number;
 }
 
+/** Filters for querying the workflow index. */
 export interface WorkflowIndexListFilters {
+	/** Filter to only include workflows with this status. */
 	status?: string;
+	/** Maximum number of entries to return. */
 	limit?: number;
 }
 
+/** Configuration for shard-based workflow indexing. */
 export interface WorkflowShardConfig {
+	/** Number of shards to distribute index entries across. */
 	shards?: number;
+	/** Previous shard count, used during migration to also query old shards. */
 	previousShards?: number;
 }
 
+/** Low-level RPC stub interface for communicating with a WorkflowRunner Durable Object. */
 export interface WorkflowRunnerStub {
 	initialize(props: WorkflowRunnerInitProps): Promise<void>;
 	getStatus(): Promise<WorkflowStatusResponse>;
@@ -157,6 +323,9 @@ export interface WorkflowRunnerStub {
 	_expireTimers(): Promise<void>;
 }
 
+/**
+ * Type-safe version of {@link WorkflowRunnerStub} with narrowed `getStatus()` and `deliverEvent()`.
+ */
 export type TypedWorkflowRunnerStub<
 	Payload,
 	Result,
@@ -167,8 +336,16 @@ export type TypedWorkflowRunnerStub<
 	deliverEvent(props: WorkflowEventProps<Events>): Promise<void>;
 };
 
+/**
+ * SSE context for emitting real-time updates from within a workflow.
+ *
+ * @typeParam Updates - Map of update names to their data types.
+ */
 export interface SSE<Updates extends object = {}> {
+	/** Send a named update to all connected clients without persisting (skipped during replay). */
 	broadcast<K extends SSEUpdateKey<Updates>>(name: K, data: Updates[K]): void;
+	/** Send a named update to all connected clients AND persist to SQLite for replay. */
 	emit<K extends SSEUpdateKey<Updates>>(name: K, data: Updates[K]): void;
+	/** Close all active SSE connections for this workflow instance. */
 	close(): void;
 }

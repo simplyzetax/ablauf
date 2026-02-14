@@ -3,6 +3,7 @@ import type {
   ContentfulStatusCode
 } from "hono/utils/http-status";
 
+/** Union of all recognized error codes for discriminating {@link WorkflowError} instances. */
 export type ErrorCode =
   | "WORKFLOW_NOT_FOUND"
   | "WORKFLOW_ALREADY_EXISTS"
@@ -17,6 +18,14 @@ export type ErrorCode =
   | "OBSERVABILITY_DISABLED"
   | "INTERNAL_ERROR";
 
+/**
+ * Identifies where an error originated.
+ *
+ * - `"api"` — Request-level errors (bad input, not found).
+ * - `"engine"` — Workflow lifecycle errors (already exists, not running, timeout).
+ * - `"step"` — Step execution errors (failed, retries exhausted).
+ * - `"validation"` — Schema validation errors (payload, event, duration).
+ */
 export type ErrorSource = "api" | "engine" | "step" | "validation";
 
 const VALID_ERROR_CODES: readonly ErrorCode[] = [
@@ -43,6 +52,14 @@ const VALID_ERROR_SOURCES: readonly ErrorSource[] = [
 
 const VALID_HTTP_STATUSES = new Set([400, 401, 403, 404, 408, 409, 422, 500, 502, 503]);
 
+/**
+ * Base error class for all Ablauf workflow errors.
+ *
+ * Extends Hono's `HTTPException` so errors thrown in route handlers are
+ * automatically formatted by the centralized `app.onError` handler.
+ * Errors crossing DO RPC boundaries are serialized via `toJSON()` and
+ * reconstructed via `fromSerialized()`.
+ */
 export class WorkflowError extends HTTPException {
   public readonly code: ErrorCode;
   public readonly source: ErrorSource;
@@ -62,6 +79,7 @@ export class WorkflowError extends HTTPException {
     this.details = opts.details;
   }
 
+  /** Serialize to a plain object for JSON transport across DO RPC boundaries. */
   toJSON() {
     return {
       __workflowError: true,
@@ -119,6 +137,11 @@ export class WorkflowError extends HTTPException {
   }
 }
 
+/**
+ * Thrown when a workflow with the given ID is not found.
+ *
+ * Error code: `WORKFLOW_NOT_FOUND` | HTTP status: `404`
+ */
 export class WorkflowNotFoundError extends WorkflowError {
   constructor(workflowId: string) {
     super({
@@ -130,6 +153,11 @@ export class WorkflowNotFoundError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when attempting to create a workflow whose ID already exists.
+ *
+ * Error code: `WORKFLOW_ALREADY_EXISTS` | HTTP status: `409`
+ */
 export class WorkflowAlreadyExistsError extends WorkflowError {
   constructor(workflowId: string) {
     super({
@@ -141,6 +169,11 @@ export class WorkflowAlreadyExistsError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when the requested workflow type is not registered.
+ *
+ * Error code: `WORKFLOW_TYPE_UNKNOWN` | HTTP status: `400`
+ */
 export class WorkflowTypeUnknownError extends WorkflowError {
   constructor(workflowType: string) {
     super({
@@ -152,6 +185,11 @@ export class WorkflowTypeUnknownError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when the input payload fails Zod schema validation.
+ *
+ * Error code: `VALIDATION_ERROR` | HTTP status: `400`
+ */
 export class PayloadValidationError extends WorkflowError {
   constructor(message: string, issues: unknown[]) {
     super({
@@ -164,6 +202,11 @@ export class PayloadValidationError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when an event payload fails Zod schema validation.
+ *
+ * Error code: `EVENT_INVALID` | HTTP status: `400`
+ */
 export class EventValidationError extends WorkflowError {
   constructor(eventName: string, issues: unknown[]) {
     super({
@@ -176,6 +219,11 @@ export class EventValidationError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when a workflow step execution fails.
+ *
+ * Error code: `STEP_FAILED` | HTTP status: `500`
+ */
 export class StepFailedError extends WorkflowError {
   constructor(stepName: string, cause: string) {
     super({
@@ -188,6 +236,11 @@ export class StepFailedError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when a step has exhausted all configured retry attempts.
+ *
+ * Error code: `STEP_RETRY_EXHAUSTED` | HTTP status: `500`
+ */
 export class StepRetryExhaustedError extends WorkflowError {
   constructor(stepName: string, attempts: number, cause: string) {
     super({
@@ -200,6 +253,11 @@ export class StepRetryExhaustedError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when `step.waitForEvent()` times out before the event arrives.
+ *
+ * Error code: `EVENT_TIMEOUT` | HTTP status: `408`
+ */
 export class EventTimeoutError extends WorkflowError {
   constructor(eventName: string) {
     super({
@@ -211,6 +269,11 @@ export class EventTimeoutError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when `waitForUpdate()` times out before an SSE update is received.
+ *
+ * Error code: `UPDATE_TIMEOUT` | HTTP status: `408`
+ */
 export class UpdateTimeoutError extends WorkflowError {
   constructor(updateName: string, timeout: string) {
     super({
@@ -223,6 +286,11 @@ export class UpdateTimeoutError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when an action requires the workflow to be running but it is not.
+ *
+ * Error code: `WORKFLOW_NOT_RUNNING` | HTTP status: `409`
+ */
 export class WorkflowNotRunningError extends WorkflowError {
   constructor(workflowId: string, currentStatus: string) {
     super({
@@ -235,6 +303,11 @@ export class WorkflowNotRunningError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when two steps within the same workflow share the same name.
+ *
+ * Error code: `VALIDATION_ERROR` | HTTP status: `400`
+ */
 export class DuplicateStepError extends WorkflowError {
   constructor(stepName: string, method: string) {
     super({
@@ -247,6 +320,11 @@ export class DuplicateStepError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when a duration string can't be parsed (e.g., not matching `"30s"`, `"5m"`, `"1h"`).
+ *
+ * Error code: `VALIDATION_ERROR` | HTTP status: `400`
+ */
 export class InvalidDurationError extends WorkflowError {
   constructor(duration: string) {
     super({
@@ -258,6 +336,11 @@ export class InvalidDurationError extends WorkflowError {
   }
 }
 
+/**
+ * Thrown when listing or indexing features are called but observability is disabled.
+ *
+ * Error code: `OBSERVABILITY_DISABLED` | HTTP status: `400`
+ */
 export class ObservabilityDisabledError extends WorkflowError {
   constructor() {
     super({
@@ -269,6 +352,10 @@ export class ObservabilityDisabledError extends WorkflowError {
   }
 }
 
+/**
+ * Extract Zod validation issues from an unknown error value.
+ * Returns the `issues` array from a `ZodError`, or a single synthetic issue otherwise.
+ */
 export function extractZodIssues(e: unknown): unknown[] {
   return e instanceof Error && "issues" in e
     ? (e as { issues: unknown[] }).issues

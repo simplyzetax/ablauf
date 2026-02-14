@@ -4,7 +4,13 @@ import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass }
 
 /**
  * Options for defining a workflow using the functional API.
- * Types are inferred from schemas — no manual generics needed.
+ * All types are inferred from the Zod schemas you provide — no manual generics needed.
+ *
+ * @typeParam Type - String literal workflow type identifier.
+ * @typeParam Input - Zod schema type for the input payload.
+ * @typeParam Result - Return type of the `run` function.
+ * @typeParam Events - Map of event names to Zod schemas.
+ * @typeParam SSEUpdates - Optional map of SSE update names to Zod schemas.
  */
 interface DefineWorkflowOptions<
 	Type extends string,
@@ -13,11 +19,20 @@ interface DefineWorkflowOptions<
 	Events extends Record<string, z.ZodType>,
 	SSEUpdates extends Record<string, z.ZodType> | undefined = undefined,
 > {
+	/** Unique string identifier for this workflow type (e.g., `"process-order"`). */
 	type: Type;
+	/** Zod schema for validating the input payload at runtime. */
 	input: Input;
+	/** Optional map of event names to Zod schemas for validating event payloads. */
 	events?: Events;
+	/** Optional default configuration (e.g., retry settings) for all steps. */
 	defaults?: Partial<WorkflowDefaults>;
+	/** Optional map of SSE update names to Zod schemas for real-time streaming validation. */
 	sseUpdates?: SSEUpdates;
+	/**
+	 * The workflow logic function. Receives durable step primitives, the validated
+	 * payload, and an SSE context for broadcasting updates.
+	 */
 	run: (
 		step: Step<{ [K in keyof Events]: z.infer<Events[K]> }>,
 		payload: z.infer<Input>,

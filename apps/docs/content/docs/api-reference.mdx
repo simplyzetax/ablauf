@@ -24,17 +24,7 @@ new Ablauf(binding: DurableObjectNamespace, config?: AblaufConfig)
 
 **Config Options:**
 
-```ts
-interface AblaufConfig {
-  workflows?: Array<WorkflowClass | [WorkflowClass, ShardConfig]>;
-  observability?: boolean; // default: true
-  shards?: number; // default shard count for all workflows
-}
-
-interface ShardConfig {
-  shards: number;
-}
-```
+<AutoTypeTable path="../../packages/workflows/src/client.ts" name="AblaufConfig" />
 
 **Example:**
 
@@ -59,18 +49,15 @@ Create and start a new workflow instance.
 ```ts
 create<Payload, Result, Events extends object, Type extends string>(
   workflow: WorkflowClass<Payload, Result, Events, Type>,
-  options: {
-    id?: string;
-    payload: Payload;
-  }
-): TypedWorkflowRunnerStub<Payload, Result, Events, Type>
+  props: { id: string; payload: Payload }
+): Promise<TypedWorkflowRunnerStub<Payload, Result, Events, Type>>
 ```
 
 **Parameters:**
 
 - `workflow` — The workflow class to instantiate
-- `options.id` — Optional workflow ID (auto-generated if omitted)
-- `options.payload` — Input payload (validated against workflow's `inputSchema`)
+- `props.id` — Workflow instance ID
+- `props.payload` — Input payload (validated against workflow's `inputSchema`)
 
 **Returns:**
 
@@ -101,16 +88,16 @@ Send a typed event to a running workflow.
 ```ts
 sendEvent<Payload, Result, Events extends object, Type extends string>(
   workflow: WorkflowClass<Payload, Result, Events, Type>,
-  options: { id: string } & WorkflowEventProps<Events>
+  props: { id: string } & WorkflowEventProps<Events>
 ): Promise<void>
 ```
 
 **Parameters:**
 
 - `workflow` — The workflow class (for type inference)
-- `options.id` — Workflow instance ID
-- `options.event` — Event name
-- `options.payload` — Event payload (validated against event schema)
+- `props.id` — Workflow instance ID
+- `props.event` — Event name
+- `props.payload` — Event payload (validated against event schema)
 
 **Throws:**
 
@@ -175,19 +162,7 @@ Pause a running workflow.
 pause(id: string): Promise<void>
 ```
 
-**Parameters:**
-
-- `id` — Workflow instance ID
-
-**Behavior:**
-
 The workflow will finish its current step, then pause before the next one. It can be resumed with `resume()`.
-
-**Example:**
-
-```ts
-await ablauf.pause("order-123");
-```
 
 ---
 
@@ -199,19 +174,7 @@ Resume a paused workflow.
 resume(id: string): Promise<void>
 ```
 
-**Parameters:**
-
-- `id` — Workflow instance ID
-
-**Behavior:**
-
 The workflow replays its execution history and continues from where it paused.
-
-**Example:**
-
-```ts
-await ablauf.resume("order-123");
-```
 
 ---
 
@@ -223,18 +186,41 @@ Permanently terminate a workflow.
 terminate(id: string): Promise<void>
 ```
 
+The workflow is permanently stopped and cannot be resumed. Its state remains stored.
+
+---
+
+#### `waitForUpdate()`
+
+Wait for a specific SSE update from a running workflow.
+
+```ts
+waitForUpdate<...>(
+  workflow: WorkflowClass,
+  props: { id: string; update: string; timeout?: string }
+): Promise<SSEUpdates[K]>
+```
+
 **Parameters:**
 
-- `id` — Workflow instance ID
+- `workflow` — The workflow class (for type inference)
+- `props.id` — Workflow instance ID
+- `props.update` — The SSE event name to wait for
+- `props.timeout` — Optional timeout as a duration string (e.g., `"30s"`, `"5m"`)
 
-**Behavior:**
+**Throws:**
 
-The workflow is permanently stopped and cannot be resumed. Its state remains stored.
+- `UpdateTimeoutError` — If the timeout expires before the update arrives
+- `WorkflowNotRunningError` — If the workflow completes or errors before the update
 
 **Example:**
 
 ```ts
-await ablauf.terminate("order-123");
+const progress = await ablauf.waitForUpdate(OrderWorkflow, {
+  id: "order-123",
+  update: "progress",
+  timeout: "30s",
+});
 ```
 
 ---
@@ -246,10 +232,7 @@ List workflow instances of a specific type.
 ```ts
 list(
   type: string,
-  filters?: {
-    status?: WorkflowStatus;
-    limit?: number;
-  }
+  filters?: WorkflowIndexListFilters
 ): Promise<WorkflowIndexEntry[]>
 ```
 
@@ -258,10 +241,6 @@ list(
 - `type` — Workflow type (e.g., `"process-order"`)
 - `filters.status` — Optional status filter
 - `filters.limit` — Optional result limit (sorted by `updatedAt`, newest first)
-
-**Returns:**
-
-An array of `WorkflowIndexEntry` objects.
 
 **Throws:**
 
@@ -281,19 +260,13 @@ const recent = await ablauf.list("process-order", { limit: 10 });
 Returns the Durable Object class to export from your worker.
 
 ```ts
-createWorkflowRunner(): typeof WorkflowRunner
+createWorkflowRunner(overrides?: { binding?: string }): typeof WorkflowRunner
 ```
 
 **Example:**
 
 ```ts
 export const WorkflowRunner = ablauf.createWorkflowRunner();
-
-export default {
-  async fetch(req, env) {
-    // ...
-  }
-}
 ```
 
 ---
@@ -301,10 +274,6 @@ export default {
 #### `createRPCHandler()`
 
 Returns an oRPC handler for the dashboard API.
-
-```ts
-createRPCHandler(): ORPCHandler
-```
 
 **Example:**
 
@@ -323,102 +292,27 @@ app.use("/__ablauf/*", async (c, next) => {
 
 ---
 
-#### `getDashboardContext()`
-
-Returns the context object needed by the dashboard router.
-
-```ts
-getDashboardContext(): DashboardContext
-```
-
-**Example:**
-
-See `createRPCHandler()` above.
-
----
-
 ## Types
 
-### WorkflowStatus
+### Step
 
-```ts
-type WorkflowStatus =
-  | "created"
-  | "running"
-  | "completed"
-  | "errored"
-  | "paused"
-  | "sleeping"
-  | "waiting"
-  | "terminated";
-```
+The step API available inside workflow `run()` functions.
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="Step" />
 
 ---
 
-### WorkflowStatusResponse
+### SSE
 
-```ts
-interface WorkflowStatusResponse {
-  id: string;
-  type: string;
-  status: WorkflowStatus;
-  payload: unknown;
-  result: unknown;
-  error: string | null;
-  steps: StepInfo[];
-  createdAt: number;
-  updatedAt: number;
-}
-```
+The Server-Sent Events API available inside workflow `run()` functions.
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="SSE" />
 
 ---
 
-### WorkflowStatusResponseFor
+### RetryConfig
 
-A generic version of `WorkflowStatusResponse` with typed `payload` and `result`:
-
-```ts
-type WorkflowStatusResponseFor<Payload, Result, Type extends string> = {
-  id: string;
-  type: Type;
-  status: WorkflowStatus;
-  payload: Payload;
-  result: Result | null;
-  error: string | null;
-  steps: StepInfo[];
-  createdAt: number;
-  updatedAt: number;
-}
-```
-
----
-
-### StepInfo
-
-```ts
-interface StepInfo {
-  name: string;
-  status: "completed" | "failed";
-  attempts: number;
-  result?: unknown;
-  error?: string;
-  startedAt: number;
-  completedAt?: number;
-}
-```
-
----
-
-### WorkflowIndexEntry
-
-```ts
-interface WorkflowIndexEntry {
-  id: string;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
-}
-```
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="RetryConfig" />
 
 ---
 
@@ -426,20 +320,7 @@ interface WorkflowIndexEntry {
 
 Options for `step.do()`:
 
-```ts
-interface StepDoOptions {
-  retry?: RetryConfig;
-}
-
-interface RetryConfig {
-  maxAttempts?: number; // default: 3
-  initialDelayMs?: number; // default: 1000
-  maxDelayMs?: number; // default: 30000
-  backoff?: BackoffStrategy; // default: "exponential"
-}
-
-type BackoffStrategy = "constant" | "exponential";
-```
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="StepDoOptions" />
 
 ---
 
@@ -447,11 +328,61 @@ type BackoffStrategy = "constant" | "exponential";
 
 Options for `step.waitForEvent()`:
 
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="StepWaitOptions" />
+
+---
+
+### WorkflowStatus
+
 ```ts
-interface StepWaitOptions {
-  timeout?: string; // duration string, e.g., "5m"
-}
+type WorkflowStatus =
+  | "created"    // Initial state after creation
+  | "running"    // Actively executing steps
+  | "completed"  // All steps finished successfully
+  | "errored"    // A step or validation error occurred
+  | "paused"     // Manually paused via pause()
+  | "sleeping"   // Waiting for a step.sleep() timer
+  | "waiting"    // Waiting for a step.waitForEvent() delivery
+  | "terminated" // Permanently stopped via terminate()
 ```
+
+---
+
+### WorkflowStatusResponse
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="WorkflowStatusResponse" />
+
+---
+
+### StepInfo
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="StepInfo" />
+
+---
+
+### WorkflowIndexEntry
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="WorkflowIndexEntry" />
+
+---
+
+### WorkflowIndexListFilters
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="WorkflowIndexListFilters" />
+
+---
+
+### WorkflowShardConfig
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="WorkflowShardConfig" />
+
+---
+
+### WorkflowClass
+
+The interface that workflow definitions (both class-based and functional) must satisfy.
+
+<AutoTypeTable path="../../packages/workflows/src/engine/types.ts" name="WorkflowClass" />
 
 ---
 
@@ -472,9 +403,9 @@ Ablauf uses human-readable duration strings in several places (e.g., `step.sleep
 ### Examples
 
 ```ts
-await step.sleep("30s"); // 30 seconds
-await step.sleep("5m");  // 5 minutes
-await step.sleep("1h");  // 1 hour
+await step.sleep("cooldown", "30s"); // 30 seconds
+await step.sleep("backoff", "5m");   // 5 minutes
+await step.sleep("daily", "1h");     // 1 hour
 
 const result = await step.waitForEvent("payment-received", {
   timeout: "10m", // 10 minutes
@@ -489,18 +420,49 @@ const result = await step.waitForEvent("payment-received", {
 
 ## Error Classes
 
-All errors thrown by Ablauf extend `WorkflowError`, which extends Hono's `HTTPException`. See the [Error Handling guide](/docs/error-handling) for details.
+All errors thrown by Ablauf extend `WorkflowError`, which extends Hono's `HTTPException`. Every error has a `code`, `status`, `source`, and `message`.
 
-Key error codes:
+| Error Class | Code | Status | Source |
+|-------------|------|--------|--------|
+| `WorkflowNotFoundError` | `WORKFLOW_NOT_FOUND` | 404 | api |
+| `WorkflowAlreadyExistsError` | `WORKFLOW_ALREADY_EXISTS` | 409 | engine |
+| `WorkflowTypeUnknownError` | `WORKFLOW_TYPE_UNKNOWN` | 400 | api |
+| `PayloadValidationError` | `VALIDATION_ERROR` | 400 | validation |
+| `EventValidationError` | `EVENT_INVALID` | 400 | validation |
+| `StepFailedError` | `STEP_FAILED` | 500 | step |
+| `StepRetryExhaustedError` | `STEP_RETRY_EXHAUSTED` | 500 | step |
+| `EventTimeoutError` | `EVENT_TIMEOUT` | 408 | engine |
+| `UpdateTimeoutError` | `UPDATE_TIMEOUT` | 408 | engine |
+| `WorkflowNotRunningError` | `WORKFLOW_NOT_RUNNING` | 409 | engine |
+| `DuplicateStepError` | `VALIDATION_ERROR` | 400 | engine |
+| `InvalidDurationError` | `VALIDATION_ERROR` | 400 | validation |
+| `ObservabilityDisabledError` | `OBSERVABILITY_DISABLED` | 400 | api |
 
-- `WORKFLOW_NOT_FOUND` (404)
-- `WORKFLOW_ALREADY_EXISTS` (409)
-- `PAYLOAD_VALIDATION_FAILED` (400)
-- `EVENT_VALIDATION_FAILED` (400)
-- `STEP_FAILED` (500)
-- `STEP_RETRY_EXHAUSTED` (500)
-- `EVENT_TIMEOUT` (408)
-- `WORKFLOW_NOT_RUNNING` (409)
-- `DUPLICATE_STEP` (400)
-- `INVALID_DURATION` (400)
-- `OBSERVABILITY_DISABLED` (400)
+### Error JSON Shape
+
+All `WorkflowError` instances serialize to:
+
+```json
+{
+  "error": {
+    "code": "WORKFLOW_NOT_FOUND",
+    "message": "Workflow \"order-123\" not found",
+    "status": 404,
+    "source": "api"
+  }
+}
+```
+
+### Discriminating Errors
+
+Across Durable Object RPC boundaries, errors lose their class identity. Use `err.code` to discriminate:
+
+```ts
+try {
+  await ablauf.status("order-123");
+} catch (e) {
+  if (e instanceof WorkflowError && e.code === "WORKFLOW_NOT_FOUND") {
+    // handle not found
+  }
+}
+```
