@@ -1,6 +1,7 @@
 import { os } from "@orpc/server";
 import { z } from "zod";
 import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from "./engine/types";
+import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from "./engine/types";
 import { listIndexEntries } from "./engine/index-listing";
 import { parseSSEStream } from "./engine/sse-stream";
 import { ObservabilityDisabledError } from "./errors";
@@ -18,6 +19,28 @@ function getStub(binding: DurableObjectNamespace, id: string): WorkflowRunnerStu
 	return binding.get(binding.idFromName(id)) as unknown as WorkflowRunnerStub;
 }
 
+const listOutputSchema = z.object({
+	workflows: z.array(workflowIndexEntrySchema.extend({ type: z.string() })),
+});
+
+const timelineEntrySchema = z.object({
+	name: z.string(),
+	type: z.string(),
+	status: z.string(),
+	startedAt: z.number().nullable(),
+	duration: z.number(),
+	attempts: z.number(),
+	error: z.string().nullable(),
+	retryHistory: stepInfoSchema.shape.retryHistory,
+});
+
+const timelineOutputSchema = z.object({
+	id: z.string(),
+	type: z.string(),
+	status: workflowStatusSchema,
+	timeline: z.array(timelineEntrySchema),
+});
+
 const list = base
 	.route({
 		method: "GET",
@@ -33,6 +56,7 @@ const list = base
 			limit: z.number().optional(),
 		}),
 	)
+	.output(listOutputSchema)
 	.handler(async ({ input, context }) => {
 		if (!context.observability) {
 			throw new ObservabilityDisabledError();
@@ -70,6 +94,7 @@ const get = base
 		tags: ["workflows"],
 	})
 	.input(z.object({ id: z.string() }))
+	.output(workflowStatusResponseSchema)
 	.handler(async ({ input, context }) => {
 		const stub = getStub(context.binding, input.id);
 		return stub.getStatus();
@@ -84,6 +109,7 @@ const timeline = base
 		tags: ["workflows"],
 	})
 	.input(z.object({ id: z.string() }))
+	.output(timelineOutputSchema)
 	.handler(async ({ input, context }) => {
 		const stub = getStub(context.binding, input.id);
 		const status = await stub.getStatus();
