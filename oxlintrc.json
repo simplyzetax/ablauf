@@ -1,0 +1,30 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"categories": {
+		"correctness": "error",
+		"suspicious": "warn"
+	},
+	"plugins": ["typescript", "react", "import"],
+	"rules": {
+		"no-console": "warn"
+	},
+	"overrides": [
+		{
+			"files": ["packages/workflows/src/**/*.ts"],
+			"rules": {
+				"no-console": "error"
+			}
+		}
+	],
+	"ignorePatterns": [
+		"node_modules",
+		"dist",
+		".next",
+		".source",
+		".wrangler",
+		".turbo",
+		"drizzle",
+		"**/routeTree.gen.ts",
+		"**/worker-configuration.d.ts"
+	]
+}

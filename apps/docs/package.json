@@ -7,7 +7,7 @@
 		"generate:openapi": "bun scripts/generate-openapi.ts",
 		"dev": "bun scripts/generate-openapi.ts && next dev",
 		"build": "bun scripts/generate-openapi.ts && next build",
-		"check-types": "tsc --noEmit"
+		"check-types": "fumadocs-mdx && tsc --noEmit"
 	},
 	"dependencies": {
 		"fumadocs-core": "^16.0.0",
