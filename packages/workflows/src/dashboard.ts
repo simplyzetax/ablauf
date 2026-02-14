@@ -2,6 +2,7 @@ import { os } from "@orpc/server";
 import { z } from "zod";
 import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from "./engine/types";
 import { listIndexEntries } from "./engine/index-listing";
+import { parseSSEStream } from "./engine/sse-stream";
 import { ObservabilityDisabledError } from "./errors";
 
 export interface DashboardContext {
@@ -86,42 +87,11 @@ const subscribe = base
 	.handler(async function* ({ input, context, signal }) {
 		const stub = getStub(context.binding, input.id);
 		const stream = await stub.connectSSE();
-		const reader = stream.getReader();
-		const decoder = new TextDecoder();
-		let buffer = "";
-		let currentEvent = "message";
-
-		try {
-			while (!signal?.aborted) {
-				const { done, value } = await reader.read();
-				if (done) break;
-
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split("\n");
-				buffer = lines.pop() ?? "";
-
-				for (const rawLine of lines) {
-					const line = rawLine.trim();
-					if (!line) continue;
-					if (line.startsWith("event: ")) {
-						currentEvent = line.slice(7).trim();
-						continue;
-					}
-					if (line.startsWith("data: ")) {
-						try {
-							const data = JSON.parse(line.slice(6));
-							if (currentEvent === "close") {
-								return;
-							}
-							yield { event: currentEvent, data };
-						} catch {
-							// skip malformed
-						}
-					}
-				}
+		for await (const update of parseSSEStream(stream, { signal })) {
+			if (update.event === "close") {
+				return;
 			}
-		} finally {
-			reader.cancel().catch(() => {});
+			yield update;
 		}
 	});
 

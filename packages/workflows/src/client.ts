@@ -7,6 +7,7 @@ import {
 } from "./errors";
 import { listIndexEntries } from "./engine/index-listing";
 import { parseDuration } from "./engine/duration";
+import { parseSSEStream } from "./engine/sse-stream";
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
@@ -139,68 +140,29 @@ export class Ablauf {
 		void workflow; // used only for type narrowing
 		const stub = this.getStub(props.id);
 		const stream = await stub.connectSSE();
-		const reader = stream.getReader();
-		const decoder = new TextDecoder();
+		const abortController = new AbortController();
 
 		const timeoutMs = props.timeout ? parseDuration(props.timeout) : null;
-		let timeoutReached = false;
 		let timer: ReturnType<typeof setTimeout> | null = null;
 
-		let buffer = "";
-		let currentEvent = "message";
-
 		const readUntilMatch = async (): Promise<SSEUpdates[K]> => {
-			while (true) {
-				let done: boolean;
-				let value: Uint8Array | undefined;
-				try {
-					({ done, value } = await reader.read());
-				} catch (error) {
-					if (timeoutReached) {
-						throw new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs ?? 0}ms`);
-					}
-					throw error;
-				}
-
-				if (done) {
-					if (timeoutReached) {
-						throw new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs ?? 0}ms`);
-					}
+			for await (const update of parseSSEStream(stream, { signal: abortController.signal })) {
+				if (update.event === "close") {
 					const status = await stub.getStatus();
 					throw new WorkflowNotRunningError(props.id, status.status);
 				}
 
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split("\n");
-				buffer = lines.pop() ?? "";
-
-				for (const rawLine of lines) {
-					const line = rawLine.trim();
-					if (!line) continue;
-
-					if (line.startsWith("event: ")) {
-						currentEvent = line.slice(7).trim();
-						if (currentEvent === "close") {
-							const status = await stub.getStatus();
-							throw new WorkflowNotRunningError(props.id, status.status);
-						}
-						continue;
-					}
-
-					if (line.startsWith("data: ")) {
-						let data: unknown;
-						try {
-							data = JSON.parse(line.slice(6));
-						} catch {
-							continue;
-						}
-
-						if (currentEvent === props.update) {
-							return data as SSEUpdates[K];
-						}
-					}
+				if (update.event === props.update) {
+					return update.data as SSEUpdates[K];
 				}
 			}
+
+			if (abortController.signal.aborted) {
+				throw new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs ?? 0}ms`);
+			}
+
+			const status = await stub.getStatus();
+			throw new WorkflowNotRunningError(props.id, status.status);
 		};
 
 		const readPromise = readUntilMatch();
@@ -210,7 +172,7 @@ export class Ablauf {
 				? null
 				: new Promise<never>((_, reject) => {
 						timer = setTimeout(() => {
-							timeoutReached = true;
+							abortController.abort();
 							reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
 						}, timeoutMs);
 					});
@@ -222,7 +184,6 @@ export class Ablauf {
 			return await Promise.race([readPromise, timeoutPromise]);
 		} catch (error) {
 			if (error instanceof UpdateTimeoutError) {
-				await reader.cancel().catch(() => {});
 				await readPromiseHandled;
 			}
 			throw error;
@@ -230,7 +191,7 @@ export class Ablauf {
 			if (timer) {
 				clearTimeout(timer);
 			}
-			await reader.cancel().catch(() => {});
+			abortController.abort();
 		}
 	}
 
