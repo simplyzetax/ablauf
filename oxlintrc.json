@@ -6,7 +6,8 @@
 	},
 	"plugins": ["typescript", "react", "import"],
 	"rules": {
-		"no-console": "warn"
+		"no-console": "warn",
+		"no-throw-literal": "error"
 	},
 	"overrides": [
 		{
