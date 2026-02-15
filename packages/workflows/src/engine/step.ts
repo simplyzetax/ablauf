@@ -1,5 +1,5 @@
 import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { stepsTable, eventBufferTable } from '../db/schema';
 import { SleepInterrupt, WaitInterrupt } from './interrupts';
 import {
@@ -11,8 +11,9 @@ import {
 	InvalidDateError,
 } from '../errors';
 import { parseDuration } from './duration';
-import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from './types';
-import { DEFAULT_RETRY_CONFIG } from './types';
+import { parseSize } from './size';
+import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults, ResultSizeLimitConfig } from './types';
+import { DEFAULT_RETRY_CONFIG, DEFAULT_RESULT_SIZE_LIMIT } from './types';
 import superjson from 'superjson';
 
 /**
@@ -26,6 +27,8 @@ import superjson from 'superjson';
  */
 export class StepContext<Events extends object = {}> implements Step<Events> {
 	private defaults: WorkflowDefaults;
+	private resultSizeLimitBytes: number;
+	private resultSizeLimitConfig: ResultSizeLimitConfig;
 	/**
 	 * Callback invoked when the first non-cached step executes.
 	 * Used by the workflow runner to switch SSE from replay mode to live mode.
@@ -38,9 +41,13 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		private db: DrizzleSqliteDODatabase,
 		defaults?: Partial<WorkflowDefaults>,
 	) {
+		const resolvedSizeLimit: ResultSizeLimitConfig = { ...DEFAULT_RESULT_SIZE_LIMIT, ...defaults?.resultSizeLimit };
 		this.defaults = {
 			retries: { ...DEFAULT_RETRY_CONFIG, ...defaults?.retries },
+			resultSizeLimit: resolvedSizeLimit,
 		};
+		this.resultSizeLimitConfig = resolvedSizeLimit;
+		this.resultSizeLimitBytes = parseSize(resolvedSizeLimit.maxSize);
 	}
 
 	private checkDuplicateName(name: string, method: string): void {
@@ -150,6 +157,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			}
 			const result = await fn();
 			const serialized = superjson.stringify(result);
+			await this.checkResultSizeLimit(name, serialized);
 			const duration = Date.now() - startedAt;
 
 			await this.db
@@ -353,6 +361,39 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		});
 
 		throw new WaitInterrupt(name as string, timeoutAt);
+	}
+
+	/**
+	 * Check whether storing a new result would exceed the workflow's cumulative
+	 * result size budget. Queries SQLite for the total bytes of all completed
+	 * step results, then compares `usedBytes + newBytes` against the limit.
+	 *
+	 * @param stepName - Name of the step being checked (for error messages).
+	 * @param serialized - The superjson-serialized result string.
+	 * @throws {@link NonRetriableError} When `onOverflow` is `'fail'` (default).
+	 * @throws {Error} When `onOverflow` is `'retry'` (goes through normal retry logic).
+	 */
+	private async checkResultSizeLimit(stepName: string, serialized: string): Promise<void> {
+		if (this.resultSizeLimitBytes <= 0) return;
+
+		const newBytes = new TextEncoder().encode(serialized).byteLength;
+		const [row] = await this.db
+			.select({ total: sql<number>`coalesce(sum(length(${stepsTable.result})), 0)` })
+			.from(stepsTable)
+			.where(eq(stepsTable.status, 'completed'));
+		const usedBytes = row?.total ?? 0;
+
+		if (usedBytes + newBytes > this.resultSizeLimitBytes) {
+			const usedMB = (usedBytes / (1024 * 1024)).toFixed(1);
+			const newMB = (newBytes / (1024 * 1024)).toFixed(1);
+			const limitMB = (this.resultSizeLimitBytes / (1024 * 1024)).toFixed(1);
+			const message = `Step "${stepName}" result (${newMB} MB) would exceed workflow result size limit (used: ${usedMB} MB / limit: ${limitMB} MB)`;
+
+			if (this.resultSizeLimitConfig.onOverflow === 'retry') {
+				throw new Error(message);
+			}
+			throw new NonRetriableError(message);
+		}
 	}
 
 	private calculateBackoff(baseDelay: number, attempt: number, strategy: string): number {

@@ -95,8 +95,8 @@ export const DEFAULT_RESULT_SIZE_LIMIT: ResultSizeLimitConfig = {
 export interface WorkflowDefaults {
 	/** Default retry configuration for all `step.do()` calls. */
 	retries: RetryConfig;
-	/** Cumulative result size limit configuration. */
-	resultSizeLimit: ResultSizeLimitConfig;
+	/** Cumulative result size limit configuration. Individual fields are optional and fall back to {@link DEFAULT_RESULT_SIZE_LIMIT}. */
+	resultSizeLimit: Partial<ResultSizeLimitConfig>;
 }
 
 /** Base type for the events map. Maps event names to their payload types. */
