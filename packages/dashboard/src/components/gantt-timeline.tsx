@@ -140,6 +140,8 @@ function buildSequentialTimeline(timeline: TimelineEntry[]): { segments: Timelin
 }
 
 const NAME_COL = '140px';
+/** Scale factor to leave room for duration labels at the right edge. */
+const SCALE = 0.93;
 
 /** Waterfall-style timeline chart for workflow step execution. */
 export function GanttTimeline({ timeline }: GanttTimelineProps) {
@@ -159,9 +161,9 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 			<div>
 				<div className="grid" style={{ gridTemplateColumns: `${NAME_COL} 1fr` }}>
 					<div className="pr-3 text-[10px] font-medium text-muted-foreground">Name</div>
-					<div className="relative mb-1 h-4 pr-10">
+					<div className="relative mb-1 h-4">
 						{ticks.map((tick) => {
-							const left = (tick / totalDuration) * 100;
+							const left = (tick / totalDuration) * 100 * SCALE;
 							return (
 								<span
 									key={tick}
@@ -179,8 +181,8 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 				</div>
 
 				{segments.map((seg) => {
-					const barLeft = (seg.offset / totalDuration) * 100;
-					const barWidth = Math.max((seg.duration / totalDuration) * 100, 0.5);
+					const barLeft = (seg.offset / totalDuration) * 100 * SCALE;
+					const barWidth = Math.max((seg.duration / totalDuration) * 100 * SCALE, 0.5);
 
 					if (seg.isRetry) {
 						return (
@@ -193,9 +195,9 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 									{seg.label}
 								</div>
 
-								<div className="relative h-3.5 pr-10">
+								<div className="relative h-3.5">
 									{ticks.map((tick) => {
-										const left = (tick / totalDuration) * 100;
+										const left = (tick / totalDuration) * 100 * SCALE;
 										return <div key={tick} className="absolute top-0 h-full w-px bg-border/30" style={{ left: `${left}%` }} />;
 									})}
 
@@ -237,9 +239,9 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 						>
 							<div className="min-w-0 truncate pr-3 font-mono text-xs text-muted-foreground">{seg.stepName}</div>
 
-							<div className="relative h-5 pr-10">
+							<div className="relative h-5">
 								{ticks.map((tick) => {
-									const left = (tick / totalDuration) * 100;
+									const left = (tick / totalDuration) * 100 * SCALE;
 									return <div key={tick} className="absolute top-0 h-full w-px bg-border/50" style={{ left: `${left}%` }} />;
 								})}
 
