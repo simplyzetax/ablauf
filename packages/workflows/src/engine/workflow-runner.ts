@@ -387,6 +387,10 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			await this.scheduleNextAlarm();
 			await this.setStatus('running');
+			// Safety alarm: ensures crash recovery if OOM kills the isolate during replay.
+			// Without this, a retry that also OOMs leaves the step in "running" state
+			// with no alarm to trigger the next recovery cycle — bricking the DO.
+			await this.ctx.storage.setAlarm(Date.now() + 1000);
 			await this.replay();
 		}
 

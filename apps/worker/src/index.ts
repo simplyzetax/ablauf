@@ -163,6 +163,8 @@ app.post('/workflows/:type', async (c) => {
 			case 'completed':
 				return c.json(status);
 			case 'sleeping':
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+				continue;
 			case 'waiting':
 			case 'paused':
 			case 'errored':
