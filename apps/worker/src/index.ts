@@ -22,6 +22,7 @@ import { BenchmarkAblaufWorkflow } from './workflows/benchmark-ablauf-workflow';
 import { OOMRecoveryWorkflow } from './workflows/oom-recovery-workflow';
 import { NonRetriableWorkflow } from './workflows/non-retriable-workflow';
 import { SleepUntilWorkflow } from './workflows/sleep-until-workflow';
+import { SizeLimitWorkflow, SizeLimitRetryWorkflow } from './workflows/size-limit-workflow';
 import { env } from 'cloudflare:workers';
 import type { WorkflowClass } from '@der-ablauf/workflows';
 import { benchmarkRequestSchema, toBenchmarkConfig } from './utils/benchmark-request';
@@ -43,6 +44,8 @@ const workflows = [
 	OOMRecoveryWorkflow,
 	NonRetriableWorkflow,
 	SleepUntilWorkflow,
+	SizeLimitWorkflow,
+	SizeLimitRetryWorkflow,
 ];
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
