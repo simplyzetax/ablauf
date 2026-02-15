@@ -115,6 +115,7 @@ export function validateSchema(schema: z.ZodType, path = 'root'): void {
 			break;
 		case 'pipe':
 			validateSchema(def.in as z.ZodType, path);
+			validateSchema(def.out as z.ZodType, path);
 			break;
 		case 'lazy':
 			validateSchema((def.getter as () => z.ZodType)(), path);
