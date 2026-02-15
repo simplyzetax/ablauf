@@ -157,10 +157,9 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 	return (
 		<TooltipProvider>
 			<div>
-				{/* Time axis header */}
 				<div className="grid" style={{ gridTemplateColumns: `${NAME_COL} 1fr` }}>
 					<div className="pr-3 text-[10px] font-medium text-muted-foreground">Name</div>
-					<div className="relative mb-1 h-4">
+					<div className="relative mb-1 h-4 pr-10">
 						{ticks.map((tick) => {
 							const left = (tick / totalDuration) * 100;
 							return (
@@ -179,13 +178,11 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 					</div>
 				</div>
 
-				{/* Rows */}
 				{segments.map((seg) => {
 					const barLeft = (seg.offset / totalDuration) * 100;
 					const barWidth = Math.max((seg.duration / totalDuration) * 100, 0.5);
 
 					if (seg.isRetry) {
-						// Retry sub-row
 						return (
 							<div
 								key={`${seg.stepName}-retry-${seg.attempt}`}
@@ -196,14 +193,12 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 									{seg.label}
 								</div>
 
-								<div className="relative h-3.5">
-									{/* Gridlines */}
+								<div className="relative h-3.5 pr-10">
 									{ticks.map((tick) => {
 										const left = (tick / totalDuration) * 100;
 										return <div key={tick} className="absolute top-0 h-full w-px bg-border/30" style={{ left: `${left}%` }} />;
 									})}
 
-									{/* Retry bar */}
 									<Tooltip>
 										<TooltipTrigger asChild>
 											<div
@@ -220,7 +215,6 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 										</TooltipContent>
 									</Tooltip>
 
-									{/* Duration label */}
 									<span
 										className="absolute top-0 flex h-full items-center pl-1.5 text-[10px] text-red-400/60"
 										style={{ left: `${barLeft + barWidth}%` }}
@@ -232,7 +226,6 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 						);
 					}
 
-					// Main step row
 					const color = getBarColor(seg.status);
 					const textColor = getBarTextColor(seg.status);
 
@@ -244,14 +237,12 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 						>
 							<div className="min-w-0 truncate pr-3 font-mono text-xs text-muted-foreground">{seg.stepName}</div>
 
-							<div className="relative h-5">
-								{/* Gridlines */}
+							<div className="relative h-5 pr-10">
 								{ticks.map((tick) => {
 									const left = (tick / totalDuration) * 100;
 									return <div key={tick} className="absolute top-0 h-full w-px bg-border/50" style={{ left: `${left}%` }} />;
 								})}
 
-								{/* Bar */}
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<div
@@ -275,7 +266,6 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 									</TooltipContent>
 								</Tooltip>
 
-								{/* Duration label */}
 								<span
 									className={`absolute top-0 flex h-full items-center pl-1.5 text-[10px] font-medium ${textColor}`}
 									style={{ left: `${barLeft + barWidth}%` }}
