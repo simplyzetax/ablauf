@@ -1,20 +1,31 @@
 import { os } from '@orpc/server';
 import { z } from 'zod';
-import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from './engine/types';
+import type { WorkflowRunnerStub, WorkflowClass, WorkflowStatus } from './engine/types';
 import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from './engine/types';
-import { listIndexEntries } from './engine/index-listing';
-import { ObservabilityDisabledError, asWorkflowError, pickORPCErrors } from './errors';
+import type { ObservabilityProvider } from './engine/observability';
+import { ObservabilityReadNotConfiguredError, asWorkflowError, pickORPCErrors } from './errors';
 
+/** Context provided to all dashboard oRPC handlers. */
 export interface DashboardContext {
+	/** Durable Object namespace binding for communicating with workflow runner DOs. */
 	binding: DurableObjectNamespace;
+	/** List of all registered workflow classes. */
 	workflows: WorkflowClass[];
-	shardConfigs: Record<string, WorkflowShardConfig>;
-	observability: boolean;
+	/** Resolved observability provider, or `null` when observability is disabled. */
+	provider: ObservabilityProvider<any> | null;
 }
 
 const base = os
 	.$context<DashboardContext>()
-	.errors(pickORPCErrors(['WORKFLOW_NOT_FOUND', 'OBSERVABILITY_DISABLED', 'WORKFLOW_NOT_RUNNING', 'INTERNAL_ERROR'] as const))
+	.errors(
+		pickORPCErrors([
+			'WORKFLOW_NOT_FOUND',
+			'OBSERVABILITY_DISABLED',
+			'OBSERVABILITY_READ_NOT_CONFIGURED',
+			'WORKFLOW_NOT_RUNNING',
+			'INTERNAL_ERROR',
+		] as const),
+	)
 	.use(async ({ next, errors }) => {
 		try {
 			return await next();
@@ -74,31 +85,15 @@ const list = base
 	)
 	.output(listOutputSchema)
 	.handler(async ({ input, context }) => {
-		if (!context.observability) {
-			throw new ObservabilityDisabledError();
+		if (!context.provider?.listWorkflows) {
+			throw new ObservabilityReadNotConfiguredError();
 		}
-		const { binding, workflows, shardConfigs } = context;
-		const workflowTypes = workflows.map((w) => w.type);
-		const types = input.type ? [input.type] : workflowTypes;
-		const filters: WorkflowIndexListFilters = { status: input.status, limit: input.limit };
-
-		const all = await Promise.all(
-			types.map(async (type) => {
-				try {
-					const entries = await listIndexEntries(binding, type, shardConfigs, filters);
-					return entries.map((e) => ({ ...e, type }));
-				} catch {
-					return [];
-				}
-			}),
-		);
-
-		let workflows_ = all.flat();
-		if (input.limit) {
-			workflows_.sort((a, b) => b.updatedAt - a.updatedAt);
-			workflows_ = workflows_.slice(0, input.limit);
-		}
-		return { workflows: workflows_ };
+		const workflows = await context.provider.listWorkflows({
+			type: input.type,
+			status: input.status as WorkflowStatus | undefined,
+			limit: input.limit,
+		});
+		return { workflows };
 	});
 
 const get = base
@@ -112,6 +107,10 @@ const get = base
 	.input(z.object({ id: z.string() }))
 	.output(workflowStatusResponseSchema)
 	.handler(async ({ input, context }) => {
+		if (context.provider?.getWorkflowStatus) {
+			return context.provider.getWorkflowStatus(input.id);
+		}
+		// Fallback to direct DO RPC when provider doesn't implement getWorkflowStatus
 		const stub = getStub(context.binding, input.id);
 		return stub.getStatus();
 	});
@@ -127,6 +126,10 @@ const timeline = base
 	.input(z.object({ id: z.string() }))
 	.output(timelineOutputSchema)
 	.handler(async ({ input, context }) => {
+		if (context.provider?.getWorkflowTimeline) {
+			return context.provider.getWorkflowTimeline(input.id);
+		}
+		// Fallback to direct DO RPC when provider doesn't implement getWorkflowTimeline
 		const stub = getStub(context.binding, input.id);
 		const status = await stub.getStatus();
 		const timelineEntries = status.steps

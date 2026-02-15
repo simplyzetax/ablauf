@@ -1,10 +1,12 @@
-import { ObservabilityDisabledError } from './errors';
-import { listIndexEntries } from './engine/index-listing';
+import { ObservabilityReadNotConfiguredError } from './errors';
+import type { ObservabilityProvider } from './engine/observability';
+import { ShardObservabilityProvider } from './engine/observability';
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
 	WorkflowRunnerInitProps,
 	WorkflowEvents,
+	WorkflowStatus,
 	WorkflowIndexListFilters,
 	WorkflowIndexEntry,
 	WorkflowShardConfig,
@@ -24,10 +26,16 @@ import { WorkflowHandle } from './handle';
 export interface AblaufConfig {
 	/** Workflow classes (or `[WorkflowClass, ShardConfig]` tuples) to register. */
 	workflows?: WorkflowRegistration[];
-	/** Per-type shard configuration overrides for index listing. */
+	/** Per-type shard configuration overrides for index listing. @deprecated Use `ShardObservabilityProvider` constructor instead. */
 	shards?: Record<string, WorkflowShardConfig>;
-	/** Whether observability (index sharding and listing) is enabled. Defaults to `true`. */
-	observability?: boolean;
+	/**
+	 * Observability configuration.
+	 *
+	 * - `true` (default) — uses the built-in {@link ShardObservabilityProvider}
+	 * - `false` — disables all observability (no index writes, no dashboard)
+	 * - `ObservabilityProvider` — uses a custom provider for full replacement
+	 */
+	observability?: boolean | ObservabilityProvider<any>;
 	/** An array of allowed CORS origins for the oRPC API. */
 	corsOrigins?: string[];
 }
@@ -41,7 +49,8 @@ export class Ablauf {
 	private shardConfigs: Record<string, WorkflowShardConfig>;
 	private workflows: WorkflowClass[];
 	private registry: Record<string, WorkflowClass>;
-	private observability: boolean;
+	/** Resolved observability provider, or `null` when observability is disabled. */
+	private provider: ObservabilityProvider<any> | null;
 
 	/**
 	 * @param binding - The `WORKFLOW_RUNNER` Durable Object namespace from your worker's `env`.
@@ -55,7 +64,6 @@ export class Ablauf {
 		this.shardConfigs = {};
 		this.workflows = [];
 		this.registry = {};
-		this.observability = config?.observability ?? true;
 
 		if (config?.workflows) {
 			for (const entry of config.workflows) {
@@ -72,6 +80,22 @@ export class Ablauf {
 			for (const [type, shardConfig] of Object.entries(config.shards)) {
 				this.shardConfigs[type] = shardConfig;
 			}
+		}
+
+		// Resolve the observability provider from the config value.
+		const obs = config?.observability;
+		if (obs === false) {
+			this.provider = null;
+		} else if (typeof obs === 'object') {
+			// Custom provider instance — use as-is
+			this.provider = obs;
+		} else {
+			// Default (true or undefined): built-in shard-based provider
+			const shard = new ShardObservabilityProvider(binding, {
+				shards: this.shardConfigs,
+				workflowTypes: this.workflows.map((w) => w.type),
+			});
+			this.provider = shard;
 		}
 	}
 
@@ -145,23 +169,18 @@ export class Ablauf {
 	}
 
 	/**
-	 * List workflow instances of a given type from the index shards.
+	 * List workflow instances of a given type via the observability provider.
 	 *
 	 * @param type - The workflow type string (e.g., `"process-order"`).
 	 * @param filters - Optional filters for status and result limit.
 	 * @returns An array of index entries, sorted by `updatedAt` descending when a limit is applied.
-	 * @throws {ObservabilityDisabledError} If observability is disabled in the configuration.
+	 * @throws {ObservabilityReadNotConfiguredError} If the provider is disabled or doesn't implement `listWorkflows`.
 	 */
 	async list(type: string, filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]> {
-		if (!this.observability) {
-			throw new ObservabilityDisabledError();
+		if (!this.provider?.listWorkflows) {
+			throw new ObservabilityReadNotConfiguredError();
 		}
-		const entries = await listIndexEntries(this.binding, type, this.shardConfigs, filters);
-		if (filters?.limit) {
-			entries.sort((a, b) => b.updatedAt - a.updatedAt);
-			return entries.slice(0, filters.limit);
-		}
-		return entries;
+		return this.provider.listWorkflows({ type, status: filters?.status as WorkflowStatus | undefined, limit: filters?.limit });
 	}
 
 	// ─── Unified API Methods ───
@@ -179,7 +198,7 @@ export class Ablauf {
 		return createWorkflowRunner({
 			workflows: registrations,
 			binding: overrides?.binding,
-			observability: this.observability,
+			provider: this.provider,
 		});
 	}
 
@@ -192,8 +211,7 @@ export class Ablauf {
 		return {
 			binding: this.binding,
 			workflows: this.workflows,
-			shardConfigs: this.shardConfigs,
-			observability: this.observability,
+			provider: this.provider,
 		};
 	}
 

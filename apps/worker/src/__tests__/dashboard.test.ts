@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { call } from '@orpc/server';
 
-import { Ablauf, dashboardRouter } from '@der-ablauf/workflows';
+import { Ablauf, dashboardRouter, ShardObservabilityProvider } from '@der-ablauf/workflows';
 import type { DashboardContext } from '@der-ablauf/workflows';
 import { EchoWorkflow } from '../workflows/echo-workflow';
 import { TestWorkflow } from '../workflows/test-workflow';
@@ -13,8 +13,9 @@ const workflows = [EchoWorkflow, TestWorkflow, MultiStepWorkflow];
 const context: DashboardContext = {
 	binding: env.WORKFLOW_RUNNER,
 	workflows,
-	shardConfigs: {},
-	observability: true,
+	provider: new ShardObservabilityProvider(env.WORKFLOW_RUNNER, {
+		workflowTypes: workflows.map((w) => w.type),
+	}),
 };
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, { workflows, observability: true });

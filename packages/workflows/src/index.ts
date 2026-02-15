@@ -60,6 +60,7 @@ export {
 	UpdateTimeoutError,
 	WorkflowNotRunningError,
 	ObservabilityDisabledError,
+	ObservabilityReadNotConfiguredError,
 	DuplicateStepError,
 	InvalidDateError,
 	InvalidDurationError,
@@ -80,6 +81,19 @@ export { t, serializable, validateSchema, type SerializableSchema, type Transpor
 
 // Live updates (WebSocket)
 export { LiveContext } from './engine/sse';
+
+// Observability
+export { ShardObservabilityProvider } from './engine/observability';
+export type {
+	ObservabilityProvider,
+	StepObserver,
+	WorkflowStartEvent,
+	WorkflowStatusChangeEvent,
+	StepStartEvent,
+	StepCompleteEvent,
+	StepRetryEvent,
+	WorkflowListFilters,
+} from './engine/observability';
 
 // Engine internals (for advanced use)
 export { shardIndex } from './engine/shard';

@@ -19,13 +19,12 @@ import {
 } from '../errors';
 import { validateSchema } from '../serializable';
 import { eq, or } from 'drizzle-orm';
-import { shardIndex } from './shard';
 import superjson from 'superjson';
+import type { ObservabilityProvider, StepObserver } from './observability';
 import type {
 	WorkflowStatus,
 	WorkflowStatusResponse,
 	StepInfo,
-	WorkflowRunnerStub,
 	WorkflowRunnerEventProps,
 	WorkflowRunnerInitProps,
 	WorkflowClass,
@@ -44,8 +43,10 @@ export interface CreateWorkflowRunnerConfig {
 	workflows: WorkflowRegistration[];
 	/** Name of the Durable Object binding in the worker's `env`. Defaults to `"WORKFLOW_RUNNER"`. */
 	binding?: string;
-	/** Whether observability (index sharding and listing) is enabled. Defaults to `true`. */
+	/** @deprecated Use `provider` instead. Kept for backwards compatibility. */
 	observability?: boolean;
+	/** Observability provider for lifecycle events. `null` disables observability. */
+	provider?: ObservabilityProvider<any> | null;
 }
 
 /**
@@ -68,7 +69,8 @@ export interface CreateWorkflowRunnerConfig {
  */
 export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 	const bindingName = config.binding ?? 'WORKFLOW_RUNNER';
-	const observability = config.observability ?? true;
+	/** Resolved observability provider. `null` disables all lifecycle event emission. */
+	const provider = config.provider !== undefined ? config.provider : null;
 
 	const registry: Record<string, WorkflowClass> = {};
 	const shardConfigs: Record<string, WorkflowShardConfig> = {};
@@ -99,6 +101,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		private workflowType: string | null = null;
 		private workflowId: string | null = null;
 		private liveCtx: LiveContext<Record<string, unknown>> | null = null;
+		/** Whether the current `replay()` call was triggered by `initialize()`. */
+		private isInitializing = false;
 
 		constructor(ctx: DurableObjectState, env: Record<string, unknown>) {
 			super(ctx, env);
@@ -131,11 +135,11 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				createdAt: now,
 				updatedAt: now,
 			});
-			this.updateIndex(props.type, props.id, 'running', now);
 			// Safety alarm: if replay() causes OOM and kills the isolate, this
 			// durably-stored alarm fires and the alarm handler triggers crash
 			// recovery via the write-ahead mechanism in step.do().
 			await this.ctx.storage.setAlarm(Date.now() + 1000);
+			this.isInitializing = true;
 			await this.replay();
 		}
 
@@ -431,11 +435,68 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				return;
 			}
 
+			// Create a collector for this execution cycle if a provider is configured.
+			const collector = provider ? provider.createCollector(wf.workflowId, wf.type) : null;
+
+			// Emit workflow start event on the very first replay (initialization).
+			if (this.isInitializing && provider && collector) {
+				provider.onWorkflowStart(collector, {
+					workflowId: wf.workflowId,
+					type: wf.type,
+					payload: wf.payload ? superjson.parse(wf.payload) : null,
+					timestamp: wf.createdAt,
+				});
+				this.isInitializing = false;
+			}
+
+			// Build the StepObserver bridge that forwards step events to the provider.
+			const observer: StepObserver | undefined =
+				provider && collector
+					? {
+							onStepStart(stepName, stepType, timestamp) {
+								provider.onStepStart(collector, {
+									workflowId: wf.workflowId,
+									type: wf.type,
+									stepName,
+									stepType,
+									timestamp,
+								});
+							},
+							onStepComplete(stepName, stepType, result, duration, timestamp) {
+								provider.onStepComplete(collector, {
+									workflowId: wf.workflowId,
+									type: wf.type,
+									stepName,
+									stepType,
+									result,
+									duration,
+									timestamp,
+								});
+							},
+							onStepRetry(stepName, attempt, error, errorStack, nextRetryAt, timestamp) {
+								provider.onStepRetry(collector, {
+									workflowId: wf.workflowId,
+									type: wf.type,
+									stepName,
+									attempt,
+									error,
+									errorStack,
+									nextRetryAt,
+									timestamp,
+								});
+							},
+						}
+					: undefined;
+
 			const instance = new WorkflowCls();
-			const stepCtx = new StepContext(this.db, {
-				...WorkflowCls.defaults,
-				resultSizeLimit: { ...WorkflowCls.defaults?.resultSizeLimit, ...WorkflowCls.resultSizeLimit },
-			});
+			const stepCtx = new StepContext(
+				this.db,
+				{
+					...WorkflowCls.defaults,
+					resultSizeLimit: { ...WorkflowCls.defaults?.resultSizeLimit, ...WorkflowCls.resultSizeLimit },
+				},
+				observer,
+			);
 
 			const sseSchemas = WorkflowCls.sseUpdates ?? null;
 			if (sseSchemas) {
@@ -465,34 +526,88 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				}
 				const sseArg = this.liveCtx ?? new NoOpSSEContext();
 				const result = await instance.run(stepCtx, payload, sseArg);
+				const now = Date.now();
 				await this.db.update(workflowTable).set({
 					status: 'completed',
 					result: superjson.stringify(result),
-					updatedAt: Date.now(),
+					updatedAt: now,
 				});
-				this.updateIndex(wf.type, wf.workflowId, 'completed', Date.now());
+
+				if (provider && collector) {
+					provider.onWorkflowStatusChange(collector, {
+						workflowId: wf.workflowId,
+						type: wf.type,
+						status: 'completed',
+						result,
+						timestamp: now,
+					});
+					this.ctx.waitUntil(provider.flush(collector, 'completed'));
+				}
+
 				// Clean up any unconsumed buffered events
 				await this.db.delete(eventBufferTable);
 				this.liveCtx?.close();
 			} catch (e) {
 				if (e instanceof SleepInterrupt) {
 					await this.ctx.storage.setAlarm(e.wakeAt);
-					await this.setStatus('sleeping');
+					await this.db.update(workflowTable).set({ status: 'sleeping', updatedAt: Date.now() });
+
+					if (provider && collector) {
+						provider.onWorkflowStatusChange(collector, {
+							workflowId: wf.workflowId,
+							type: wf.type,
+							status: 'sleeping',
+							timestamp: Date.now(),
+						});
+						this.ctx.waitUntil(provider.flush(collector, 'sleeping'));
+					}
 				} else if (e instanceof WaitInterrupt) {
 					if (e.timeoutAt) {
 						await this.ctx.storage.setAlarm(e.timeoutAt);
 					}
-					await this.setStatus('waiting');
+					await this.db.update(workflowTable).set({ status: 'waiting', updatedAt: Date.now() });
+
+					if (provider && collector) {
+						provider.onWorkflowStatusChange(collector, {
+							workflowId: wf.workflowId,
+							type: wf.type,
+							status: 'waiting',
+							timestamp: Date.now(),
+						});
+						this.ctx.waitUntil(provider.flush(collector, 'waiting'));
+					}
 				} else if (e instanceof PauseInterrupt) {
-					await this.setStatus('paused');
+					await this.db.update(workflowTable).set({ status: 'paused', updatedAt: Date.now() });
+
+					if (provider && collector) {
+						provider.onWorkflowStatusChange(collector, {
+							workflowId: wf.workflowId,
+							type: wf.type,
+							status: 'paused',
+							timestamp: Date.now(),
+						});
+						this.ctx.waitUntil(provider.flush(collector, 'paused'));
+					}
 				} else if (!isInterrupt(e)) {
 					const errorMsg = e instanceof WorkflowError ? JSON.stringify(e.toJSON()) : e instanceof Error ? e.message : String(e);
+					const now = Date.now();
 					await this.db.update(workflowTable).set({
 						status: 'errored',
 						error: errorMsg,
-						updatedAt: Date.now(),
+						updatedAt: now,
 					});
-					this.updateIndex(wf.type, wf.workflowId, 'errored', Date.now());
+
+					if (provider && collector) {
+						provider.onWorkflowStatusChange(collector, {
+							workflowId: wf.workflowId,
+							type: wf.type,
+							status: 'errored',
+							error: errorMsg,
+							timestamp: now,
+						});
+						this.ctx.waitUntil(provider.flush(collector, 'errored'));
+					}
+
 					// Clean up any unconsumed buffered events
 					await this.db.delete(eventBufferTable);
 					this.liveCtx?.close();
@@ -524,35 +639,37 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const now = Date.now();
 			await this.db.update(workflowTable).set({ status, updatedAt: now });
 
-			const type = this.workflowType;
-			const id = this.workflowId;
-			if (type && id) {
-				this.updateIndex(type, id, status, now);
-			} else {
-				const [wf] = await this.db.select().from(workflowTable);
-				if (wf) {
-					this.workflowType = wf.type;
-					this.workflowId = wf.workflowId;
-					this.updateIndex(wf.type, wf.workflowId, status, now);
+			if (provider) {
+				const type = this.workflowType;
+				const id = this.workflowId;
+				if (type && id) {
+					const collector = provider.createCollector(id, type);
+					provider.onWorkflowStatusChange(collector, {
+						workflowId: id,
+						type,
+						status,
+						timestamp: now,
+					});
+					this.ctx.waitUntil(provider.flush(collector, status));
+				} else {
+					const [wf] = await this.db.select().from(workflowTable);
+					if (wf) {
+						this.workflowType = wf.type;
+						this.workflowId = wf.workflowId;
+						const collector = provider.createCollector(wf.workflowId, wf.type);
+						provider.onWorkflowStatusChange(collector, {
+							workflowId: wf.workflowId,
+							type: wf.type,
+							status,
+							timestamp: now,
+						});
+						this.ctx.waitUntil(provider.flush(collector, status));
+					}
 				}
 			}
 
 			if (status === 'completed' || status === 'errored' || status === 'terminated') {
 				this.liveCtx?.close();
-			}
-		}
-
-		private updateIndex(type: string, id: string, status: string, now: number): void {
-			if (!observability) return;
-			try {
-				const binding = this.getBinding();
-				const shards = shardConfigs[type]?.shards ?? 1;
-				const shard = shardIndex(id, shards);
-				const indexId = binding.idFromName(`__index:${type}:${shard}`);
-				const indexStub = binding.get(indexId) as unknown as WorkflowRunnerStub;
-				this.ctx.waitUntil(indexStub.indexWrite({ id, status, createdAt: now, updatedAt: now }));
-			} catch {
-				// Index update is best-effort
 			}
 		}
 	};
