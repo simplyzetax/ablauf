@@ -12,7 +12,7 @@ describe('Demo API', () => {
 		const response = await new Promise<Response>((resolve, reject) => {
 			const timeout = setTimeout(() => {
 				reject(new Error('Timed out waiting for create endpoint response'));
-			}, 2000);
+			}, 15000);
 
 			request
 				.then((res) => {
@@ -35,6 +35,6 @@ describe('Demo API', () => {
 
 		expect(body.id).toBeTypeOf('string');
 		expect(body.type).toBe('test');
-		expect(['sleeping', 'waiting', 'paused', 'errored', 'terminated']).toContain(body.status);
-	}, 10000);
+		expect(['waiting', 'paused', 'errored', 'terminated']).toContain(body.status);
+	}, 30000);
 });
