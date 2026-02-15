@@ -3,7 +3,97 @@ title: Performance Benchmarks
 description: Compare Ablauf workflow performance against native Cloudflare Workflows with a fair, repeatable benchmark endpoint.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout';
+
 # Performance Benchmarks
+
+Ablauf ships with a built-in benchmark endpoint that runs identical workloads on both engines side-by-side, so you can compare performance yourself.
+
+## Results
+
+The following results were measured on a deployed Cloudflare Worker. Both engines executed the same 8-step workflow with identical CPU work per step, alternating execution order each round.
+
+<Callout type="info">
+	10 measured iterations, 4 warmup rounds discarded. Execution order alternates per round to eliminate ordering bias.
+</Callout>
+
+### End-to-End Completion
+
+Time from workflow creation to completion (lower is better).
+
+<div className="overflow-x-auto [&_td]:tabular-nums">
+
+| Engine | Mean | p50 | p95 | Min | Max |
+|--------|------|-----|-----|-----|-----|
+| **Ablauf** | **460ms** | 453ms | 503ms | 424ms | 504ms |
+| Cloudflare Workflows | 10,254ms | 5,544ms | 23,514ms | 2,898ms | 23,980ms |
+
+</div>
+
+Ablauf completes workflows in **4.5% of the time** it takes native Cloudflare Workflows — roughly **22x faster**.
+
+### Startup Latency
+
+Time from creation request to the first step starting execution.
+
+<div className="overflow-x-auto [&_td]:tabular-nums">
+
+| Engine | Mean | p50 | p95 | Min | Max |
+|--------|------|-----|-----|-----|-----|
+| **Ablauf** | **332ms** | 328ms | 369ms | 293ms | 370ms |
+| Cloudflare Workflows | 9,742ms | 4,688ms | 23,199ms | 2,510ms | 23,735ms |
+
+</div>
+
+Ablauf starts executing steps in **3.4% of the time** — roughly **29x faster** startup.
+
+### Throughput
+
+Steps executed per second (higher is better).
+
+<div className="overflow-x-auto [&_td]:tabular-nums">
+
+| Engine | Mean | p50 | p95 | Min | Max |
+|--------|------|-----|-----|-----|-----|
+| **Ablauf** | **17.4 steps/s** | 17.7 steps/s | 18.7 steps/s | 15.9 steps/s | 18.9 steps/s |
+| Cloudflare Workflows | 1.35 steps/s | 1.45 steps/s | 2.51 steps/s | 0.33 steps/s | 2.76 steps/s |
+
+</div>
+
+Ablauf sustains **13x higher throughput** with significantly lower variance (stddev 0.96 vs 0.77).
+
+### Per-Step Orchestration Overhead
+
+Cloudflare Workflows adds measurable orchestration overhead between steps. Ablauf runs all steps in a single execution pass with zero inter-step overhead.
+
+<div className="overflow-x-auto [&_td]:tabular-nums">
+
+| Engine | Avg Step Overhead (mean) | Avg Step Overhead (p50) | Avg Step Overhead (p95) |
+|--------|--------------------------|-------------------------|-------------------------|
+| **Ablauf** | **0ms** | 0ms | 0ms |
+| Cloudflare Workflows | 47.9ms | 35.9ms | 104.8ms |
+
+</div>
+
+### Variance
+
+Ablauf shows tight, predictable latency. Cloudflare Workflows has high variance across runs.
+
+<div className="overflow-x-auto [&_td]:tabular-nums">
+
+| Metric | Ablauf stddev | Cloudflare stddev |
+|--------|---------------|-------------------|
+| Completion | 25.9ms | 8,388.9ms |
+| Startup | 23.7ms | 8,480.4ms |
+| Throughput | 0.96 steps/s | 0.77 steps/s |
+
+</div>
+
+<Callout type="warn">
+	These benchmarks reflect a specific workload (8 deterministic CPU-bound steps). Real-world results will vary based on step complexity, I/O patterns, and Worker resource usage. Run the benchmark endpoint on your own deployment for the most relevant numbers.
+</Callout>
+
+## Benchmark Endpoint
 
 The Worker exposes a benchmark endpoint that executes:
 
@@ -12,7 +102,7 @@ The Worker exposes a benchmark endpoint that executes:
 
 Both paths run the same payload, same number of steps, and same deterministic CPU work so the comparison is fair.
 
-## Endpoint
+### Usage
 
 `POST /benchmarks/workflows`
 
@@ -25,42 +115,42 @@ npx wrangler secret put BENCHMARK_TOKEN
 Then call the endpoint with `x-benchmark-token`.
 
 ```bash
-curl -X POST http://localhost:8787/benchmarks/workflows \\
-  -H \"content-type: application/json\" \\
-  -H \"x-benchmark-token: <your-token>\" \\
+curl -X POST https://your-worker.workers.dev/benchmarks/workflows \
+  -H "content-type: application/json" \
+  -H "x-benchmark-token: <your-token>" \
   -d '{
-    "iterations": 8,
-    "warmups": 2,
+    "iterations": 10,
+    "warmups": 4,
     "steps": 8,
     "workIterations": 5000,
     "pollIntervalMs": 10
   }'
 ```
 
-## Fairness Rules Implemented
+### Fairness Rules
 
 - Alternating run order per measured round (`ablauf -> cloudflare`, then `cloudflare -> ablauf`)
 - Warmup rounds are executed but discarded from final stats
 - Identical payload shape and work units for both implementations
 - Same polling interval and completion criteria
 
-## Metrics Returned
+### Metrics Returned
 
 The response includes per-run and aggregated metrics for both engines:
 
-- `createMs`: latency for workflow instance creation call
-- `startupMs`: request-to-first-step-start latency
-- `completionMs`: end-to-end latency until workflow completes
-- `runMs`: workflow runtime measured inside the workflow implementation
-- `totalStepWallMs`: sum of wall-clock step durations
-- `totalCallbackMs`: sum of callback execution durations
-- `totalOrchestrationMs`: estimated scheduler/orchestration overhead (`wall - callback`)
+- `createMs` — latency for workflow instance creation call
+- `startupMs` — request-to-first-step-start latency
+- `completionMs` — end-to-end latency until workflow completes
+- `runMs` — workflow runtime measured inside the workflow implementation
+- `totalStepWallMs` — sum of wall-clock step durations
+- `totalCallbackMs` — sum of callback execution durations
+- `totalOrchestrationMs` — estimated scheduler/orchestration overhead (`wall - callback`)
 - `throughputStepsPerSecond`
-- `perStep`: p50/p95/min/max/mean/stddev for each step
+- `perStep` — p50/p95/min/max/mean/stddev for each step
 
 The `comparison` object reports mean deltas and ratios for key metrics.
 
-## Notes
+### Notes
 
 - If `BENCHMARK_TOKEN` is missing, the endpoint returns `503`.
 - If the token header is wrong or missing, the endpoint returns `401`.
