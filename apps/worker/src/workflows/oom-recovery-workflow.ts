@@ -1,16 +1,13 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
-
-const inputSchema = z.object({});
 
 /**
  * Test workflow for OOM crash recovery.
  * Has two steps separated by a sleep so tests can inject a simulated
  * OOM crash (step left in 'running' state) before the second step executes.
  */
-export const OOMRecoveryWorkflow = defineWorkflow({
+export const OOMRecoveryWorkflow = defineWorkflow((t) => ({
 	type: 'oom-recovery',
-	input: inputSchema,
+	input: t.object({}),
 	defaults: {
 		retries: { limit: 3, delay: '500ms', backoff: 'exponential' as const },
 	},
@@ -20,4 +17,4 @@ export const OOMRecoveryWorkflow = defineWorkflow({
 		const b = await step.do('second', async () => 'recovered');
 		return { a, b };
 	},
-});
+}));

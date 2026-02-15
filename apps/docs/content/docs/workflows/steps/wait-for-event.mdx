@@ -18,13 +18,13 @@ The event name must match a key from the workflow's `events` schema, and the ret
 ## Basic Usage
 
 ```ts
-const workflow = defineWorkflow({
+const workflow = defineWorkflow((t) => ({
 	type: 'approval-flow',
-	input: z.object({ requestId: z.string() }),
+	input: t.object({ requestId: t.string() }),
 	events: {
-		approval: z.object({
-			approved: z.boolean(),
-			reviewer: z.string(),
+		approval: t.object({
+			approved: t.boolean(),
+			reviewer: t.string(),
 		}),
 	},
 	run: async (step, payload) => {
@@ -45,7 +45,7 @@ const workflow = defineWorkflow({
 
 		return { approved: decision.approved, reviewer: decision.reviewer };
 	},
-});
+}));
 ```
 
 ## Timeouts
@@ -123,9 +123,9 @@ The return type of `step.waitForEvent()` is automatically inferred from your eve
 
 ```ts
 events: {
-	payment: z.object({
-		amount: z.number(),
-		currency: z.string(),
+	payment: t.object({
+		amount: t.number(),
+		currency: t.string(),
 	}),
 }
 

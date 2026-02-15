@@ -1,9 +1,8 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
-export const EchoWorkflow = defineWorkflow({
+export const EchoWorkflow = defineWorkflow((t) => ({
 	type: 'echo',
-	input: z.object({ message: z.string() }),
+	input: t.object({ message: t.string() }),
 	run: async (step, payload) => {
 		return await step.do('echo', async () => ({
 			original: payload.message,
@@ -11,4 +10,4 @@ export const EchoWorkflow = defineWorkflow({
 			timestamp: Date.now(),
 		}));
 	},
-});
+}));

@@ -1,13 +1,12 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
 /**
  * Test workflow for validating `step.sleepUntil()` behavior.
  * Accepts a `wakeAt` timestamp and sleeps until that absolute time.
  */
-export const SleepUntilWorkflow = defineWorkflow({
+export const SleepUntilWorkflow = defineWorkflow((t) => ({
 	type: 'sleep-until-test',
-	input: z.object({ wakeAt: z.number() }),
+	input: t.object({ wakeAt: t.number() }),
 	events: {},
 	run: async (step, payload) => {
 		const before = await step.do('before-sleep', async () => 'before');
@@ -15,4 +14,4 @@ export const SleepUntilWorkflow = defineWorkflow({
 		const after = await step.do('after-sleep', async () => 'after');
 		return { before, after };
 	},
-});
+}));

@@ -32,7 +32,7 @@ npm install @der-ablauf/workflows hono zod
 
 - **`@der-ablauf/workflows`** — The workflow engine
 - **`hono`** — Lightweight web framework for Workers
-- **`zod`** — Runtime validation for workflow inputs and events
+- **`zod`** — Runtime validation (used internally; you can also use `z.infer` for type extraction)
 
 ## Build Your First Workflow
 
@@ -46,12 +46,11 @@ Create a simple greeting workflow using the `defineWorkflow()` API. This is the 
 
 ```ts title="src/workflows/greeting.ts"
 import { defineWorkflow } from '@der-ablauf/workflows';
-import { z } from 'zod';
 
-export const GreetingWorkflow = defineWorkflow({
+export const GreetingWorkflow = defineWorkflow((t) => ({
 	type: 'greeting',
-	input: z.object({
-		name: z.string(),
+	input: t.object({
+		name: t.string(),
 	}),
 	run: async (step, payload) => {
 		// This step is durable—if the worker crashes, it replays with cached results
@@ -65,7 +64,7 @@ export const GreetingWorkflow = defineWorkflow({
 		// Return the final result
 		return { message, completedAt: new Date().toISOString() };
 	},
-});
+}));
 ```
 
 The `step.do()` block ensures the greeting is generated once and cached. If the workflow restarts, it won't regenerate the message—it'll use the stored result.

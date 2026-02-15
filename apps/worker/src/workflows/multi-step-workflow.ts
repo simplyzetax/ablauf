@@ -1,11 +1,8 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
-const inputSchema = z.object({ value: z.number() });
-
-export const MultiStepWorkflow = defineWorkflow({
+export const MultiStepWorkflow = defineWorkflow((t) => ({
 	type: 'multi-step',
-	input: inputSchema,
+	input: t.object({ value: t.number() }),
 	run: async (step, payload) => {
 		const a = await step.do('step-a', async () => payload.value + 1);
 		const b = await step.do('step-b', async () => a * 2);
@@ -13,4 +10,4 @@ export const MultiStepWorkflow = defineWorkflow({
 		const d = await step.do('step-d', async () => `result:${c}`);
 		return { a, b, c, d };
 	},
-});
+}));

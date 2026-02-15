@@ -1,14 +1,11 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
-const inputSchema = z.object({ name: z.string() });
-
-export const MultiEventWorkflow = defineWorkflow({
+export const MultiEventWorkflow = defineWorkflow((t) => ({
 	type: 'multi-event',
-	input: inputSchema,
+	input: t.object({ name: t.string() }),
 	events: {
-		'first-approval': z.object({ ok: z.boolean() }),
-		'second-approval': z.object({ ok: z.boolean() }),
+		'first-approval': t.object({ ok: t.boolean() }),
+		'second-approval': t.object({ ok: t.boolean() }),
 	},
 	run: async (step, payload) => {
 		const greeting = await step.do('greet', async () => `Hi, ${payload.name}`);
@@ -16,4 +13,4 @@ export const MultiEventWorkflow = defineWorkflow({
 		const second = await step.waitForEvent('second-approval', { timeout: '1m' });
 		return { greeting, first: first.ok, second: second.ok };
 	},
-});
+}));

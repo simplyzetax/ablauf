@@ -32,16 +32,15 @@ Here's a workflow that processes a payment with retries, waits for confirmation,
 
 ```ts
 import { defineWorkflow } from '@der-ablauf/workflows';
-import { z } from 'zod';
 
-const PaymentWorkflow = defineWorkflow({
+const PaymentWorkflow = defineWorkflow((t) => ({
 	type: 'payment',
-	input: z.object({
-		orderId: z.string(),
-		amount: z.number(),
+	input: t.object({
+		orderId: t.string(),
+		amount: t.number(),
 	}),
 	events: {
-		confirmed: z.object({ transactionId: z.string() }),
+		confirmed: t.object({ transactionId: t.string() }),
 	},
 	run: async (step, payload) => {
 		// This step retries on failure
@@ -68,7 +67,7 @@ const PaymentWorkflow = defineWorkflow({
 
 		return { status: 'complete', charge };
 	},
-});
+}));
 ```
 
 If the worker crashes after charging the card, Ablauf **replays** the workflow. The `charge-card` step returns the cached result—your customer won't be charged twice. The workflow picks up where it left off.

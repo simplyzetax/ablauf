@@ -4,50 +4,75 @@ import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass, 
 import { t as transportSchema, validateSchema } from '../serializable';
 import type { TransportSchema } from '../serializable';
 
+// -- Helper types to extract schema information from the inferred Opts type --
+
+/** Extract the inferred payload type from an options object's `input` schema. */
+type InferPayload<Opts> = Opts extends { input: z.ZodType<infer T> } ? T : unknown;
+
+/** Extract the events schema record type from an options object. */
+type InferEventSchemas<Opts> = Opts extends { events: infer E extends Record<string, z.ZodType> } ? E : {};
+
+/** Extract the inferred events map (name -> payload) from an options object. */
+type InferEvents<Opts> = { [K in keyof InferEventSchemas<Opts>]: z.infer<InferEventSchemas<Opts>[K]> };
+
+/** Extract the SSE schema record type from an options object. */
+type InferSSESchemas<Opts> = Opts extends { sseUpdates: infer S extends Record<string, z.ZodType> } ? S : undefined;
+
+/** Extract the inferred SSE map (name -> data) from an options object. */
+type InferSSE<Opts> =
+	InferSSESchemas<Opts> extends Record<string, z.ZodType>
+		? { [K in keyof InferSSESchemas<Opts>]: z.infer<InferSSESchemas<Opts>[K]> }
+		: never;
+
+/** Extract the type string literal from an options object. */
+type InferType<Opts> = Opts extends { type: infer T extends string } ? T : string;
+
+/** Extract the result type from the `run` function's return type. */
+type InferResult<Opts> = Opts extends { run: (...args: any[]) => Promise<infer R> } ? R : unknown;
+
+// -- Base shape (loose constraint for the `const Opts extends` pattern) --------
+
 /**
- * Options for defining a workflow using the functional API.
- * All types are inferred from the Zod schemas you provide — no manual generics needed.
+ * Loose base shape for workflow options. Used as a constraint for the
+ * `const Opts extends` inference pattern so TypeScript can infer the full
+ * concrete type of the options object returned by the factory callback.
  *
- * @typeParam Type - String literal workflow type identifier.
- * @typeParam Input - Zod schema type for the input payload.
- * @typeParam Result - Return type of the `run` function.
- * @typeParam Events - Map of event names to Zod schemas.
- * @typeParam SSEUpdates - Optional map of SSE update names to Zod schemas.
+ * @internal
  */
-interface DefineWorkflowOptions<
-	Type extends string,
-	Input extends z.ZodType,
-	Result,
-	Events extends Record<string, z.ZodType>,
-	SSEUpdates extends Record<string, z.ZodType> | undefined = undefined,
-> {
-	/** Unique string identifier for this workflow type (e.g., `"process-order"`). */
-	type: Type;
-	/** Zod schema for validating the input payload at runtime. */
-	input: Input;
-	/** Optional map of event names to Zod schemas for validating event payloads. */
-	events?: Events;
-	/** Optional default configuration (e.g., retry settings) for all steps. */
+interface BaseWorkflowOptions {
+	type: string;
+	input: z.ZodType;
+	events?: Record<string, z.ZodType>;
 	defaults?: Partial<WorkflowDefaults>;
-	/** Optional cumulative result size limit. Overrides the 64 MB default. */
 	resultSizeLimit?: Partial<ResultSizeLimitConfig>;
-	/** Optional map of SSE update names to Zod schemas for real-time streaming validation. */
-	sseUpdates?: SSEUpdates;
-	/**
-	 * The workflow logic function. Receives durable step primitives, the validated
-	 * payload, and an SSE context for broadcasting updates.
-	 */
-	run: (
-		step: Step<{ [K in keyof Events]: z.infer<Events[K]> }>,
-		payload: z.infer<Input>,
-		sse: SSE<SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never>,
-	) => Promise<Result>;
+	sseUpdates?: Record<string, z.ZodType>;
+	run: (...args: any[]) => Promise<any>;
 }
+
+// -- Typed run callback -------------------------------------------------------
+
+/**
+ * The properly-typed `run` function signature, derived from the inferred `Opts`.
+ * Used via intersection (`Opts & { run: TypedRun<Opts> }`) to provide contextual
+ * typing for the `run` callback's parameters without interfering with generic inference.
+ *
+ * @internal
+ */
+type TypedRun<Opts extends BaseWorkflowOptions> = (
+	step: Step<InferEvents<Opts>>,
+	payload: InferPayload<Opts>,
+	sse: SSE<InferSSE<Opts>>,
+) => Promise<any>;
 
 /**
  * Define a workflow using a callback that receives a constrained Zod namespace (`t`)
  * which only exposes SuperJSON-compatible types. All types are inferred from the
  * schemas you provide.
+ *
+ * Uses the `const Opts extends BaseWorkflowOptions` pattern to infer the full
+ * concrete type of the returned options object as a single generic parameter.
+ * The `& { run: TypedRun<Opts> }` intersection then provides proper contextual
+ * typing for the `run` callback's `step`, `payload`, and `sse` parameters.
  *
  * @param factory - A callback that receives a {@link TransportSchema} (`t`) and returns
  *   the workflow options. Using `t` instead of raw `z` ensures all schemas are
@@ -68,49 +93,38 @@ interface DefineWorkflowOptions<
  * }));
  * ```
  */
-export function defineWorkflow<
-	Type extends string,
-	Input extends z.ZodType,
-	Result,
-	Events extends Record<string, z.ZodType> = {},
-	SSEUpdates extends Record<string, z.ZodType> | undefined = undefined,
->(
-	factory: (t: TransportSchema) => DefineWorkflowOptions<Type, Input, Result, Events, SSEUpdates>,
-): WorkflowClass<
-	z.infer<Input>,
-	Result,
-	{ [K in keyof Events]: z.infer<Events[K]> },
-	Type,
-	SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never
-> {
+export function defineWorkflow<const Opts extends BaseWorkflowOptions>(
+	factory: (t: TransportSchema) => Opts & { run: TypedRun<Opts> },
+): WorkflowClass<InferPayload<Opts>, InferResult<Opts>, InferEvents<Opts>, InferType<Opts>, InferSSE<Opts>> {
 	const options = factory(transportSchema);
 
 	// Runtime safety net: validate all schemas use SuperJSON-compatible types
 	validateSchema(options.input, 'input');
 	if (options.events) {
-		for (const [key, schema] of Object.entries(options.events)) {
+		for (const [key, schema] of Object.entries(options.events as Record<string, z.ZodType>)) {
 			validateSchema(schema, `events.${key}`);
 		}
 	}
 	if (options.sseUpdates) {
-		for (const [key, schema] of Object.entries(options.sseUpdates)) {
+		for (const [key, schema] of Object.entries(options.sseUpdates as Record<string, z.ZodType>)) {
 			validateSchema(schema, `sseUpdates.${key}`);
 		}
 	}
 
-	type InferredPayload = z.infer<Input>;
-	type InferredEvents = { [K in keyof Events]: z.infer<Events[K]> };
-	type InferredSSE = SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never;
+	type Payload = InferPayload<Opts>;
+	type Events = InferEvents<Opts>;
+	type SSEData = InferSSE<Opts>;
+	type Result = InferResult<Opts>;
 
-	const workflow = class extends BaseWorkflow<InferredPayload, Result, InferredEvents, InferredSSE> {
+	const workflow = class extends BaseWorkflow<Payload, Result, Events, SSEData> {
 		static type = options.type;
 		static inputSchema = options.input;
-		static events = (options.events ?? {}) as WorkflowEventSchemas<InferredEvents>;
+		static events = (options.events ?? {}) as WorkflowEventSchemas<Events>;
 		static defaults = options.defaults ?? {};
 		static resultSizeLimit = options.resultSizeLimit;
 		static sseUpdates = options.sseUpdates as Record<string, z.ZodType<unknown>> | undefined;
 
-		async run(step: Step<InferredEvents>, payload: InferredPayload, sse: SSE<InferredSSE>): Promise<Result> {
+		async run(step: Step<Events>, payload: Payload, sse: SSE<SSEData>): Promise<Result> {
 			return options.run(step, payload, sse);
 		}
 	};
@@ -118,5 +132,5 @@ export function defineWorkflow<
 	// Set a readable name for debugging
 	Object.defineProperty(workflow, 'name', { value: `Workflow(${options.type})` });
 
-	return workflow as unknown as WorkflowClass<z.infer<Input>, Result, InferredEvents, Type, InferredSSE>;
+	return workflow as unknown as WorkflowClass<Payload, Result, Events, InferType<Opts>, SSEData>;
 }

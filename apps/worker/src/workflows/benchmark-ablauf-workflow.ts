@@ -1,15 +1,12 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 import { executeWorkflowBenchmark } from '../benchmarks/workflow-benchmark';
 
-const inputSchema = z.object({
-	requestedAtMs: z.number().int().nonnegative(),
-	steps: z.number().int().min(1).max(50),
-	workIterations: z.number().int().min(10).max(500_000),
-});
-
-export const BenchmarkAblaufWorkflow = defineWorkflow({
+export const BenchmarkAblaufWorkflow = defineWorkflow((t) => ({
 	type: 'benchmark-ablauf',
-	input: inputSchema,
+	input: t.object({
+		requestedAtMs: t.number().int().nonnegative(),
+		steps: t.number().int().min(1).max(50),
+		workIterations: t.number().int().min(10).max(500_000),
+	}),
 	run: async (step, payload) => executeWorkflowBenchmark(step, payload),
-});
+}));

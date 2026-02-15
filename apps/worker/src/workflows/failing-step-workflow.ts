@@ -1,7 +1,4 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
-
-const inputSchema = z.object({ failCount: z.number() });
 
 // Module-level counter persists across replay() calls within the same DO isolate.
 const callCounts = new Map<string, number>();
@@ -10,9 +7,9 @@ const callCounts = new Map<string, number>();
  * Test-only workflow: step.do throws `failCount` times, then succeeds.
  * Used to verify alarm-based retry with exponential backoff.
  */
-export const FailingStepWorkflow = defineWorkflow({
+export const FailingStepWorkflow = defineWorkflow((t) => ({
 	type: 'failing-step',
-	input: inputSchema,
+	input: t.object({ failCount: t.number() }),
 	defaults: {
 		retries: { limit: 3, delay: '500ms', backoff: 'exponential' as const },
 	},
@@ -29,4 +26,4 @@ export const FailingStepWorkflow = defineWorkflow({
 
 		return result;
 	},
-});
+}));
