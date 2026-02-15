@@ -142,6 +142,19 @@ static sseUpdates = {
 };
 ```
 
+### `resultSizeLimit` (optional)
+
+Cumulative memory budget for all step results. Prevents OOM by failing steps before the total serialized result size exceeds the limit.
+
+```ts
+static resultSizeLimit = {
+	maxSize: '128mb',     // Default: '64mb'
+	onOverflow: 'retry',  // Default: 'fail'
+};
+```
+
+See [Result Size Limits](/docs/workflows/retries#result-size-limits) for details.
+
 ## The `run` Method
 
 The `run` method is where your workflow logic lives. It receives three parameters and must return a Promise of your `Result` type.

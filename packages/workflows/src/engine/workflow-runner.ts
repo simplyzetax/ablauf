@@ -414,7 +414,10 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			}
 
 			const instance = new WorkflowCls();
-			const stepCtx = new StepContext(this.db, WorkflowCls.defaults);
+			const stepCtx = new StepContext(this.db, {
+				...WorkflowCls.defaults,
+				resultSizeLimit: { ...WorkflowCls.defaults?.resultSizeLimit, ...WorkflowCls.resultSizeLimit },
+			});
 
 			const sseSchemas = WorkflowCls.sseUpdates ?? null;
 			if (sseSchemas) {

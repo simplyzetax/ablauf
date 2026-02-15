@@ -115,6 +115,19 @@ defaults: {
 }
 ```
 
+### `resultSizeLimit` (optional)
+
+Cumulative memory budget for all step results. Prevents OOM by failing steps before the total serialized result size exceeds the limit.
+
+```ts
+resultSizeLimit: {
+	maxSize: '128mb',     // Default: '64mb'
+	onOverflow: 'retry',  // Default: 'fail'
+}
+```
+
+See [Result Size Limits](/docs/workflows/retries#result-size-limits) for details.
+
 ### `sseUpdates` (optional)
 
 A record of named Zod schemas defining the SSE updates your workflow can emit.

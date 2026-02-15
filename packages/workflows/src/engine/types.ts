@@ -52,10 +52,51 @@ export interface StepWaitOptions {
 	timeout: string;
 }
 
+/** Behavior when a step result exceeds the cumulative size limit. */
+export type ResultSizeOverflow = 'fail' | 'retry';
+
+/**
+ * Configuration for the cumulative result size limit.
+ *
+ * Ablauf tracks the total serialized size of all completed step results.
+ * When a new step result would push the total over `maxSize`, the step
+ * fails according to the `onOverflow` strategy.
+ *
+ * @see {@link DEFAULT_RESULT_SIZE_LIMIT}
+ */
+export interface ResultSizeLimitConfig {
+	/**
+	 * Maximum cumulative byte budget for all step results in the workflow.
+	 * Accepts human-readable size strings: `"512kb"`, `"64mb"`, `"1gb"`.
+	 * @defaultValue `"64mb"`
+	 */
+	maxSize: string;
+	/**
+	 * Strategy when a step result exceeds the budget.
+	 * - `"fail"` — throws `NonRetriableError` (default). Step is not retried.
+	 * - `"retry"` — throws `StepFailedError`. Normal retry logic applies.
+	 * @defaultValue `"fail"`
+	 */
+	onOverflow: ResultSizeOverflow;
+}
+
+/**
+ * Default result size limit: 64 MB budget, non-retryable on overflow.
+ *
+ * The 64 MB default leaves ~64 MB headroom for the engine runtime, workflow
+ * code, and deserialized objects within the 128 MB Cloudflare isolate limit.
+ */
+export const DEFAULT_RESULT_SIZE_LIMIT: ResultSizeLimitConfig = {
+	maxSize: '64mb',
+	onOverflow: 'fail',
+};
+
 /** Default configuration values applied to all steps in a workflow unless overridden. */
 export interface WorkflowDefaults {
 	/** Default retry configuration for all `step.do()` calls. */
 	retries: RetryConfig;
+	/** Cumulative result size limit configuration. Individual fields are optional and fall back to {@link DEFAULT_RESULT_SIZE_LIMIT}. */
+	resultSizeLimit: Partial<ResultSizeLimitConfig>;
 }
 
 /** Base type for the events map. Maps event names to their payload types. */
@@ -210,6 +251,8 @@ export interface WorkflowClass<
 	events: WorkflowEventSchemas<Events>;
 	/** Optional default configuration (e.g., retry settings) for all steps. */
 	defaults?: Partial<WorkflowDefaults>;
+	/** Optional cumulative result size limit. Overrides the 64 MB default. */
+	resultSizeLimit?: Partial<ResultSizeLimitConfig>;
 	/** Optional map of SSE update names to Zod schemas. */
 	sseUpdates?: WorkflowSSESchemas<SSEUpdates>;
 	/** Constructor producing a workflow instance with a `run()` method. */

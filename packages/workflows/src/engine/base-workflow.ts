@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Step, SSE, WorkflowDefaults } from './types';
+import type { Step, SSE, WorkflowDefaults, ResultSizeLimitConfig } from './types';
 
 /**
  * Abstract base class for class-based workflow definitions.
@@ -37,6 +37,8 @@ export abstract class BaseWorkflow<Payload = unknown, Result = unknown, Events e
 	static events: Record<string, z.ZodType<unknown>> = {};
 	/** Default configuration (e.g., retry settings) for all steps. Defaults to `{}`. */
 	static defaults: Partial<WorkflowDefaults> = {};
+	/** Optional cumulative result size limit. Overrides the 64 MB default. */
+	static resultSizeLimit?: Partial<ResultSizeLimitConfig>;
 	/** Optional map of SSE update names to Zod schemas for real-time streaming validation. */
 	static sseUpdates?: Record<string, z.ZodType<unknown>>;
 

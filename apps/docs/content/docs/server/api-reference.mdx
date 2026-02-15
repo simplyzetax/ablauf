@@ -423,6 +423,31 @@ const result = await step.waitForEvent('payment-received', {
 
 ---
 
+## Size Strings
+
+Ablauf uses human-readable size strings for the `resultSizeLimit.maxSize` configuration.
+
+### Supported Formats
+
+| Format | Example   | Description  |
+| ------ | --------- | ------------ |
+| `Nb`   | `"100b"`  | Bytes        |
+| `Nkb`  | `"512kb"` | Kilobytes    |
+| `Nmb`  | `"64mb"`  | Megabytes    |
+| `Ngb`  | `"1gb"`   | Gigabytes    |
+
+**Throws:**
+
+`InvalidSizeError` if the size string is malformed.
+
+---
+
+### ResultSizeLimitConfig
+
+<auto-type-table path="../../../../../packages/workflows/src/engine/types.ts" name="ResultSizeLimitConfig" />
+
+---
+
 ## Error Classes
 
 ### Engine Errors
@@ -444,6 +469,7 @@ All engine errors extend `WorkflowError` (which extends `Error`). Every engine e
 | `WorkflowNotRunningError`    | `WORKFLOW_NOT_RUNNING`    | 409    | engine     |
 | `DuplicateStepError`         | `VALIDATION_ERROR`        | 400    | engine     |
 | `InvalidDurationError`       | `VALIDATION_ERROR`        | 400    | validation |
+| `InvalidSizeError`           | `VALIDATION_ERROR`        | 400    | validation |
 | `ObservabilityDisabledError` | `OBSERVABILITY_DISABLED`  | 400    | api        |
 
 ### NonRetriableError

@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import { BaseWorkflow } from './base-workflow';
-import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass } from './types';
+import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass, ResultSizeLimitConfig } from './types';
 
 /**
  * Options for defining a workflow using the functional API.
@@ -27,6 +27,8 @@ interface DefineWorkflowOptions<
 	events?: Events;
 	/** Optional default configuration (e.g., retry settings) for all steps. */
 	defaults?: Partial<WorkflowDefaults>;
+	/** Optional cumulative result size limit. Overrides the 64 MB default. */
+	resultSizeLimit?: Partial<ResultSizeLimitConfig>;
 	/** Optional map of SSE update names to Zod schemas for real-time streaming validation. */
 	sseUpdates?: SSEUpdates;
 	/**
@@ -82,6 +84,7 @@ export function defineWorkflow<
 		static inputSchema = options.input;
 		static events = (options.events ?? {}) as WorkflowEventSchemas<InferredEvents>;
 		static defaults = options.defaults ?? {};
+		static resultSizeLimit = options.resultSizeLimit;
 		static sseUpdates = options.sseUpdates as Record<string, z.ZodType<unknown>> | undefined;
 
 		async run(step: Step<InferredEvents>, payload: InferredPayload, sse: SSE<InferredSSE>): Promise<Result> {
