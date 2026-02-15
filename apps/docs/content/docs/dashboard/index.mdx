@@ -104,7 +104,7 @@ For full details about a specific workflow, use `ablauf.get(OrderWorkflow, { id 
 
 ## Shard Configuration
 
-Under the hood, Ablauf uses **shard-based indexing** with dedicated Durable Objects for index storage. When observability is enabled, every workflow state change is recorded in one or more index shards.
+The built-in `ShardObservabilityProvider` uses **shard-based indexing** with dedicated Durable Objects for index storage. When observability is enabled, every workflow state change is recorded in one or more index shards.
 
 By default, Ablauf uses a single shard per workflow type. For high-volume workflows (thousands of instances), you can increase the shard count to distribute load:
 
@@ -114,6 +114,20 @@ const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 		[HighVolumeWorkflow, { shards: 8 }],
 		[LowVolumeWorkflow, { shards: 1 }], // default
 	],
+});
+```
+
+You can also configure shards directly via `ShardObservabilityProvider`:
+
+```ts
+import { Ablauf, ShardObservabilityProvider } from '@der-ablauf/workflows';
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [HighVolumeWorkflow],
+	observability: new ShardObservabilityProvider(env.WORKFLOW_RUNNER, {
+		shards: { 'high-volume': { shards: 8 } },
+		workflowTypes: ['high-volume'],
+	}),
 });
 ```
 
@@ -132,10 +146,16 @@ const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	observability: false,
 });
 
-// ablauf.list() will throw ObservabilityDisabledError
+// ablauf.list() will throw ObservabilityReadNotConfiguredError
 ```
 
 This skips all index updates, reducing the number of Durable Object writes. You can still use `ablauf.get(Workflow, { id }).getStatus()` to check individual workflows if you know their ID.
+
+## Custom Observability Provider
+
+You can replace the built-in shard-based indexing entirely with your own storage backend by providing a custom `ObservabilityProvider`. This is useful if you want to send workflow events to an external database, logging service, or tracing system.
+
+See the [Server docs](/docs/server#custom-observability-provider) for the full provider interface and examples.
 
 ## Production Considerations
 
