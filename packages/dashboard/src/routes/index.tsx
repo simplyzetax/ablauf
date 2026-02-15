@@ -3,13 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { orpc } from '~/lib/orpc';
 import { TopBar } from '~/components/top-bar';
 import { StatFilterBar } from '~/components/filter-bar';
-import { WorkflowList } from '~/components/workflow-table';
+import { WorkflowTable } from '~/components/workflow-table';
 import { DetailPanel } from '~/components/detail-panel';
 
 interface WorkflowSearchParams {
 	status?: string;
 	type?: string;
 	selected?: string;
+	q?: string;
 }
 
 export const Route = createFileRoute('/')({
@@ -17,12 +18,13 @@ export const Route = createFileRoute('/')({
 		status: typeof search.status === 'string' ? search.status : undefined,
 		type: typeof search.type === 'string' ? search.type : undefined,
 		selected: typeof search.selected === 'string' ? search.selected : undefined,
+		q: typeof search.q === 'string' ? search.q : undefined,
 	}),
 	component: HomePage,
 });
 
 function HomePage() {
-	const { status, type, selected } = Route.useSearch();
+	const { status, type, selected, q } = Route.useSearch();
 	const navigate = useNavigate();
 
 	const { data, isLoading } = useQuery(
@@ -34,6 +36,12 @@ function HomePage() {
 
 	const workflows = data?.workflows ?? [];
 	const uniqueTypes = [...new Set(workflows.map((wf) => wf.type))].sort();
+
+	const searchQuery = q ?? '';
+	const filtered = workflows.filter((wf) => {
+		if (searchQuery && !wf.id.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+		return true;
+	});
 
 	function handleStatusChange(newStatus: string) {
 		navigate({
@@ -57,12 +65,34 @@ function HomePage() {
 		});
 	}
 
+	function handleSearchChange(query: string) {
+		navigate({
+			to: '/',
+			search: (prev: WorkflowSearchParams) => ({
+				...prev,
+				q: query || undefined,
+			}),
+			replace: true,
+		});
+	}
+
 	function handleSelectWorkflow(id: string) {
 		navigate({
 			to: '/',
 			search: (prev: WorkflowSearchParams) => ({
 				...prev,
 				selected: id,
+			}),
+			replace: true,
+		});
+	}
+
+	function handleCloseDetail() {
+		navigate({
+			to: '/',
+			search: (prev: WorkflowSearchParams) => ({
+				...prev,
+				selected: undefined,
 			}),
 			replace: true,
 		});
@@ -77,38 +107,17 @@ function HomePage() {
 				activeType={type ?? ''}
 				types={uniqueTypes}
 				workflows={workflows}
+				searchQuery={searchQuery}
 				onStatusChange={handleStatusChange}
 				onTypeChange={handleTypeChange}
+				onSearchChange={handleSearchChange}
 			/>
 
-			<div className="flex flex-1 overflow-hidden">
-				{/* Left panel - workflow list */}
-				<div className="w-80 shrink-0 overflow-y-auto border-r border-border bg-surface-0">
-					<div aria-live="polite">
-						{isLoading ? (
-							<div className="space-y-px">
-								{Array.from({ length: 8 }).map((_, i) => (
-									<div key={i} className="flex flex-col gap-1 border-b border-border-muted px-3 py-2.5">
-										<div className="flex items-center gap-2">
-											<div className="h-2 w-2 animate-pulse rounded-full bg-zinc-800" />
-											<div className="h-4 w-24 animate-pulse rounded bg-zinc-800" />
-										</div>
-										<div className="flex items-center justify-between pl-4">
-											<div className="h-3 w-20 animate-pulse rounded bg-zinc-800" />
-											<div className="h-3 w-12 animate-pulse rounded bg-zinc-800" />
-										</div>
-									</div>
-								))}
-							</div>
-						) : (
-							<WorkflowList workflows={workflows} selectedId={selected ?? null} onSelect={handleSelectWorkflow} />
-						)}
-					</div>
-				</div>
-
-				{/* Right panel - detail */}
-				<DetailPanel workflowId={selected ?? null} />
+			<div className="flex-1 overflow-auto">
+				<WorkflowTable workflows={filtered} selectedId={selected ?? null} isLoading={isLoading} onSelect={handleSelectWorkflow} />
 			</div>
+
+			<DetailPanel workflowId={selected ?? null} onClose={handleCloseDetail} />
 		</div>
 	);
 }
