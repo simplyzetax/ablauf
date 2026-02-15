@@ -7,22 +7,20 @@ import superjson from 'superjson';
 type UpdateKey<Updates extends object> = Extract<keyof Updates, string>;
 
 /**
- * Concrete implementation of the {@link SSE} interface for real-time workflow updates.
+ * Manages real-time WebSocket updates for a workflow instance.
  *
- * Manages a set of connected SSE writers and supports two modes:
- * - **Replay mode** (`isReplay = true`): `broadcast()` calls are skipped; `emit()` calls
- *   only persist without writing to clients (since clients will receive persisted messages
- *   via {@link SSEContext.flushPersistedMessages | flushPersistedMessages()}).
- * - **Live mode** (`isReplay = false`): Both `broadcast()` and `emit()` write to connected clients.
+ * Two modes via `isReplay` flag:
+ * - **Replay** (`true`): `broadcast()` is a no-op; `emit()` only persists.
+ * - **Live** (`false`): Both `broadcast()` and `emit()` send to connected WebSocket clients.
  *
- * @typeParam Updates - Map of update names to their data types.
+ * Uses Cloudflare's Hibernatable WebSocket API — the platform manages connections
+ * so the Durable Object can hibernate between events.
  */
-export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
-	private writers = new Set<WritableStreamDefaultWriter>();
+export class LiveContext<Updates extends object = {}> implements SSE<Updates> {
 	private closed = false;
-	private encoder = new TextEncoder();
 
 	constructor(
+		private doState: DurableObjectState,
 		private db: DrizzleSqliteDODatabase,
 		private schemas: Record<string, z.ZodType<unknown>> | null,
 		private isReplay: boolean,
@@ -32,29 +30,17 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 		this.isReplay = isReplay;
 	}
 
-	addWriter(writer: WritableStreamDefaultWriter): void {
-		this.writers.add(writer);
-	}
-
-	removeWriter(writer: WritableStreamDefaultWriter): void {
-		this.writers.delete(writer);
-	}
-
-	get writerCount(): number {
-		return this.writers.size;
-	}
-
 	broadcast<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
 		if (this.closed || this.isReplay) return;
 		const parsed = this.validate(name, data);
-		this.writeToClients(name, parsed);
+		this.sendToClients(name, parsed);
 	}
 
 	emit<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
 		if (this.closed) return;
 		const parsed = this.validate(name, data);
 		if (!this.isReplay) {
-			this.writeToClients(name, parsed);
+			this.sendToClients(name, parsed);
 			this.db
 				.insert(sseMessagesTable)
 				.values({
@@ -69,23 +55,22 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 	close(): void {
 		if (this.closed) return;
 		this.closed = true;
-		const closeMsg = this.encoder.encode('event: close\ndata: {}\n\n');
-		for (const writer of this.writers) {
+		const msg = JSON.stringify({ event: 'close', data: {} });
+		for (const ws of this.doState.getWebSockets()) {
 			try {
-				writer.write(closeMsg);
-				writer.close();
+				ws.send(msg);
+				ws.close(1000, 'Workflow ended');
 			} catch {
 				// Client already disconnected
 			}
 		}
-		this.writers.clear();
 	}
 
-	async flushPersistedMessages(writer: WritableStreamDefaultWriter): Promise<void> {
+	async flushPersistedMessages(ws: WebSocket): Promise<void> {
 		const messages = await this.db.select().from(sseMessagesTable);
 		for (const msg of messages) {
 			try {
-				writer.write(this.encoder.encode(`event: ${msg.event}\ndata: ${msg.data}\n\n`));
+				ws.send(JSON.stringify({ event: msg.event, data: msg.data }));
 			} catch {
 				break;
 			}
@@ -103,19 +88,19 @@ export class SSEContext<Updates extends object = {}> implements SSE<Updates> {
 		return schema.parse(data) as Updates[K];
 	}
 
-	private writeToClients<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
-		const message = this.encoder.encode(`event: ${name}\ndata: ${superjson.stringify(data)}\n\n`);
-		for (const writer of this.writers) {
+	private sendToClients<K extends UpdateKey<Updates>>(name: K, data: Updates[K]): void {
+		const msg = JSON.stringify({ event: name, data: superjson.stringify(data) });
+		for (const ws of this.doState.getWebSockets()) {
 			try {
-				writer.write(message);
+				ws.send(msg);
 			} catch {
-				this.writers.delete(writer);
+				// Dead socket — platform will clean up
 			}
 		}
 	}
 }
 
-/** No-op SSE context used when a workflow does not define `sseUpdates`. All methods are silent no-ops. */
+/** No-op context used when a workflow does not define `sseUpdates`. */
 export class NoOpSSEContext implements SSE<never> {
 	broadcast<K extends never>(_name: K, _data: never): void {}
 	emit<K extends never>(_name: K, _data: never): void {}

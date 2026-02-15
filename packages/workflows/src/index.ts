@@ -68,8 +68,8 @@ export {
 } from './errors';
 export type { ErrorCode, ErrorSource, WorkflowErrorStatus, WorkflowErrorCatalogEntry } from './errors';
 
-// SSE
-export { SSEContext } from './engine/sse';
+// Live updates (WebSocket)
+export { LiveContext } from './engine/sse';
 
 // Engine internals (for advanced use)
 export { shardIndex } from './engine/shard';

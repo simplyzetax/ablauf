@@ -34,18 +34,93 @@ export function createDashboardClient(config: AblaufClientConfig): DashboardClie
 	return createORPCClient(link) as DashboardClient;
 }
 
-/** Create an extended client with a typed `subscribe()` helper for SSE. */
+function deriveWsUrl(httpUrl: string): string {
+	return httpUrl.replace(/^http/, 'ws');
+}
+
+/** Create an extended client with a typed `subscribe()` helper over WebSocket. */
 export function createAblaufClient(config: AblaufClientConfig): AblaufClient {
 	const rawClient = createDashboardClient(config);
+	const wsBaseUrl = config.wsUrl ?? deriveWsUrl(config.url);
 
 	const client = Object.assign(rawClient, {
 		async *subscribe<W extends WorkflowClass>(
 			id: string,
 			options?: { signal?: AbortSignal },
 		): AsyncGenerator<InferSSEUpdates<W>, void, unknown> {
-			const iterator = await rawClient.workflows.subscribe({ id }, options ? { signal: options.signal } : undefined);
-			for await (const update of iterator as AsyncIterable<{ event: string; data: unknown }>) {
-				yield update as InferSSEUpdates<W>;
+			const ws = new WebSocket(`${wsBaseUrl}/workflows/${id}/ws`);
+			const signal = options?.signal;
+
+			try {
+				// Wait for connection
+				await new Promise<void>((resolve, reject) => {
+					ws.addEventListener('open', () => resolve(), { once: true });
+					ws.addEventListener('error', () => reject(new Error('WebSocket connection failed')), { once: true });
+					signal?.addEventListener(
+						'abort',
+						() => {
+							ws.close();
+							reject(new DOMException('Aborted', 'AbortError'));
+						},
+						{ once: true },
+					);
+				});
+
+				// Yield messages as async iterable
+				const messageQueue: string[] = [];
+				let resolve: (() => void) | null = null;
+				let done = false;
+
+				ws.addEventListener('message', (evt) => {
+					messageQueue.push(evt.data as string);
+					resolve?.();
+				});
+
+				ws.addEventListener('close', () => {
+					done = true;
+					resolve?.();
+				});
+
+				ws.addEventListener('error', () => {
+					done = true;
+					resolve?.();
+				});
+
+				signal?.addEventListener('abort', () => {
+					ws.close();
+					done = true;
+					resolve?.();
+				});
+
+				while (!done) {
+					if (messageQueue.length === 0) {
+						await new Promise<void>((r) => {
+							resolve = r;
+						});
+						resolve = null;
+					}
+
+					while (messageQueue.length > 0) {
+						const raw = messageQueue.shift()!;
+						try {
+							const parsed = JSON.parse(raw);
+							if (parsed.event === 'close') {
+								done = true;
+								break;
+							}
+							yield {
+								event: parsed.event,
+								data: SuperJSON.parse(parsed.data),
+							} as InferSSEUpdates<W>;
+						} catch {
+							// Malformed message, skip
+						}
+					}
+				}
+			} finally {
+				if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+					ws.close();
+				}
 			}
 		},
 	});

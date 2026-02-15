@@ -90,6 +90,17 @@ app.post('/workflows/:type', async (c) => {
 	}
 });
 
+app.get('/__ablauf/workflows/:id/ws', async (c) => {
+	const upgradeHeader = c.req.header('Upgrade');
+	if (upgradeHeader !== 'websocket') {
+		return c.text('Expected WebSocket upgrade', 426);
+	}
+	const id = c.req.param('id');
+	const doId = c.env.WORKFLOW_RUNNER.idFromName(id);
+	const stub = c.env.WORKFLOW_RUNNER.get(doId);
+	return stub.fetch(c.req.raw);
+});
+
 app.all('/__ablauf/*', async (c) => {
 	const { matched: matchedOpenApi, response: responseOpenApi } = await openApiHandler.handle(c.req.raw, {
 		prefix: '/__ablauf',

@@ -3,7 +3,6 @@ import { z } from 'zod';
 import type { WorkflowRunnerStub, WorkflowClass, WorkflowIndexListFilters, WorkflowShardConfig } from './engine/types';
 import { workflowStatusSchema, workflowStatusResponseSchema, workflowIndexEntrySchema, stepInfoSchema } from './engine/types';
 import { listIndexEntries } from './engine/index-listing';
-import { parseSSEStream } from './engine/sse-stream';
 import { ObservabilityDisabledError, asWorkflowError, pickORPCErrors } from './errors';
 
 export interface DashboardContext {
@@ -146,31 +145,10 @@ const timeline = base
 		return { id: status.id, type: status.type, status: status.status, timeline: timelineEntries };
 	});
 
-const subscribe = base
-	.route({
-		method: 'GET',
-		path: '/workflows/{id}/subscribe',
-		summary: 'Subscribe to workflow updates',
-		description: 'Open an SSE stream to receive real-time updates from a running workflow instance.',
-		tags: ['workflows'],
-	})
-	.input(z.object({ id: z.string() }))
-	.handler(async function* ({ input, context, signal }) {
-		const stub = getStub(context.binding, input.id);
-		const stream = await stub.connectSSE();
-		for await (const update of parseSSEStream(stream, { signal })) {
-			if (update.event === 'close') {
-				return;
-			}
-			yield update;
-		}
-	});
-
 export const dashboardRouter = {
 	workflows: {
 		list,
 		get,
 		timeline,
-		subscribe,
 	},
 };
