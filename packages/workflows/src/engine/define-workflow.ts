@@ -1,6 +1,8 @@
 import type { z } from 'zod';
 import { BaseWorkflow } from './base-workflow';
 import type { Step, SSE, WorkflowDefaults, WorkflowEventSchemas, WorkflowClass, ResultSizeLimitConfig } from './types';
+import { t as transportSchema, validateSchema } from '../serializable';
+import type { TransportSchema } from '../serializable';
 
 /**
  * Options for defining a workflow using the functional API.
@@ -43,21 +45,27 @@ interface DefineWorkflowOptions<
 }
 
 /**
- * Define a workflow using a simple object instead of a class.
- * All types are inferred from the schemas you provide.
+ * Define a workflow using a callback that receives a constrained Zod namespace (`t`)
+ * which only exposes SuperJSON-compatible types. All types are inferred from the
+ * schemas you provide.
+ *
+ * @param factory - A callback that receives a {@link TransportSchema} (`t`) and returns
+ *   the workflow options. Using `t` instead of raw `z` ensures all schemas are
+ *   serialization-safe at the type level. A runtime check via {@link validateSchema}
+ *   is also performed as a safety net.
  *
  * @example
  * ```ts
- * const MyWorkflow = defineWorkflow({
+ * const MyWorkflow = defineWorkflow((t) => ({
  *   type: "my-workflow",
- *   input: z.object({ name: z.string() }),
- *   events: { approval: z.object({ approved: z.boolean() }) },
+ *   input: t.object({ name: t.string() }),
+ *   events: { approval: t.object({ approved: t.boolean() }) },
  *   run: async (step, payload, sse) => {
  *     const greeting = await step.do("greet", () => `Hello, ${payload.name}!`);
  *     const approval = await step.waitForEvent("approval");
  *     return { greeting, approved: approval.approved };
  *   },
- * });
+ * }));
  * ```
  */
 export function defineWorkflow<
@@ -67,7 +75,7 @@ export function defineWorkflow<
 	Events extends Record<string, z.ZodType> = {},
 	SSEUpdates extends Record<string, z.ZodType> | undefined = undefined,
 >(
-	options: DefineWorkflowOptions<Type, Input, Result, Events, SSEUpdates>,
+	factory: (t: TransportSchema) => DefineWorkflowOptions<Type, Input, Result, Events, SSEUpdates>,
 ): WorkflowClass<
 	z.infer<Input>,
 	Result,
@@ -75,6 +83,21 @@ export function defineWorkflow<
 	Type,
 	SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never
 > {
+	const options = factory(transportSchema);
+
+	// Runtime safety net: validate all schemas use SuperJSON-compatible types
+	validateSchema(options.input, 'input');
+	if (options.events) {
+		for (const [key, schema] of Object.entries(options.events)) {
+			validateSchema(schema, `events.${key}`);
+		}
+	}
+	if (options.sseUpdates) {
+		for (const [key, schema] of Object.entries(options.sseUpdates)) {
+			validateSchema(schema, `sseUpdates.${key}`);
+		}
+	}
+
 	type InferredPayload = z.infer<Input>;
 	type InferredEvents = { [K in keyof Events]: z.infer<Events[K]> };
 	type InferredSSE = SSEUpdates extends Record<string, z.ZodType> ? { [K in keyof SSEUpdates]: z.infer<SSEUpdates[K]> } : never;
