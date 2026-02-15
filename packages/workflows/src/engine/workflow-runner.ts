@@ -114,6 +114,10 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				updatedAt: now,
 			});
 			this.updateIndex(props.type, props.id, 'running', now);
+			// Safety alarm: if replay() causes OOM and kills the isolate, this
+			// durably-stored alarm fires and the alarm handler triggers crash
+			// recovery via the write-ahead mechanism in step.do().
+			await this.ctx.storage.setAlarm(Date.now() + 1000);
 			await this.replay();
 		}
 
@@ -207,6 +211,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			await this.scheduleNextAlarm();
 			await this.setStatus('running');
+			// Safety alarm: ensures crash recovery if OOM kills the isolate during replay
+			await this.ctx.storage.setAlarm(Date.now() + 1000);
 			await this.replay();
 		}
 
@@ -218,6 +224,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		async resume(): Promise<void> {
 			await this.db.update(workflowTable).set({ paused: false, updatedAt: Date.now() });
 			await this.setStatus('running');
+			// Safety alarm: ensures crash recovery if OOM kills the isolate during replay
+			await this.ctx.storage.setAlarm(Date.now() + 1000);
 			await this.replay();
 		}
 
@@ -266,7 +274,9 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		}
 
 		async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
-			ws.close(code, reason || 'Client disconnected');
+			// 1005 ("No Status Received") is a reserved code that must not be sent on the wire.
+			const safeCode = code === 1005 ? 1000 : code;
+			ws.close(safeCode, reason || 'Client disconnected');
 		}
 
 		async webSocketError(_ws: WebSocket, _error: unknown): Promise<void> {
@@ -299,6 +309,14 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		// ─── DO Alarm Handler ───
 
 		async alarm(): Promise<void> {
+			// Guard: skip replay for workflows already in a terminal state.
+			// Safety alarms (set before replay in RPC methods) may fire after
+			// the workflow has already completed — bail early to avoid re-running.
+			const [wf] = await this.db.select().from(workflowTable);
+			if (!wf || wf.status === 'completed' || wf.status === 'errored' || wf.status === 'terminated') {
+				return;
+			}
+
 			const pendingSteps = await this.db
 				.select()
 				.from(stepsTable)
@@ -335,6 +353,22 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				.update(stepsTable)
 				.set({ wakeAt: 1 })
 				.where(or(eq(stepsTable.status, 'sleeping'), eq(stepsTable.status, 'waiting'), eq(stepsTable.status, 'failed')));
+		}
+
+		/** Simulate an OOM crash by leaving a step in 'running' state (as the write-ahead would). */
+		async _simulateOOMCrash(stepName: string, attempts: number = 1): Promise<void> {
+			const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, stepName));
+			if (existing) {
+				await this.db.update(stepsTable).set({ status: 'running', attempts }).where(eq(stepsTable.name, stepName));
+			} else {
+				await this.db.insert(stepsTable).values({
+					name: stepName,
+					type: 'do',
+					status: 'running',
+					attempts,
+					startedAt: Date.now(),
+				});
+			}
 		}
 
 		// ─── Internal ───

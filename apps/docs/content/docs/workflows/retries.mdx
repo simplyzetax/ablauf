@@ -111,6 +111,46 @@ try {
 	For the complete list of error classes and their HTTP status codes, see the [API Reference](/docs/server/api-reference#error-classes).
 </Callout>
 
+## Crash & OOM Recovery
+
+Cloudflare Durable Objects run in isolates with a **128 MB memory limit**. If a step exceeds this limit (or the isolate crashes for any reason), the entire isolate is killed — your step's try/catch never executes, and the error is never recorded.
+
+Ablauf handles this automatically using **write-ahead step tracking**. Before executing your step function, Ablauf persists the step as `"running"` in SQLite with an incremented attempt counter. If the isolate dies mid-execution:
+
+1. The step remains in `"running"` state in durable storage (SQLite survives isolate resets)
+2. A **safety alarm** (set before replay started) fires and triggers the alarm handler
+3. The alarm handler replays the workflow, detecting the orphaned `"running"` step
+4. The crash is recorded in the step's retry history
+5. Normal retry logic kicks in — backoff delay, then re-execution
+6. If retries are exhausted, the step fails permanently with `StepRetryExhaustedError`
+
+This means OOM crashes are handled identically to normal step failures — no infinite loops, no zombie workflows. Ablauf sets a safety alarm before every replay so there's always a trigger for crash recovery, whether the OOM happened during initial execution, a resume, or an alarm-driven retry.
+
+```
+Attempt 1: step.do() → write-ahead (running, attempts=1) → fn() → OOM 💥
+  ↓ isolate killed, safety alarm fires
+Recovery: alarm() → replay() → detects status="running" → schedule retry with backoff
+  ↓ retry alarm fires
+Attempt 2: step.do() → write-ahead (running, attempts=2) → fn() → success ✓
+```
+
+<Callout type="warn">
+	If a step deterministically exceeds 128 MB, retries won't help — it will fail on every attempt and
+	eventually exhaust retries. Move memory-heavy work to a separate Worker via
+	[service binding RPC](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/rpc/)
+	so the DO isolate stays safe. The separate Worker has its own 128 MB and its crash won't kill your workflow's state.
+</Callout>
+
+### What Survives an Isolate Crash
+
+| Data | Survives? | Why |
+|------|-----------|-----|
+| Completed step results | Yes | Persisted in SQLite before the crash |
+| Workflow metadata & payload | Yes | Written to durable storage on creation |
+| In-flight step attempt counter | Yes | Write-ahead persists before `fn()` runs |
+| The step function's return value | No | Isolate died before it could be saved |
+| JavaScript variables in memory | No | Isolate memory is wiped |
+
 ## Best Practices
 
 **Set realistic retry limits.** If an API is down, 100 retries won't help. Use retries for transient issues, not systemic failures.
@@ -133,4 +173,14 @@ await step.do(
 		retries: { limit: 5 },
 	},
 );
+```
+
+**Offload memory-heavy steps.** If a step does inference, image processing, or anything that might exceed 128 MB, call it via `fetch()` or service binding RPC so it runs in a separate isolate. Your DO stays safe and can retry if the external call fails.
+
+```ts
+await step.do('run-inference', async () => {
+	// Runs in a separate Worker's isolate — OOM here won't kill the DO
+	const result = await env.INFERENCE_WORKER.runModel(payload);
+	return result;
+}, { retries: { limit: 5, delay: '10s', backoff: 'exponential' } });
 ```
