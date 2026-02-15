@@ -439,13 +439,15 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			const collector = provider ? provider.createCollector(wf.workflowId, wf.type) : null;
 
 			// Emit workflow start event on the very first replay (initialization).
-			if (this.isInitializing && provider && collector) {
-				provider.onWorkflowStart(collector, {
-					workflowId: wf.workflowId,
-					type: wf.type,
-					payload: wf.payload ? superjson.parse(wf.payload) : null,
-					timestamp: wf.createdAt,
-				});
+			if (this.isInitializing) {
+				if (provider && collector) {
+					provider.onWorkflowStart(collector, {
+						workflowId: wf.workflowId,
+						type: wf.type,
+						payload: wf.payload ? superjson.parse(wf.payload) : null,
+						timestamp: wf.createdAt,
+					});
+				}
 				this.isInitializing = false;
 			}
 

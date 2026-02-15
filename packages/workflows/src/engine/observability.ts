@@ -232,6 +232,9 @@ export interface ObservabilityProvider<TCollector = void> {
 	 * (e.g., the built-in shard provider or an external database).
 	 * Used by the dashboard API to populate workflow lists.
 	 *
+	 * When `limit` is specified, results should be sorted by `updatedAt` descending
+	 * (newest first) so the most recent entries are returned.
+	 *
 	 * @param filters - Criteria for narrowing results by type, status, or count.
 	 * @returns Array of index entries augmented with the workflow type.
 	 */
@@ -398,49 +401,6 @@ export class ShardObservabilityProvider implements ObservabilityProvider<ShardCo
 		this.binding = binding;
 		this.shardConfigs = config?.shards ?? {};
 		this.workflowTypes = config?.workflowTypes ?? [];
-	}
-
-	/**
-	 * Set the list of known workflow types.
-	 *
-	 * Called internally by the {@link Ablauf} class during setup to inform the provider
-	 * of all registered workflow types. This is needed so `listWorkflows()` can query
-	 * all types when no type filter is specified.
-	 *
-	 * @param types - Array of workflow type strings (e.g., `["order-processing", "notification"]`).
-	 */
-	_setWorkflowTypes(types: string[]): void {
-		this.workflowTypes = types;
-	}
-
-	/**
-	 * Set the Durable Object namespace binding.
-	 *
-	 * Called internally by the {@link Ablauf} class during setup when the binding
-	 * is not available at construction time (e.g., it comes from the worker `env`).
-	 *
-	 * @param binding - The `DurableObjectNamespace` binding for the `WorkflowRunner` DO class.
-	 */
-	_setBinding(binding: DurableObjectNamespace): void {
-		this.binding = binding;
-	}
-
-	/**
-	 * Merge shard configurations from workflow registration tuples.
-	 *
-	 * Called internally by the {@link Ablauf} class during setup to consolidate
-	 * shard configs from `[WorkflowClass, ShardConfig]` tuples into the provider's
-	 * config map. Existing entries are not overwritten — explicit constructor config
-	 * takes precedence.
-	 *
-	 * @param configs - Map of workflow type strings to shard configurations.
-	 */
-	_mergeShardConfigs(configs: Record<string, WorkflowShardConfig>): void {
-		for (const [type, config] of Object.entries(configs)) {
-			if (!this.shardConfigs[type]) {
-				this.shardConfigs[type] = config;
-			}
-		}
 	}
 
 	/**
