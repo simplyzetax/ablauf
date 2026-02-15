@@ -116,7 +116,7 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 				</SheetDescription>
 			</SheetHeader>
 
-			<div className="space-y-5">
+			<div className="space-y-5 px-4">
 				{/* Error banner — always expanded, not collapsible */}
 				{workflow.error && (
 					<div className="rounded-sm border border-red-800/50 bg-red-950/50 p-3 text-sm text-red-300">{workflow.error}</div>
@@ -156,7 +156,7 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 
 function DetailSkeleton() {
 	return (
-		<div className="space-y-5 pt-6">
+		<div className="space-y-5 px-4 pt-6">
 			<div>
 				<div className="flex items-center gap-3">
 					<Skeleton className="h-6 w-48" />
