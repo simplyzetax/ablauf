@@ -19,18 +19,18 @@ The class-based API allows you to define workflows by extending `BaseWorkflow`. 
 Here's a workflow that handles user onboarding with email verification:
 
 ```ts
-import { BaseWorkflow } from '@der-ablauf/workflows';
+import { BaseWorkflow, t } from '@der-ablauf/workflows';
 import type { Step, SSE } from '@der-ablauf/workflows';
-import { z } from 'zod';
+import type { z } from 'zod';
 
-const inputSchema = z.object({
-	name: z.string(),
-	email: z.string().email(),
+const inputSchema = t.object({
+	name: t.string(),
+	email: t.string().email(),
 });
 type Payload = z.infer<typeof inputSchema>;
 
 const eventSchemas = {
-	verification: z.object({ code: z.string() }),
+	verification: t.object({ code: t.string() }),
 };
 type Events = { verification: { code: string } };
 
@@ -68,6 +68,12 @@ export class OnboardingWorkflow extends BaseWorkflow<Payload, Result, Events> {
 }
 ```
 
+<Callout type="info">
+	Schemas use the `t` namespace from `@der-ablauf/workflows` instead of `z` from Zod. This constrained namespace only exposes
+	[SuperJSON-compatible types](/docs/workflows/transport-types), preventing serialization errors at compile time. You can also wrap
+	existing Zod schemas with `serializable()`.
+</Callout>
+
 ## Generic Type Parameters
 
 `BaseWorkflow` accepts up to four generic type parameters:
@@ -97,13 +103,27 @@ static type = "onboarding" as const;
 
 ### `inputSchema` (required)
 
-A Zod schema that validates the workflow payload.
+A Zod schema that validates the workflow payload. Use the `t` namespace for transport-safe types.
 
 ```ts
-static inputSchema = z.object({
-	name: z.string(),
-	email: z.string().email(),
+static inputSchema = t.object({
+	name: t.string(),
+	email: t.string().email(),
 });
+```
+
+If you have an existing Zod schema, wrap it with `serializable()`:
+
+```ts
+import { serializable } from '@der-ablauf/workflows';
+import { z } from 'zod';
+
+// Pre-existing schema from your app
+const userSchema = z.object({ name: z.string(), email: z.string() });
+
+class MyWorkflow extends BaseWorkflow<...> {
+	static inputSchema = serializable(userSchema);
+}
 ```
 
 ### `events` (optional)
@@ -112,8 +132,8 @@ A record mapping event names to their Zod validation schemas.
 
 ```ts
 static events = {
-	verification: z.object({ code: z.string() }),
-	cancellation: z.object({ reason: z.string() }),
+	verification: t.object({ code: t.string() }),
+	cancellation: t.object({ reason: t.string() }),
 };
 ```
 
@@ -137,8 +157,8 @@ A record of named Zod schemas for SSE updates your workflow can broadcast/emit.
 
 ```ts
 static sseUpdates = {
-	status: z.object({ message: z.string() }),
-	error: z.object({ error: z.string() }),
+	status: t.object({ message: t.string() }),
+	error: t.object({ error: t.string() }),
 };
 ```
 
@@ -182,19 +202,19 @@ Unlike the functional API, you'll need to manually annotate parameter types:
 Here's a more complex workflow with SSE updates and multiple event types:
 
 ```ts
-import { BaseWorkflow } from '@der-ablauf/workflows';
+import { BaseWorkflow, t } from '@der-ablauf/workflows';
 import type { Step, SSE } from '@der-ablauf/workflows';
-import { z } from 'zod';
+import type { z } from 'zod';
 
-const inputSchema = z.object({
-	fileUrl: z.string().url(),
-	format: z.enum(['pdf', 'docx', 'txt']),
+const inputSchema = t.object({
+	fileUrl: t.string().url(),
+	format: t.enum(['pdf', 'docx', 'txt']),
 });
 type Payload = z.infer<typeof inputSchema>;
 
 const eventSchemas = {
-	progress: z.object({ percent: z.number() }),
-	cancel: z.object({ reason: z.string() }),
+	progress: t.object({ percent: t.number() }),
+	cancel: t.object({ reason: t.string() }),
 };
 type Events = {
 	progress: { percent: number };
@@ -202,9 +222,9 @@ type Events = {
 };
 
 const sseSchema = {
-	started: z.object({ url: z.string() }),
-	progress: z.object({ percent: z.number() }),
-	complete: z.object({ outputUrl: z.string() }),
+	started: t.object({ url: t.string() }),
+	progress: t.object({ percent: t.number() }),
+	complete: t.object({ outputUrl: t.string() }),
 };
 type SSEUpdates = {
 	started: z.infer<typeof sseSchema.started>;

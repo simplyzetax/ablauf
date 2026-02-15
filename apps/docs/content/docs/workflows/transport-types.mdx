@@ -1,0 +1,181 @@
+---
+title: Supported Transport Types
+description: Learn which data types are safe for workflow payloads, events, and SSE updates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Supported Transport Types
+
+All workflow data — input payloads, event payloads, and SSE updates — is serialized via [SuperJSON](https://github.com/blitz-js/superjson) for durable storage in SQLite and transport across Durable Object RPC boundaries. This means only data types that SuperJSON can handle are safe to use.
+
+Ablauf enforces this at **compile time** via the `t` namespace and at **runtime** via schema validation at workflow registration.
+
+## The `t` Namespace
+
+Instead of using `z` from Zod directly, workflow schemas use the constrained `t` namespace that only exposes SuperJSON-compatible types:
+
+```ts
+import { defineWorkflow } from '@der-ablauf/workflows';
+
+const OrderWorkflow = defineWorkflow((t) => ({
+	type: 'process-order',
+	input: t.object({
+		orderId: t.string(),
+		items: t.array(t.object({ name: t.string(), price: t.number() })),
+		placedAt: t.date(),
+		metadata: t.map(t.string(), t.unknown()),
+	}),
+	events: {
+		payment: t.object({ amount: t.number(), transactionId: t.string() }),
+	},
+	run: async (step, payload) => {
+		// payload is fully typed
+		return { processed: true };
+	},
+}));
+```
+
+For `BaseWorkflow`, import `t` directly:
+
+```ts
+import { BaseWorkflow, t } from '@der-ablauf/workflows';
+
+class MyWorkflow extends BaseWorkflow<...> {
+	static inputSchema = t.object({ name: t.string() });
+}
+```
+
+## Supported Types
+
+### Primitives
+
+| Method | TypeScript Type | SuperJSON |
+| --- | --- | --- |
+| `t.string()` | `string` | Native JSON |
+| `t.number()` | `number` | Native JSON |
+| `t.boolean()` | `boolean` | Native JSON |
+| `t.null()` | `null` | Native JSON |
+| `t.undefined()` | `undefined` | SuperJSON handles |
+| `t.bigint()` | `bigint` | SuperJSON handles |
+
+### Rich Types
+
+| Method | TypeScript Type | SuperJSON |
+| --- | --- | --- |
+| `t.date()` | `Date` | SuperJSON handles |
+| `t.map(key, value)` | `Map<K, V>` | SuperJSON handles |
+| `t.set(value)` | `Set<T>` | SuperJSON handles |
+| `t.url()` | `URL` | SuperJSON handles |
+
+### Structural
+
+| Method | TypeScript Type |
+| --- | --- |
+| `t.object(shape)` | `{ [key]: T }` |
+| `t.array(item)` | `T[]` |
+| `t.tuple(items)` | `[A, B, ...]` |
+| `t.record(key, value)` | `Record<K, V>` |
+
+### Combinators
+
+| Method | Description |
+| --- | --- |
+| `t.literal(value)` | Exact value match |
+| `t.enum(values)` | String enum |
+| `t.nativeEnum(enum)` | TypeScript enum |
+| `t.union(options)` | Union of types |
+| `t.discriminatedUnion(key, options)` | Tagged union |
+| `t.intersection(a, b)` | Intersection |
+| `t.optional()` | Optional wrapper |
+| `t.nullable()` | Nullable wrapper |
+| `t.lazy(fn)` | Recursive/deferred schemas |
+
+All Zod modifiers like `.default()`, `.transform()`, `.refine()`, `.pipe()` work as expected on `t.*` schemas.
+
+## Escape Hatches
+
+<Callout type="warn">
+	`t.any()` and `t.unknown()` bypass transport type safety. The actual runtime value **must** be SuperJSON-compatible or serialization will
+	fail silently. Prefer explicit types whenever possible.
+</Callout>
+
+These are available for cases where you genuinely need flexible schemas, but use them sparingly:
+
+```ts
+defineWorkflow((t) => ({
+	type: 'flexible',
+	input: t.object({
+		data: t.unknown(), // ⚠️ Caller must ensure SuperJSON compatibility
+	}),
+	run: async (step, payload) => { ... },
+}));
+```
+
+Both `t.any()` and `t.unknown()` emit a `console.warn` at schema creation time to remind you of the risk.
+
+## Excluded Types
+
+These Zod types are **not available** on `t` and will cause a compile error:
+
+| Zod Type | Reason |
+| --- | --- |
+| `z.function()` | Functions are not serializable |
+| `z.promise()` | Promises are not serializable |
+| `z.instanceof()` | Arbitrary classes are not serializable (use `t.url()` for URL) |
+| `z.symbol()` | Symbols are not supported by SuperJSON |
+| `z.void()` | Not meaningful for transport data |
+| `z.never()` | Not meaningful for transport data |
+
+If you attempt to bypass `t` and smuggle an unsupported type, the runtime validation will throw an `InvalidSchemaError` at workflow registration time.
+
+## Using Existing Zod Schemas
+
+If you have Zod schemas defined elsewhere in your app, wrap them with `serializable()` to validate and brand them:
+
+```ts
+import { serializable, BaseWorkflow } from '@der-ablauf/workflows';
+import { z } from 'zod';
+
+// Shared schema from your app
+const userSchema = z.object({ name: z.string(), email: z.string() });
+
+class UserWorkflow extends BaseWorkflow<...> {
+	static inputSchema = serializable(userSchema);
+	// Throws InvalidSchemaError if userSchema uses unsupported types
+}
+```
+
+## Migration from `z` to `t`
+
+If you have existing workflows using `z` directly:
+
+**Functional API** — wrap in callback, replace `z.` with `t.`:
+
+```ts
+// Before
+defineWorkflow({
+	type: 'my-workflow',
+	input: z.object({ name: z.string() }),
+	run: async (step, payload) => { ... },
+});
+
+// After
+defineWorkflow((t) => ({
+	type: 'my-workflow',
+	input: t.object({ name: t.string() }),
+	run: async (step, payload) => { ... },
+}));
+```
+
+**Class-based** — import `t`, replace `z.` with `t.` in static properties:
+
+```ts
+// Before
+import { z } from 'zod';
+static inputSchema = z.object({ name: z.string() });
+
+// After
+import { t } from '@der-ablauf/workflows';
+static inputSchema = t.object({ name: t.string() });
+```
