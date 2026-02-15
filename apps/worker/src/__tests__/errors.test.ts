@@ -18,6 +18,7 @@ import {
 	UpdateTimeoutError,
 	WorkflowNotRunningError,
 	NonRetriableError,
+	InvalidDateError,
 } from '@der-ablauf/workflows';
 
 describe('WorkflowError', () => {
@@ -100,6 +101,14 @@ describe('WorkflowError', () => {
 		expect(err.status).toBe(409);
 		expect(err.source).toBe('engine');
 		expect(err.details).toEqual({ workflowId: 'wf-123', currentStatus: 'paused' });
+	});
+
+	it('InvalidDateError has correct properties', () => {
+		const err = new InvalidDateError();
+		expect(err.code).toBe('VALIDATION_ERROR');
+		expect(err.status).toBe(400);
+		expect(err.source).toBe('validation');
+		expect(err.message).toContain('step.sleepUntil()');
 	});
 
 	it('NonRetriableError is a plain Error, not a WorkflowError', () => {
