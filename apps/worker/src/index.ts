@@ -18,8 +18,12 @@ import { ReplayCounterWorkflow } from './workflows/replay-counter-workflow';
 import { BackoffConfigWorkflow } from './workflows/backoff-config-workflow';
 import { NoSchemaWorkflow } from './workflows/no-schema-workflow';
 import { MultiEventWorkflow } from './workflows/multi-event-workflow';
+import { BenchmarkAblaufWorkflow } from './workflows/benchmark-ablauf-workflow';
 import { env } from 'cloudflare:workers';
 import type { WorkflowClass } from '@der-ablauf/workflows';
+import { benchmarkRequestSchema, toBenchmarkConfig } from './utils/benchmark-request';
+import { compareSummaries, summarizeEngine } from './utils/benchmark-stats';
+import { runBenchmarkRounds } from './utils/benchmark-runner';
 
 const workflows = [
 	TestWorkflow,
@@ -32,6 +36,7 @@ const workflows = [
 	BackoffConfigWorkflow,
 	NoSchemaWorkflow,
 	MultiEventWorkflow,
+	BenchmarkAblaufWorkflow,
 ];
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
@@ -53,6 +58,73 @@ app.onError((error, c) => {
 	const internalError = createInternalWorkflowError();
 	const honoError = toHonoError(internalError);
 	return c.json(toWorkflowErrorResponse(internalError), honoError.status);
+});
+
+app.post('/benchmarks/workflows', async (c) => {
+	if (!env.BENCHMARK_TOKEN) {
+		return c.json(
+			{
+				error: 'BENCHMARK_TOKEN is not configured. Set it with `npx wrangler secret put BENCHMARK_TOKEN`.',
+			},
+			503,
+		);
+	}
+
+	const providedToken = c.req.header('x-benchmark-token');
+	if (providedToken !== env.BENCHMARK_TOKEN) {
+		return c.json({ error: 'Unauthorized benchmark request' }, 401);
+	}
+
+	const body = await c.req.json<unknown>().catch(() => ({}));
+	const parsed = benchmarkRequestSchema.safeParse(body);
+	if (!parsed.success) {
+		return c.json(
+			{
+				error: 'Invalid benchmark request',
+				issues: parsed.error.issues.map((issue) => ({
+					path: issue.path.join('.'),
+					message: issue.message,
+				})),
+			},
+			400,
+		);
+	}
+
+	const config = toBenchmarkConfig(parsed.data);
+	const { runs, measuredRoundOrder } = await runBenchmarkRounds({
+		ablauf,
+		benchmarkWorkflowClass: BenchmarkAblaufWorkflow as WorkflowClass,
+		cloudflareBinding: c.env.CF_BENCH_WORKFLOW,
+		config,
+	});
+
+	const ablaufSummary = summarizeEngine(runs.ablauf);
+	const cloudflareSummary = summarizeEngine(runs.cloudflare);
+
+	return c.json({
+		config,
+		fairness: {
+			executionPattern: 'alternating-order-per-round',
+			warmupsDiscarded: config.warmups,
+			identicalPayload: {
+				steps: config.steps,
+				workIterations: config.workIterations,
+			},
+			pollIntervalMs: config.pollIntervalMs,
+			measuredRoundOrder,
+		},
+		engines: {
+			ablauf: {
+				runs: runs.ablauf,
+				summary: ablaufSummary,
+			},
+			cloudflare: {
+				runs: runs.cloudflare,
+				summary: cloudflareSummary,
+			},
+		},
+		comparison: compareSummaries(ablaufSummary, cloudflareSummary),
+	});
 });
 
 app.post('/workflows/:type', async (c) => {
@@ -122,7 +194,10 @@ app.all('/__ablauf/*', async (c) => {
 
 	return new Response('Not Found', { status: 404 });
 });
+
 export default {
 	fetch: app.fetch,
 } satisfies ExportedHandler<Env>;
+
 export const WorkflowRunner = ablauf.createWorkflowRunner();
+export { BenchmarkCloudflareWorkflow } from './workflows/benchmark-cloudflare-workflow';

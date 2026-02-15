@@ -1,0 +1,68 @@
+---
+title: Performance Benchmarks
+description: Compare Ablauf workflow performance against native Cloudflare Workflows with a fair, repeatable benchmark endpoint.
+---
+
+# Performance Benchmarks
+
+The Worker exposes a benchmark endpoint that executes:
+
+- A custom Ablauf workflow (`benchmark-ablauf`)
+- A native Cloudflare Workflow (`BenchmarkCloudflareWorkflow`)
+
+Both paths run the same payload, same number of steps, and same deterministic CPU work so the comparison is fair.
+
+## Endpoint
+
+`POST /benchmarks/workflows`
+
+This endpoint is token-protected and only runs when a `BENCHMARK_TOKEN` secret is configured.
+
+```bash
+npx wrangler secret put BENCHMARK_TOKEN
+```
+
+Then call the endpoint with `x-benchmark-token`.
+
+```bash
+curl -X POST http://localhost:8787/benchmarks/workflows \\
+  -H \"content-type: application/json\" \\
+  -H \"x-benchmark-token: <your-token>\" \\
+  -d '{
+    "iterations": 8,
+    "warmups": 2,
+    "steps": 8,
+    "workIterations": 5000,
+    "pollIntervalMs": 10
+  }'
+```
+
+## Fairness Rules Implemented
+
+- Alternating run order per measured round (`ablauf -> cloudflare`, then `cloudflare -> ablauf`)
+- Warmup rounds are executed but discarded from final stats
+- Identical payload shape and work units for both implementations
+- Same polling interval and completion criteria
+
+## Metrics Returned
+
+The response includes per-run and aggregated metrics for both engines:
+
+- `createMs`: latency for workflow instance creation call
+- `startupMs`: request-to-first-step-start latency
+- `completionMs`: end-to-end latency until workflow completes
+- `runMs`: workflow runtime measured inside the workflow implementation
+- `totalStepWallMs`: sum of wall-clock step durations
+- `totalCallbackMs`: sum of callback execution durations
+- `totalOrchestrationMs`: estimated scheduler/orchestration overhead (`wall - callback`)
+- `throughputStepsPerSecond`
+- `perStep`: p50/p95/min/max/mean/stddev for each step
+
+The `comparison` object reports mean deltas and ratios for key metrics.
+
+## Notes
+
+- If `BENCHMARK_TOKEN` is missing, the endpoint returns `503`.
+- If the token header is wrong or missing, the endpoint returns `401`.
+- Limits for Worker CPU/memory and request behavior can be checked at Cloudflare Workers platform limits:
+  https://developers.cloudflare.com/workers/platform/limits/
