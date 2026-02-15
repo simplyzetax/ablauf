@@ -59,6 +59,7 @@ export {
 	ObservabilityDisabledError,
 	DuplicateStepError,
 	InvalidDurationError,
+	NonRetriableError,
 	asWorkflowError,
 	createInternalWorkflowError,
 	toHonoError,

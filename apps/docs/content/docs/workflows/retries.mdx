@@ -111,6 +111,48 @@ try {
 	For the complete list of error classes and their HTTP status codes, see the [API Reference](/docs/server/api-reference#error-classes).
 </Callout>
 
+## Skipping Retries with NonRetriableError
+
+Sometimes retrying is pointless — the error is permanent and will never succeed. For these cases, throw `NonRetriableError` inside your step function to immediately fail the step without retrying:
+
+```ts
+import { defineWorkflow, NonRetriableError } from '@der-ablauf/workflows';
+
+const order = defineWorkflow({
+	type: 'process-order',
+	input: z.object({ userId: z.string() }),
+	run: async (step, payload) => {
+		const user = await step.do('validate-user', async () => {
+			const user = await getUser(payload.userId);
+			if (user.banned) {
+				throw new NonRetriableError('User is banned');
+			}
+			return user;
+		});
+		// ...
+	},
+});
+```
+
+When `NonRetriableError` is thrown:
+
+1. The step is immediately marked as `failed` — no retries are attempted, regardless of the retry configuration
+2. The error is recorded in the step's retry history (visible in the dashboard)
+3. The workflow transitions to `errored`
+
+<Callout type="info">
+	`NonRetriableError` extends plain `Error`, not `WorkflowError`. It's designed to be simple for user code — no error codes or HTTP statuses needed.
+</Callout>
+
+### When to Use NonRetriableError
+
+Use it for errors where retrying would be wasteful:
+
+- **Business rule violations** — user is banned, account is suspended
+- **Authorization failures** — invalid API key, insufficient permissions
+- **Invalid data** — malformed input discovered mid-step
+- **Resource gone** — the thing you need no longer exists
+
 ## Crash & OOM Recovery
 
 Cloudflare Durable Objects run in isolates with a **128 MB memory limit**. If a step exceeds this limit (or the isolate crashes for any reason), the entire isolate is killed — your step's try/catch never executes, and the error is never recorded.

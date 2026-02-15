@@ -17,6 +17,7 @@ import {
 	EventTimeoutError,
 	UpdateTimeoutError,
 	WorkflowNotRunningError,
+	NonRetriableError,
 } from '@der-ablauf/workflows';
 
 describe('WorkflowError', () => {
@@ -99,6 +100,14 @@ describe('WorkflowError', () => {
 		expect(err.status).toBe(409);
 		expect(err.source).toBe('engine');
 		expect(err.details).toEqual({ workflowId: 'wf-123', currentStatus: 'paused' });
+	});
+
+	it('NonRetriableError is a plain Error, not a WorkflowError', () => {
+		const err = new NonRetriableError('User is banned');
+		expect(err).toBeInstanceOf(Error);
+		expect(err).not.toBeInstanceOf(WorkflowError);
+		expect(err.name).toBe('NonRetriableError');
+		expect(err.message).toBe('User is banned');
 	});
 });
 

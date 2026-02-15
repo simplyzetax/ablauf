@@ -196,6 +196,24 @@ try {
 }
 ```
 
+### Skipping Retries
+
+If an error is permanent and retrying would be wasteful, throw `NonRetriableError` to immediately fail the step:
+
+```ts
+import { NonRetriableError } from '@der-ablauf/workflows';
+
+await step.do('charge-card', async () => {
+	const result = await chargeCard(cardId, amount);
+	if (result.declined) {
+		throw new NonRetriableError('Card declined');
+	}
+	return result;
+});
+```
+
+This bypasses all retry logic — the step fails on the first attempt and the workflow transitions to `errored`. See [Skipping Retries with NonRetriableError](/docs/workflows/retries#skipping-retries-with-nonretriableerror) for details.
+
 ## How It Works
 
 Retries use Durable Object alarms, not blocking sleeps. When a step fails and has retries remaining:

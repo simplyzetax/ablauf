@@ -11,6 +11,7 @@ import { SSEWorkflow } from '../workflows/sse-workflow';
 import { BackoffConfigWorkflow } from '../workflows/backoff-config-workflow';
 import { NoSchemaWorkflow } from '../workflows/no-schema-workflow';
 import { MultiEventWorkflow } from '../workflows/multi-event-workflow';
+import { NonRetriableWorkflow } from '../workflows/non-retriable-workflow';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -476,6 +477,49 @@ describe('WorkflowRunner', () => {
 				first: true,
 				second: false,
 			});
+		});
+	});
+
+	describe('non-retriable errors', () => {
+		it('fails immediately without retrying when NonRetriableError is thrown', async () => {
+			const stub = await ablauf.create(NonRetriableWorkflow, {
+				id: 'non-retriable-1',
+				payload: { shouldFail: true },
+			});
+
+			const status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('errored');
+
+			// Verify step was only attempted once despite retries.limit=5
+			const failedStep = status.steps.find((s) => s.name === 'maybe-fail');
+			expect(failedStep).toBeDefined();
+			expect(failedStep!.status).toBe('failed');
+			expect(failedStep!.attempts).toBe(1);
+			expect(failedStep!.error).toContain('Intentional permanent failure');
+		});
+
+		it('succeeds normally when NonRetriableError is not thrown', async () => {
+			const stub = await ablauf.create(NonRetriableWorkflow, {
+				id: 'non-retriable-2',
+				payload: { shouldFail: false },
+			});
+
+			const status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toBe('success');
+		});
+
+		it('preserves error message and stack in step retry history', async () => {
+			const stub = await ablauf.create(NonRetriableWorkflow, {
+				id: 'non-retriable-3',
+				payload: { shouldFail: true },
+			});
+
+			const status = await stub.getStatus();
+			const failedStep = status.steps.find((s) => s.name === 'maybe-fail');
+			expect(failedStep!.retryHistory).toHaveLength(1);
+			expect(failedStep!.retryHistory![0].error).toBe('Intentional permanent failure');
+			expect(failedStep!.retryHistory![0].attempt).toBe(1);
 		});
 	});
 });
