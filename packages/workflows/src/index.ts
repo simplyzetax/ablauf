@@ -60,6 +60,7 @@ export {
 	DuplicateStepError,
 	InvalidDateError,
 	InvalidDurationError,
+	InvalidSizeError,
 	NonRetriableError,
 	asWorkflowError,
 	createInternalWorkflowError,
@@ -78,6 +79,7 @@ export { shardIndex } from './engine/shard';
 export { StepContext } from './engine/step';
 export { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from './engine/interrupts';
 export { parseDuration } from './engine/duration';
+export { parseSize } from './engine/size';
 
 // Dashboard
 export { dashboardRouter, timelineEntrySchema } from './dashboard';

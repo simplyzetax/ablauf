@@ -383,6 +383,17 @@ export class InvalidDateError extends WorkflowError {
 }
 
 /**
+ * Thrown when a size string can't be parsed (e.g., not matching `"64mb"`, `"512kb"`, `"1gb"`).
+ *
+ * Error code: `VALIDATION_ERROR` | HTTP status: `400`
+ */
+export class InvalidSizeError extends WorkflowError {
+	constructor(size: string) {
+		super(createErrorInit('VALIDATION_ERROR', 'validation', `Invalid size: "${size}". Use format like "512kb", "64mb", "1gb".`));
+	}
+}
+
+/**
  * Thrown when a requested resource (other than a workflow instance) is not found.
  *
  * Error code: `RESOURCE_NOT_FOUND` | HTTP status: `404`
