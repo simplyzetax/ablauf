@@ -98,34 +98,42 @@ function buildSequentialTimeline(timeline: TimelineEntry[]): { segments: Timelin
 	let cursor = 0;
 
 	for (const entry of timeline) {
-		// Retry attempts first (in order)
-		for (const retry of entry.retryHistory ?? []) {
-			segments.push({
+		const retries = entry.retryHistory ?? [];
+
+		// Accumulate retry durations first (they happened before the current attempt)
+		let retryOffset = cursor;
+		const retrySegments: TimelineSegment[] = [];
+		for (const retry of retries) {
+			retrySegments.push({
 				stepName: entry.name,
 				label: `attempt ${retry.attempt}`,
 				isRetry: true,
 				duration: retry.duration,
-				offset: cursor,
+				offset: retryOffset,
 				status: 'failed',
 				error: retry.error,
 				attempt: retry.attempt,
 				totalAttempts: entry.attempts,
 			});
-			cursor += retry.duration;
+			retryOffset += retry.duration;
 		}
 
-		// Final/current attempt
+		// Main step row comes first visually, then retries below it
 		segments.push({
 			stepName: entry.name,
 			label: entry.name,
 			isRetry: false,
 			duration: entry.duration,
-			offset: cursor,
+			offset: retryOffset,
 			status: entry.status,
 			error: entry.error,
 			totalAttempts: entry.attempts,
 		});
-		cursor += entry.duration;
+
+		// Retry sub-rows come after the main row visually
+		segments.push(...retrySegments);
+
+		cursor = retryOffset + entry.duration;
 	}
 
 	return { segments, totalDuration: Math.max(cursor, 1) };
