@@ -31,7 +31,7 @@ export function DetailPanel({ workflowId, onClose }: DetailPanelProps) {
 				if (!open) onClose();
 			}}
 		>
-			<SheetContent className="w-full overflow-y-auto sm:max-w-[50vw]">
+			<SheetContent className="w-full overflow-y-auto overflow-x-hidden sm:max-w-[65vw]">
 				{workflowId && <DetailPanelContent workflowId={workflowId} />}
 			</SheetContent>
 		</Sheet>
