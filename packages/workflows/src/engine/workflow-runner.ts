@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import { DurableObject } from 'cloudflare:workers';
 import { drizzle, type DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
 import { migrate } from 'drizzle-orm/durable-sqlite/migrator';
@@ -16,6 +17,7 @@ import {
 	WorkflowError,
 	extractZodIssues,
 } from '../errors';
+import { validateSchema } from '../serializable';
 import { eq, or } from 'drizzle-orm';
 import { shardIndex } from './shard';
 import superjson from 'superjson';
@@ -74,6 +76,22 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		const [wf, shardConfig] = Array.isArray(entry) ? entry : [entry, {}];
 		registry[wf.type] = wf;
 		shardConfigs[wf.type] = shardConfig;
+	}
+
+	// Validate all registered workflow schemas at registration time.
+	// This catches BaseWorkflow subclasses that bypass defineWorkflow's callback validation.
+	for (const [type, WorkflowCls] of Object.entries(registry)) {
+		validateSchema(WorkflowCls.inputSchema, `${type}.input`);
+		if (WorkflowCls.events) {
+			for (const [eventName, schema] of Object.entries(WorkflowCls.events)) {
+				validateSchema(schema, `${type}.events.${eventName}`);
+			}
+		}
+		if (WorkflowCls.sseUpdates) {
+			for (const [updateName, schema] of Object.entries(WorkflowCls.sseUpdates) as [string, z.ZodType][]) {
+				validateSchema(schema, `${type}.sseUpdates.${updateName}`);
+			}
+		}
 	}
 
 	return class WorkflowRunner extends DurableObject<Record<string, unknown>> {
