@@ -1,5 +1,10 @@
+import { useRef, useEffect } from 'react';
 import type { WorkflowListItem } from '~/lib/types';
 import { getStatusDotColor } from '~/lib/format';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
+import { cn } from '~/lib/utils';
 
 const FILTER_STATUSES = ['all', 'running', 'completed', 'errored', 'paused', 'sleeping', 'waiting', 'terminated'] as const;
 
@@ -8,11 +13,36 @@ interface StatFilterBarProps {
 	activeType: string;
 	types: string[];
 	workflows: WorkflowListItem[];
+	searchQuery: string;
 	onStatusChange: (status: string) => void;
 	onTypeChange: (type: string) => void;
+	onSearchChange: (query: string) => void;
 }
 
-export function StatFilterBar({ activeStatus, activeType, types, workflows, onStatusChange, onTypeChange }: StatFilterBarProps) {
+/** Filter bar with status pills, search input, and type selector. */
+export function StatFilterBar({
+	activeStatus,
+	activeType,
+	types,
+	workflows,
+	searchQuery,
+	onStatusChange,
+	onTypeChange,
+	onSearchChange,
+}: StatFilterBarProps) {
+	const searchRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === '/' && !isInputFocused()) {
+				e.preventDefault();
+				searchRef.current?.focus();
+			}
+		}
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, []);
+
 	const counts = new Map<string, number>();
 	counts.set('all', workflows.length);
 	for (const wf of workflows) {
@@ -20,7 +50,7 @@ export function StatFilterBar({ activeStatus, activeType, types, workflows, onSt
 	}
 
 	return (
-		<div className="sticky top-10 z-40 flex items-center justify-between border-b border-border bg-surface-0 px-4 py-2">
+		<div className="sticky top-10 z-40 flex items-center justify-between border-b border-border bg-background px-4 py-2">
 			<div className="flex items-center gap-1">
 				{FILTER_STATUSES.map((status) => {
 					const count = counts.get(status) ?? 0;
@@ -29,36 +59,62 @@ export function StatFilterBar({ activeStatus, activeType, types, workflows, onSt
 					const dotColor = status === 'all' ? '' : getStatusDotColor(status);
 
 					return (
-						<button
+						<Button
 							key={status}
+							variant={isActive ? 'secondary' : 'ghost'}
+							size="sm"
+							className="h-7 gap-1.5 text-xs"
 							onClick={() => onStatusChange(status === 'all' ? '' : status)}
-							className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 ${
-								isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-							}`}
 						>
-							{status !== 'all' && (
-								<span className={`inline-block h-1.5 w-1.5 rounded-full ${dotColor} ${isActive ? 'opacity-100' : 'opacity-50'}`} />
-							)}
+							{status !== 'all' && <span className={cn('inline-block h-1.5 w-1.5 rounded-full', dotColor, !isActive && 'opacity-50')} />}
 							{status.charAt(0).toUpperCase() + status.slice(1)}
-							{count > 0 && <span className={isActive ? 'text-zinc-400' : 'text-zinc-600'}>{count}</span>}
-						</button>
+							{count > 0 && (
+								<span className={cn('text-[10px]', isActive ? 'text-muted-foreground' : 'text-muted-foreground/50')}>{count}</span>
+							)}
+						</Button>
 					);
 				})}
 			</div>
 
-			<select
-				value={activeType}
-				onChange={(e) => onTypeChange(e.target.value)}
-				aria-label="Filter by workflow type"
-				className="rounded-md border border-zinc-700 bg-surface-1 px-2.5 py-1 text-xs text-zinc-300 outline-none transition-colors hover:border-zinc-600 focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
-			>
-				<option value="">All types</option>
-				{types.map((type) => (
-					<option key={type} value={type}>
-						{type}
-					</option>
-				))}
-			</select>
+			<div className="flex items-center gap-2">
+				<div className="relative">
+					<Input
+						ref={searchRef}
+						value={searchQuery}
+						onChange={(e) => onSearchChange(e.target.value)}
+						placeholder="Search ID"
+						className="h-7 w-44 text-xs"
+						aria-label="Search workflows by ID"
+					/>
+					{!searchQuery && (
+						<kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-sm border border-border bg-muted px-1 text-[10px] text-muted-foreground">
+							/
+						</kbd>
+					)}
+				</div>
+
+				<Select value={activeType || '__all__'} onValueChange={(value) => onTypeChange(value === '__all__' ? '' : value)}>
+					<SelectTrigger className="h-7 w-[140px] text-xs" aria-label="Filter by workflow type">
+						<SelectValue placeholder="All types" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="__all__">All types</SelectItem>
+						{types.map((type) => (
+							<SelectItem key={type} value={type}>
+								{type}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
 		</div>
 	);
+}
+
+/** Check if any input-like element is currently focused. */
+function isInputFocused(): boolean {
+	const el = document.activeElement;
+	if (!el) return false;
+	const tag = el.tagName.toLowerCase();
+	return tag === 'input' || tag === 'textarea' || tag === 'select' || (el as HTMLElement).isContentEditable;
 }

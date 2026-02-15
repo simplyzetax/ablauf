@@ -29,7 +29,7 @@ function RootComponent() {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<RootDocument>
-				<div className="min-h-screen bg-surface-0 text-zinc-100">
+				<div className="min-h-screen">
 					<Outlet />
 				</div>
 			</RootDocument>
@@ -39,11 +39,11 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
 	return (
-		<html lang="en">
+		<html lang="en" className="dark">
 			<head>
 				<HeadContent />
 			</head>
-			<body className="antialiased">
+			<body>
 				{children}
 				<Scripts />
 			</body>

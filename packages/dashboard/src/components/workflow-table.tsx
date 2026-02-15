@@ -1,68 +1,140 @@
 import type { WorkflowListItem } from '~/lib/types';
-import { formatRelativeTime, truncateId, getStatusDotColor, getStatusBorderColor } from '~/lib/format';
+import { formatRelativeTime, formatTimestamp, truncateId, getStatusDotColor, getStatusBorderColor } from '~/lib/format';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip';
+import { Skeleton } from '~/components/ui/skeleton';
+import { Inbox } from 'lucide-react';
+import { cn } from '~/lib/utils';
 
-interface WorkflowListProps {
+interface WorkflowTableProps {
+	/** List of workflows to display. */
 	workflows: WorkflowListItem[];
+	/** Currently selected workflow ID. */
 	selectedId: string | null;
+	/** Whether data is still loading. */
+	isLoading: boolean;
+	/** Callback when a workflow row is clicked. */
 	onSelect: (id: string) => void;
 }
 
-export function WorkflowList({ workflows, selectedId, onSelect }: WorkflowListProps) {
+/** Full-width workflow data table with status, ID, type, and timestamps. */
+export function WorkflowTable({ workflows, selectedId, isLoading, onSelect }: WorkflowTableProps) {
 	const sorted = [...workflows].sort((a, b) => b.updatedAt - a.updatedAt);
 
-	if (sorted.length === 0) {
-		return (
-			<div className="flex flex-col items-center justify-center py-24 px-4">
-				<svg
-					aria-hidden="true"
-					className="mb-3 h-8 w-8 text-zinc-700"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke="currentColor"
-					strokeWidth={1.5}
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M21.015 4.356v4.992"
-					/>
-				</svg>
-				<p className="text-sm font-medium text-zinc-500">No workflows found</p>
-				<p className="mt-1 text-xs text-zinc-600">Workflows will appear here when created</p>
-			</div>
-		);
-	}
-
 	return (
-		<div role="listbox" aria-label="Workflow list">
-			{sorted.map((wf) => {
-				const isSelected = wf.id === selectedId;
-				const dotColor = getStatusDotColor(wf.status);
-				const borderColor = getStatusBorderColor(wf.status);
+		<TooltipProvider>
+			<Table>
+				<TableHeader>
+					<TableRow className="hover:bg-transparent">
+						<TableHead className="w-10" />
+						<TableHead className="font-mono">ID</TableHead>
+						<TableHead>Type</TableHead>
+						<TableHead className="w-28">Created</TableHead>
+						<TableHead className="w-28">Updated</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody aria-live="polite">
+					{isLoading ? (
+						<LoadingRows />
+					) : sorted.length === 0 ? (
+						<EmptyRow />
+					) : (
+						sorted.map((wf) => {
+							const isSelected = wf.id === selectedId;
+							return (
+								<TableRow
+									key={wf.id}
+									className={cn(
+										'cursor-pointer border-l-2 transition-colors',
+										isSelected ? `bg-muted ${getStatusBorderColor(wf.status)}` : 'border-l-transparent hover:bg-muted/50',
+									)}
+									tabIndex={0}
+									role="button"
+									onClick={() => onSelect(wf.id)}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter') onSelect(wf.id);
+									}}
+								>
+									<TableCell className="w-10 pl-4">
+										<span className={cn('inline-block h-2 w-2 rounded-full', getStatusDotColor(wf.status))} />
+									</TableCell>
+									<TableCell className="font-mono text-sm">
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<span>{truncateId(wf.id)}</span>
+											</TooltipTrigger>
+											<TooltipContent side="top" className="font-mono text-xs">
+												{wf.id}
+											</TooltipContent>
+										</Tooltip>
+									</TableCell>
+									<TableCell className="text-muted-foreground">{wf.type}</TableCell>
+									<TableCell className="text-xs text-muted-foreground">
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<span>{formatRelativeTime(wf.createdAt)}</span>
+											</TooltipTrigger>
+											<TooltipContent side="top" className="text-xs">
+												{formatTimestamp(wf.createdAt)}
+											</TooltipContent>
+										</Tooltip>
+									</TableCell>
+									<TableCell className="text-xs text-muted-foreground">
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<span>{formatRelativeTime(wf.updatedAt)}</span>
+											</TooltipTrigger>
+											<TooltipContent side="top" className="text-xs">
+												{formatTimestamp(wf.updatedAt)}
+											</TooltipContent>
+										</Tooltip>
+									</TableCell>
+								</TableRow>
+							);
+						})
+					)}
+				</TableBody>
+			</Table>
+		</TooltipProvider>
+	);
+}
 
-				return (
-					<button
-						key={wf.id}
-						role="option"
-						aria-selected={isSelected}
-						onClick={() => onSelect(wf.id)}
-						className={`flex w-full flex-col gap-0.5 border-b border-border-muted px-3 py-2.5 text-left transition-colors ${
-							isSelected ? `bg-zinc-800/70 border-l-2 ${borderColor}` : 'border-l-2 border-l-transparent hover:bg-zinc-900'
-						} focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-500`}
-					>
-						<div className="flex items-center gap-2">
-							<span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
-							<span className="truncate text-sm font-medium text-zinc-200">{wf.type}</span>
-						</div>
-						<div className="flex items-center justify-between pl-4">
-							<span className="font-mono text-xs text-zinc-500" title={wf.id}>
-								{truncateId(wf.id)}
-							</span>
-							<span className="text-xs text-zinc-600">{formatRelativeTime(wf.updatedAt)}</span>
-						</div>
-					</button>
-				);
-			})}
-		</div>
+function LoadingRows() {
+	return (
+		<>
+			{Array.from({ length: 8 }).map((_, i) => (
+				<TableRow key={i} className="border-l-2 border-l-transparent">
+					<TableCell className="w-10 pl-4">
+						<Skeleton className="h-2 w-2 rounded-full" />
+					</TableCell>
+					<TableCell>
+						<Skeleton className="h-4 w-24" />
+					</TableCell>
+					<TableCell>
+						<Skeleton className="h-4 w-20" />
+					</TableCell>
+					<TableCell>
+						<Skeleton className="h-4 w-16" />
+					</TableCell>
+					<TableCell>
+						<Skeleton className="h-4 w-16" />
+					</TableCell>
+				</TableRow>
+			))}
+		</>
+	);
+}
+
+function EmptyRow() {
+	return (
+		<TableRow className="hover:bg-transparent">
+			<TableCell colSpan={5} className="h-48 text-center">
+				<div className="flex flex-col items-center gap-2">
+					<Inbox className="h-8 w-8 text-muted-foreground/50" />
+					<p className="text-sm font-medium text-muted-foreground">No workflows found</p>
+					<p className="text-xs text-muted-foreground/70">Workflows will appear here when created</p>
+				</div>
+			</TableCell>
+		</TableRow>
 	);
 }
