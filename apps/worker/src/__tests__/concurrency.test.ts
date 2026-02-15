@@ -94,7 +94,7 @@ describe('Concurrency & Error Paths', () => {
 		expect(status.error).toContain('definitely-not-registered');
 	});
 
-	it('event to non-waiting step returns WORKFLOW_NOT_RUNNING', async () => {
+	it('event to non-waiting step is buffered instead of erroring', async () => {
 		const stub = await ablauf.create(TestWorkflow, {
 			id: 'cc-not-waiting-1',
 			payload: { name: 'NotWaiting' },
@@ -103,15 +103,13 @@ describe('Concurrency & Error Paths', () => {
 		const status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('sleeping');
 
-		const rawStub = stub._rpc;
-		const error = await rawStub
-			.deliverEvent({ event: 'approval', payload: { approved: true } })
-			.then(() => null)
-			.catch((e: unknown) => e);
-		expect(error).toBeTruthy();
-		if (error instanceof Error) {
-			const restored = WorkflowError.fromSerialized(error);
-			expect(restored.code).toBe('WORKFLOW_NOT_RUNNING');
-		}
+		// With event buffering, this should succeed (not throw)
+		await stub._rpc.deliverEvent({ event: 'approval', payload: { approved: true } });
+
+		// Advance the sleep alarm — workflow should consume the buffered event and complete
+		await advanceAlarm(stub._rpc);
+
+		const finalStatus = await stub.getStatus();
+		expect(finalStatus.status).toBe<WorkflowStatus>('completed');
 	});
 });
