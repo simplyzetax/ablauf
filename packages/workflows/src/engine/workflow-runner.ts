@@ -274,7 +274,9 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		}
 
 		async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
-			ws.close(code, reason || 'Client disconnected');
+			// 1005 ("No Status Received") is a reserved code that must not be sent on the wire.
+			const safeCode = code === 1005 ? 1000 : code;
+			ws.close(safeCode, reason || 'Client disconnected');
 		}
 
 		async webSocketError(_ws: WebSocket, _error: unknown): Promise<void> {
