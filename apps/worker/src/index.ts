@@ -28,6 +28,7 @@ import type { WorkflowClass } from '@der-ablauf/workflows';
 import { benchmarkRequestSchema, toBenchmarkConfig } from './utils/benchmark-request';
 import { compareSummaries, summarizeEngine } from './utils/benchmark-stats';
 import { runBenchmarkRounds } from './utils/benchmark-runner';
+import { RealOOMWorkflow } from './workflows/real-oom-workflow';
 
 const workflows = [
 	TestWorkflow,
@@ -46,16 +47,17 @@ const workflows = [
 	SleepUntilWorkflow,
 	SizeLimitWorkflow,
 	SizeLimitRetryWorkflow,
+	RealOOMWorkflow,
 ];
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
-	corsOrigins: ['http://localhost:3000'],
+	corsOrigins: ['http://localhost:3000', 'http://localhost:4100'],
 });
 const { openApiHandler, rpcHandler } = ablauf.createHandlers();
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use('/__ablauf/*', cors({ origin: ['http://localhost:3000'] }));
+app.use('/__ablauf/*', cors({ origin: ['http://localhost:3000', 'http://localhost:4100'] }));
 
 app.onError((error, c) => {
 	const wfError = asWorkflowError(error, { includeInternal: false });
@@ -136,6 +138,7 @@ app.post('/benchmarks/workflows', async (c) => {
 	});
 });
 
+//!TODO!: add authentication
 app.post('/workflows/:type', async (c) => {
 	const { type } = c.req.param();
 	const workflowClass = workflows.find((w) => w.type === type);
