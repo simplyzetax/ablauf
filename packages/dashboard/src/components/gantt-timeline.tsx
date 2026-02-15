@@ -113,14 +113,22 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 									const retryLeft = ((retry.timestamp - retry.duration - minStart) / totalDuration) * 100;
 									const retryWidth = Math.max((retry.duration / totalDuration) * 100, 0.5);
 									return (
-										<div
-											key={retry.attempt}
-											className={`absolute top-0 h-full ${retryColor}`}
-											style={{
-												left: `${Math.max(retryLeft, 0)}%`,
-												width: `${retryWidth}%`,
-											}}
-										/>
+										<Tooltip key={retry.attempt}>
+											<TooltipTrigger asChild>
+												<div
+													className={`absolute top-0 h-full ${retryColor}`}
+													style={{
+														left: `${Math.max(retryLeft, 0)}%`,
+														width: `${retryWidth}%`,
+													}}
+												/>
+											</TooltipTrigger>
+											<TooltipContent>
+												<p className="font-medium">Attempt {retry.attempt}</p>
+												<p className="text-muted-foreground">Duration: {formatDuration(retry.duration)}</p>
+												{retry.error && <p className="mt-0.5 text-red-400">{retry.error}</p>}
+											</TooltipContent>
+										</Tooltip>
 									);
 								})}
 
