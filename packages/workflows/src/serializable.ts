@@ -29,7 +29,9 @@ const ALLOWED_TYPES = new Set([
 	// Combinators
 	'literal',
 	'enum',
+	'nativeEnum',
 	'union',
+	'discriminatedUnion',
 	'intersection',
 	'optional',
 	'nullable',
@@ -88,7 +90,8 @@ export function validateSchema(schema: z.ZodType, path = 'root'): void {
 		case 'default':
 			validateSchema(def.innerType as z.ZodType, path);
 			break;
-		case 'union': {
+		case 'union':
+		case 'discriminatedUnion': {
 			const options = def.options as z.ZodType[];
 			for (let i = 0; i < options.length; i++) {
 				validateSchema(options[i], `${path}|${i}`);

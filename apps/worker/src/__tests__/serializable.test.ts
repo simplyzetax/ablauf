@@ -70,6 +70,14 @@ describe('validateSchema', () => {
 			expect(() => validateSchema(z.enum(['a', 'b']))).not.toThrow();
 		});
 
+		it('z.nativeEnum(...)', () => {
+			enum Direction {
+				Up = 'UP',
+				Down = 'DOWN',
+			}
+			expect(() => validateSchema(z.nativeEnum(Direction))).not.toThrow();
+		});
+
 		it('z.union([z.string(), z.number()])', () => {
 			expect(() => validateSchema(z.union([z.string(), z.number()]))).not.toThrow();
 		});
