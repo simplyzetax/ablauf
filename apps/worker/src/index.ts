@@ -20,6 +20,7 @@ import { NoSchemaWorkflow } from './workflows/no-schema-workflow';
 import { MultiEventWorkflow } from './workflows/multi-event-workflow';
 import { BenchmarkAblaufWorkflow } from './workflows/benchmark-ablauf-workflow';
 import { OOMRecoveryWorkflow } from './workflows/oom-recovery-workflow';
+import { NonRetriableWorkflow } from './workflows/non-retriable-workflow';
 import { env } from 'cloudflare:workers';
 import type { WorkflowClass } from '@der-ablauf/workflows';
 import { benchmarkRequestSchema, toBenchmarkConfig } from './utils/benchmark-request';
@@ -39,6 +40,7 @@ const workflows = [
 	MultiEventWorkflow,
 	BenchmarkAblaufWorkflow,
 	OOMRecoveryWorkflow,
+	NonRetriableWorkflow,
 ];
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	workflows,
