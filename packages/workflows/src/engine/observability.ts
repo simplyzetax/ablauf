@@ -1,5 +1,16 @@
 import type { TimelineEntry } from '../dashboard';
-import type { FlushReason, StepType, WorkflowIndexEntry, WorkflowStatus, WorkflowStatusResponse } from './types';
+import type {
+	FlushReason,
+	StepType,
+	WorkflowIndexEntry,
+	WorkflowShardConfig,
+	WorkflowRunnerStub,
+	WorkflowIndexListFilters,
+	WorkflowStatus,
+	WorkflowStatusResponse,
+} from './types';
+import { listIndexEntries } from './index-listing';
+import { shardIndex } from './shard';
 
 // ─── Event Types ───────────────────────────────────────────────────────────────
 
@@ -307,4 +318,372 @@ export interface StepObserver {
 		nextRetryAt: number,
 		timestamp: number,
 	): void;
+}
+
+// ─── ShardObservabilityProvider ─────────────────────────────────────────────────
+
+/**
+ * Internal collector used by {@link ShardObservabilityProvider} to accumulate
+ * workflow-level state during a single execution cycle.
+ *
+ * Captures the minimal information needed to write an index shard entry
+ * at flush time: workflow identity, current status, and timestamps.
+ */
+interface ShardCollector {
+	/** Unique identifier of the workflow instance. */
+	workflowId: string;
+	/** Workflow type string (e.g., `"order-processing"`). */
+	type: string;
+	/** Current lifecycle status of the workflow. */
+	status: WorkflowStatus;
+	/** Unix timestamp (ms) when the workflow instance was created. */
+	createdAt: number;
+	/** Unix timestamp (ms) of the most recent status update. */
+	updatedAt: number;
+}
+
+/**
+ * Built-in observability provider that uses the shard-based indexing system
+ * to track workflow instances across Durable Objects.
+ *
+ * This is the default provider when users enable observability (`observability: true`).
+ * It consolidates the index writing logic previously in `WorkflowRunner.updateIndex()`
+ * and the query logic previously inline in the dashboard oRPC handlers.
+ *
+ * ## How it works
+ *
+ * - **Collector pattern**: Each execution cycle creates a lightweight {@link ShardCollector}
+ *   that accumulates the workflow's current status and timestamps.
+ * - **Flush**: At the end of each cycle, the collector is flushed to the appropriate
+ *   index shard Durable Object via `indexWrite()`. The shard is determined by
+ *   `shardIndex(workflowId, shardCount)`.
+ * - **Step events are no-ops**: Step-level data lives in each workflow's own Durable Object
+ *   SQLite database. The shard index only tracks workflow-level metadata (id, status, timestamps).
+ * - **Queries**: `listWorkflows()` fans out to all index shards, deduplicates, and sorts.
+ *   `getWorkflowStatus()` and `getWorkflowTimeline()` go directly to the workflow's DO.
+ *
+ * ## Configuration
+ *
+ * Shard counts per workflow type are provided via the constructor config or merged
+ * from `WorkflowRegistration` tuples at setup time. Defaults to 1 shard per type.
+ *
+ * @example
+ * ```ts
+ * const provider = new ShardObservabilityProvider(env.WORKFLOW_RUNNER, {
+ *   shards: { "order-processing": { shards: 8 } },
+ *   workflowTypes: ["order-processing", "notification"],
+ * });
+ * ```
+ */
+export class ShardObservabilityProvider implements ObservabilityProvider<ShardCollector> {
+	/** Durable Object namespace binding for communicating with workflow runner DOs. */
+	private binding: DurableObjectNamespace;
+
+	/** Per-type shard configuration (shard counts and previous shard counts for migration). */
+	private shardConfigs: Record<string, WorkflowShardConfig>;
+
+	/** List of all registered workflow type strings, used by `listWorkflows()` to fan out queries. */
+	private workflowTypes: string[];
+
+	/**
+	 * Create a new shard-based observability provider.
+	 *
+	 * @param binding - The `DurableObjectNamespace` binding for the `WorkflowRunner` DO class.
+	 * @param config - Optional configuration for shard counts and known workflow types.
+	 * @param config.shards - Per-type shard configuration. Keys are workflow type strings.
+	 * @param config.workflowTypes - List of all registered workflow type strings. Used by
+	 *                               `listWorkflows()` when no type filter is provided.
+	 */
+	constructor(binding: DurableObjectNamespace, config?: { shards?: Record<string, WorkflowShardConfig>; workflowTypes?: string[] }) {
+		this.binding = binding;
+		this.shardConfigs = config?.shards ?? {};
+		this.workflowTypes = config?.workflowTypes ?? [];
+	}
+
+	/**
+	 * Set the list of known workflow types.
+	 *
+	 * Called internally by the {@link Ablauf} class during setup to inform the provider
+	 * of all registered workflow types. This is needed so `listWorkflows()` can query
+	 * all types when no type filter is specified.
+	 *
+	 * @param types - Array of workflow type strings (e.g., `["order-processing", "notification"]`).
+	 */
+	_setWorkflowTypes(types: string[]): void {
+		this.workflowTypes = types;
+	}
+
+	/**
+	 * Set the Durable Object namespace binding.
+	 *
+	 * Called internally by the {@link Ablauf} class during setup when the binding
+	 * is not available at construction time (e.g., it comes from the worker `env`).
+	 *
+	 * @param binding - The `DurableObjectNamespace` binding for the `WorkflowRunner` DO class.
+	 */
+	_setBinding(binding: DurableObjectNamespace): void {
+		this.binding = binding;
+	}
+
+	/**
+	 * Merge shard configurations from workflow registration tuples.
+	 *
+	 * Called internally by the {@link Ablauf} class during setup to consolidate
+	 * shard configs from `[WorkflowClass, ShardConfig]` tuples into the provider's
+	 * config map. Existing entries are not overwritten — explicit constructor config
+	 * takes precedence.
+	 *
+	 * @param configs - Map of workflow type strings to shard configurations.
+	 */
+	_mergeShardConfigs(configs: Record<string, WorkflowShardConfig>): void {
+		for (const [type, config] of Object.entries(configs)) {
+			if (!this.shardConfigs[type]) {
+				this.shardConfigs[type] = config;
+			}
+		}
+	}
+
+	/**
+	 * Create a new collector for a single workflow execution cycle.
+	 *
+	 * The collector captures the workflow's identity and initializes with
+	 * `"running"` status and the current timestamp. Event callbacks update
+	 * the collector's status and timestamps, and `flush()` writes the
+	 * final state to the appropriate index shard.
+	 *
+	 * @param workflowId - Unique identifier of the workflow instance.
+	 * @param type - Workflow type string (e.g., `"order-processing"`).
+	 * @returns A new {@link ShardCollector} for this execution cycle.
+	 */
+	createCollector(workflowId: string, type: string): ShardCollector {
+		const now = Date.now();
+		return {
+			workflowId,
+			type,
+			status: 'running',
+			createdAt: now,
+			updatedAt: now,
+		};
+	}
+
+	/**
+	 * Handle workflow start event.
+	 *
+	 * Sets the collector status to `"running"` and updates both `createdAt`
+	 * and `updatedAt` to the event timestamp.
+	 *
+	 * @param collector - The collector for this execution cycle.
+	 * @param event - Details of the workflow start including timestamp.
+	 */
+	onWorkflowStart(collector: ShardCollector, event: WorkflowStartEvent): void {
+		collector.status = 'running';
+		collector.createdAt = event.timestamp;
+		collector.updatedAt = event.timestamp;
+	}
+
+	/**
+	 * Handle workflow status change event.
+	 *
+	 * Updates the collector's status and `updatedAt` timestamp to reflect
+	 * the new workflow state.
+	 *
+	 * @param collector - The collector for this execution cycle.
+	 * @param event - Details of the status transition including the new status.
+	 */
+	onWorkflowStatusChange(collector: ShardCollector, event: WorkflowStatusChangeEvent): void {
+		collector.status = event.status;
+		collector.updatedAt = event.timestamp;
+	}
+
+	/**
+	 * Handle step start event — **no-op**.
+	 *
+	 * Step-level data is stored in each workflow's own Durable Object SQLite
+	 * database. The shard index only tracks workflow-level metadata (id, status,
+	 * timestamps), so step events don't need to be forwarded to the index.
+	 *
+	 * @param _collector - Unused. The collector for this execution cycle.
+	 * @param _event - Unused. Details of the step start.
+	 */
+	onStepStart(_collector: ShardCollector, _event: StepStartEvent): void {
+		// No-op: step data lives in per-workflow DO's SQLite, not in the shard index
+	}
+
+	/**
+	 * Handle step complete event — **no-op**.
+	 *
+	 * Step-level data is stored in each workflow's own Durable Object SQLite
+	 * database. The shard index only tracks workflow-level metadata (id, status,
+	 * timestamps), so step events don't need to be forwarded to the index.
+	 *
+	 * @param _collector - Unused. The collector for this execution cycle.
+	 * @param _event - Unused. Details of the step completion.
+	 */
+	onStepComplete(_collector: ShardCollector, _event: StepCompleteEvent): void {
+		// No-op: step data lives in per-workflow DO's SQLite, not in the shard index
+	}
+
+	/**
+	 * Handle step retry event — **no-op**.
+	 *
+	 * Step-level data is stored in each workflow's own Durable Object SQLite
+	 * database. The shard index only tracks workflow-level metadata (id, status,
+	 * timestamps), so step events don't need to be forwarded to the index.
+	 *
+	 * @param _collector - Unused. The collector for this execution cycle.
+	 * @param _event - Unused. Details of the step retry.
+	 */
+	onStepRetry(_collector: ShardCollector, _event: StepRetryEvent): void {
+		// No-op: step data lives in per-workflow DO's SQLite, not in the shard index
+	}
+
+	/**
+	 * Flush the collector's accumulated state to the appropriate index shard.
+	 *
+	 * Computes the target shard using `shardIndex()`, obtains the shard's
+	 * Durable Object stub, and calls `indexWrite()` to upsert the workflow's
+	 * index entry. This is the same logic as the `updateIndex()` method in
+	 * `workflow-runner.ts`, consolidated here for the provider interface.
+	 *
+	 * The write is best-effort: failures are silently caught to avoid crashing
+	 * the workflow execution cycle over an index update failure.
+	 *
+	 * @param collector - The collector containing the workflow's current state.
+	 * @param _reason - The workflow status at flush time (unused — status is already
+	 *                  captured in the collector via `onWorkflowStatusChange`).
+	 */
+	async flush(collector: ShardCollector, _reason: FlushReason): Promise<void> {
+		try {
+			const shards = this.shardConfigs[collector.type]?.shards ?? 1;
+			const shard = shardIndex(collector.workflowId, shards);
+			const indexId = this.binding.idFromName(`__index:${collector.type}:${shard}`);
+			const stub = this.binding.get(indexId) as unknown as WorkflowRunnerStub;
+			await stub.indexWrite({
+				id: collector.workflowId,
+				status: collector.status,
+				createdAt: collector.createdAt,
+				updatedAt: collector.updatedAt,
+			});
+		} catch {
+			// Best-effort: index shard writes should not crash the workflow execution cycle
+		}
+	}
+
+	/**
+	 * List workflow instances matching the given filters.
+	 *
+	 * Fans out queries to all index shards for each relevant workflow type,
+	 * deduplicates entries by ID (keeping the most recently updated), sorts
+	 * by `updatedAt` descending, and applies the limit.
+	 *
+	 * When no `type` filter is provided, queries all registered workflow types.
+	 * This is the same logic as the dashboard `list` handler, consolidated here.
+	 *
+	 * @param filters - Criteria for narrowing results by type, status, or count.
+	 * @returns Array of index entries augmented with the `type` field, sorted by
+	 *          `updatedAt` descending.
+	 */
+	async listWorkflows(filters: WorkflowListFilters): Promise<(WorkflowIndexEntry & { type: string })[]> {
+		const types = filters.type ? [filters.type] : this.workflowTypes;
+		const indexFilters: WorkflowIndexListFilters = {
+			status: filters.status,
+			limit: filters.limit,
+		};
+
+		const all = await Promise.all(
+			types.map(async (type) => {
+				try {
+					const entries = await listIndexEntries(this.binding, type, this.shardConfigs, indexFilters);
+					return entries.map((e) => ({ ...e, type }));
+				} catch {
+					// Best-effort: if querying a type's shards fails, skip it
+					return [];
+				}
+			}),
+		);
+
+		let workflows = all.flat();
+
+		// Deduplicate by workflow ID (entries from different types should not collide,
+		// but this guards against edge cases during shard migration)
+		const seen = new Map<string, (typeof workflows)[number]>();
+		for (const entry of workflows) {
+			const existing = seen.get(entry.id);
+			if (!existing || entry.updatedAt > existing.updatedAt) {
+				seen.set(entry.id, entry);
+			}
+		}
+		workflows = [...seen.values()];
+
+		// Sort by most recently updated first
+		workflows.sort((a, b) => b.updatedAt - a.updatedAt);
+
+		if (filters.limit) {
+			workflows = workflows.slice(0, filters.limit);
+		}
+
+		return workflows;
+	}
+
+	/**
+	 * Get the full status snapshot of a single workflow instance.
+	 *
+	 * Retrieves the workflow's Durable Object stub by name and calls `getStatus()`
+	 * to obtain the complete status including steps, payload, and result.
+	 *
+	 * @param id - Unique identifier of the workflow instance.
+	 * @returns The complete workflow status response from the Durable Object.
+	 */
+	async getWorkflowStatus(id: string): Promise<WorkflowStatusResponse> {
+		const stub = this.binding.get(this.binding.idFromName(id)) as unknown as WorkflowRunnerStub;
+		return stub.getStatus();
+	}
+
+	/**
+	 * Get a chronological timeline of executed steps for a workflow instance.
+	 *
+	 * Retrieves the full workflow status via {@link getWorkflowStatus}, then
+	 * transforms the steps into a flat timeline of executed entries. Only steps
+	 * that have actually started (`startedAt != null`) are included.
+	 *
+	 * This is the same transformation logic as the dashboard `timeline` handler,
+	 * consolidated here for the provider interface.
+	 *
+	 * @param id - Unique identifier of the workflow instance.
+	 * @returns The workflow identity, current status, and chronologically ordered
+	 *          timeline entries (sorted by `startedAt` ascending).
+	 */
+	async getWorkflowTimeline(id: string): Promise<{
+		/** Unique identifier of the workflow instance. */
+		id: string;
+		/** Workflow type string. */
+		type: string;
+		/** Current lifecycle status. */
+		status: WorkflowStatus;
+		/** Chronologically ordered list of step timeline entries. */
+		timeline: TimelineEntry[];
+	}> {
+		const status = await this.getWorkflowStatus(id);
+
+		const timeline: TimelineEntry[] = status.steps
+			.filter((s) => s.startedAt != null)
+			.map((s) => ({
+				name: s.name,
+				type: s.type,
+				status: s.status,
+				startedAt: s.startedAt,
+				duration: s.duration ?? 0,
+				attempts: s.attempts,
+				error: s.error,
+				retryHistory: s.retryHistory,
+			}))
+			.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+
+		return {
+			id: status.id,
+			type: status.type,
+			status: status.status,
+			timeline,
+		};
+	}
 }
