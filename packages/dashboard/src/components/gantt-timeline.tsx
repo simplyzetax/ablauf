@@ -24,16 +24,8 @@ function getBarColor(status: string): string {
 	}
 }
 
-function getRetryBarColor(status: string): string {
-	switch (status) {
-		case 'completed':
-			return 'bg-emerald-400/20';
-		case 'failed':
-			return 'bg-red-400/20';
-		default:
-			return 'bg-zinc-500/20';
-	}
-}
+/** Retry bars use a uniform muted style — they're past failed attempts. */
+const RETRY_BAR_CLASS = 'bg-zinc-500/25 border-r border-zinc-500/40';
 
 function isRunning(status: string): boolean {
 	return status === 'running';
@@ -101,7 +93,6 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 					const barLeft = (((entry.startedAt ?? 0) - minStart) / totalDuration) * 100;
 					const barWidth = Math.max((entry.duration / totalDuration) * 100, 0.5);
 					const color = getBarColor(entry.status);
-					const retryColor = getRetryBarColor(entry.status);
 
 					return (
 						<div key={entry.name} className="grid items-center" style={{ gridTemplateColumns: '140px 1fr', minHeight: '28px' }}>
@@ -116,7 +107,7 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 										<Tooltip key={retry.attempt}>
 											<TooltipTrigger asChild>
 												<div
-													className={`absolute top-0 h-full ${retryColor}`}
+													className={`absolute top-0 h-full ${RETRY_BAR_CLASS}`}
 													style={{
 														left: `${Math.max(retryLeft, 0)}%`,
 														width: `${retryWidth}%`,
