@@ -1,14 +1,11 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
-const inputSchema = z.object({});
-
-export const DuplicateStepWorkflow = defineWorkflow({
+export const DuplicateStepWorkflow = defineWorkflow((t) => ({
 	type: 'duplicate-step',
-	input: inputSchema,
+	input: t.object({}),
 	run: async (step) => {
 		const a = await step.do('fetch-data', () => 'first');
 		const b = await step.do('fetch-data', () => 'second');
 		return { a, b };
 	},
-});
+}));

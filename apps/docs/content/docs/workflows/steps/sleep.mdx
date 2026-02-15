@@ -23,9 +23,9 @@ await step.sleep('wait-for-next-day', '24h');
 ## Basic Usage
 
 ```ts
-const workflow = defineWorkflow({
+const workflow = defineWorkflow((t) => ({
 	type: 'scheduled-reminder',
-	input: z.object({ userId: z.string() }),
+	input: t.object({ userId: t.string() }),
 	run: async (step, payload) => {
 		await step.do('send-immediate-email', async () => {
 			await sendEmail(payload.userId, 'Thanks for signing up!');
@@ -40,7 +40,7 @@ const workflow = defineWorkflow({
 
 		return { remindersSent: 2 };
 	},
-});
+}));
 ```
 
 The workflow sends an immediate email, sleeps for 7 days (consuming zero resources during that time), then sends a follow-up email.
@@ -120,9 +120,9 @@ await step.sleepUntil('computed', new Date(Date.now() + 3600_000));
 ### Example: Scheduled Task
 
 ```ts
-const workflow = defineWorkflow({
+const workflow = defineWorkflow((t) => ({
 	type: 'scheduled-report',
-	input: z.object({ reportDate: z.string() }),
+	input: t.object({ reportDate: t.string() }),
 	run: async (step, payload) => {
 		const targetDate = new Date(payload.reportDate);
 
@@ -138,7 +138,7 @@ const workflow = defineWorkflow({
 
 		return { sent: true };
 	},
-});
+}));
 ```
 
 ## How It Works
@@ -189,9 +189,9 @@ for (let i = 0; i < items.length; i++) {
 Send time-delayed notifications:
 
 ```ts
-const workflow = defineWorkflow({
+const workflow = defineWorkflow((t) => ({
 	type: 'trial-reminder-sequence',
-	input: z.object({ userId: z.string() }),
+	input: t.object({ userId: t.string() }),
 	run: async (step, { userId }) => {
 		await step.sleep('wait-3-days', '3d');
 		await step.do('send-3-day-reminder', async () => {
@@ -208,7 +208,7 @@ const workflow = defineWorkflow({
 			await handleTrialExpiration(userId);
 		});
 	},
-});
+}));
 ```
 
 ### Retry with Backoff

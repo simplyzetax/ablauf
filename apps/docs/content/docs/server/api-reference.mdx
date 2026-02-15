@@ -471,6 +471,24 @@ All engine errors extend `WorkflowError` (which extends `Error`). Every engine e
 | `InvalidDurationError`       | `VALIDATION_ERROR`        | 400    | validation |
 | `InvalidSizeError`           | `VALIDATION_ERROR`        | 400    | validation |
 | `ObservabilityDisabledError` | `OBSERVABILITY_DISABLED`  | 400    | api        |
+| `InvalidSchemaError`         | `INVALID_SCHEMA`          | 400    | validation |
+
+### InvalidSchemaError
+
+Thrown when a workflow schema uses Zod types that are not compatible with SuperJSON serialization. This error is raised at **workflow registration time** (not at runtime), catching invalid schemas early.
+
+```ts
+// This throws InvalidSchemaError because z.function() is not serializable:
+defineWorkflow((t) => ({
+	type: 'bad',
+	input: z.object({ cb: z.function() }), // bypassed t namespace
+	run: async () => ({}),
+}));
+```
+
+The error message includes the full path to the unsupported type (e.g., `"Unsupported Zod type "function" at path "input.cb"`).
+
+See [Supported Transport Types](/docs/workflows/transport-types) for the full list of allowed types.
 
 ### NonRetriableError
 
@@ -527,3 +545,25 @@ try {
 	}
 }
 ```
+
+---
+
+## Transport Schema
+
+The `t` namespace is a constrained subset of Zod that only exposes types compatible with SuperJSON serialization. It's provided as the parameter in `defineWorkflow()` callbacks and can be imported directly for `BaseWorkflow` usage.
+
+```ts
+import { t } from '@der-ablauf/workflows';
+```
+
+For wrapping pre-existing Zod schemas, use `serializable()`:
+
+```ts
+import { serializable } from '@der-ablauf/workflows';
+import { z } from 'zod';
+
+const mySchema = serializable(z.object({ name: z.string() }));
+// Throws InvalidSchemaError if schema uses unsupported types
+```
+
+See [Supported Transport Types](/docs/workflows/transport-types) for the complete list of available types, excluded types, and migration guide.

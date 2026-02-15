@@ -20,16 +20,15 @@ Here's a simple workflow that processes an order with validation, a cool-down pe
 
 ```ts
 import { defineWorkflow } from '@der-ablauf/workflows';
-import { z } from 'zod';
 
-const OrderWorkflow = defineWorkflow({
+const OrderWorkflow = defineWorkflow((t) => ({
 	type: 'process-order',
-	input: z.object({
-		orderId: z.string(),
-		items: z.array(
-			z.object({
-				name: z.string(),
-				quantity: z.number(),
+	input: t.object({
+		orderId: t.string(),
+		items: t.array(
+			t.object({
+				name: t.string(),
+				quantity: t.number(),
 			}),
 		),
 	}),
@@ -46,7 +45,7 @@ const OrderWorkflow = defineWorkflow({
 
 		return { validated, shipped };
 	},
-});
+}));
 ```
 
 Notice how `payload` is automatically typed based on your `input` schema. No manual type annotations needed.
@@ -68,10 +67,10 @@ type: 'process-order';
 A Zod schema that validates the workflow payload. The type of `payload` in your `run` function is automatically inferred from this schema.
 
 ```ts
-input: z.object({
-	orderId: z.string(),
-	customerId: z.string().uuid(),
-	amount: z.number().positive(),
+input: t.object({
+	orderId: t.string(),
+	customerId: t.string().uuid(),
+	amount: t.number().positive(),
 });
 ```
 
@@ -96,8 +95,8 @@ A record mapping event names to Zod schemas. This makes `step.waitForEvent()` fu
 
 ```ts
 events: {
-	approved: z.object({ by: z.string() }),
-	rejected: z.object({ reason: z.string() }),
+	approved: t.object({ by: t.string() }),
+	rejected: t.object({ reason: t.string() }),
 }
 ```
 
@@ -134,8 +133,8 @@ A record of named Zod schemas defining the SSE updates your workflow can emit.
 
 ```ts
 sseUpdates: {
-	progress: z.object({ percent: z.number() }),
-	complete: z.object({ result: z.string() }),
+	progress: t.object({ percent: t.number() }),
+	complete: t.object({ result: t.string() }),
 }
 ```
 
@@ -145,23 +144,22 @@ Here's a more complex workflow demonstrating events, SSE updates, and retry conf
 
 ```ts
 import { defineWorkflow } from '@der-ablauf/workflows';
-import { z } from 'zod';
 
-const ApprovalWorkflow = defineWorkflow({
+const ApprovalWorkflow = defineWorkflow((t) => ({
 	type: 'approval',
-	input: z.object({
-		requestId: z.string(),
-		amount: z.number(),
+	input: t.object({
+		requestId: t.string(),
+		amount: t.number(),
 	}),
 	events: {
-		decision: z.object({
-			approved: z.boolean(),
-			reviewer: z.string(),
+		decision: t.object({
+			approved: t.boolean(),
+			reviewer: t.string(),
 		}),
 	},
 	sseUpdates: {
-		progress: z.object({ message: z.string() }),
-		complete: z.object({ approved: z.boolean() }),
+		progress: t.object({ message: t.string() }),
+		complete: t.object({ approved: t.boolean() }),
 	},
 	defaults: {
 		retries: {
@@ -192,7 +190,7 @@ const ApprovalWorkflow = defineWorkflow({
 			reviewer: decision.reviewer,
 		};
 	},
-});
+}));
 ```
 
 ## Under the Hood

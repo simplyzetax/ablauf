@@ -15,15 +15,14 @@ Update messages are typed with Zod schemas, just like events and payloads:
 
 ```ts
 import { defineWorkflow } from '@der-ablauf/workflows';
-import { z } from 'zod';
 
-const ImportWorkflow = defineWorkflow({
+const ImportWorkflow = defineWorkflow((t) => ({
 	type: 'data-import',
-	input: z.object({ fileUrl: z.string() }),
+	input: t.object({ fileUrl: t.string() }),
 	sseUpdates: {
-		progress: z.object({ percent: z.number(), message: z.string() }),
-		error: z.object({ message: z.string() }),
-		complete: z.object({ recordCount: z.number() }),
+		progress: t.object({ percent: t.number(), message: t.string() }),
+		error: t.object({ message: t.string() }),
+		complete: t.object({ recordCount: t.number() }),
 	},
 	run: async (step, payload, sse) => {
 		sse.broadcast('progress', { percent: 0, message: 'Starting import...' });
@@ -44,7 +43,7 @@ const ImportWorkflow = defineWorkflow({
 
 		return { imported: parsed.records };
 	},
-});
+}));
 ```
 
 TypeScript autocompletes the message types and validates the payload shape. You can't send an invalid update message.
@@ -138,11 +137,11 @@ Ablauf detects replay and skips `broadcast()` automatically. Only new `broadcast
 ### Progress Bar for Long Operations
 
 ```ts
-const BatchJob = defineWorkflow({
+const BatchJob = defineWorkflow((t) => ({
 	type: 'batch-job',
-	input: z.object({ itemIds: z.array(z.string()) }),
+	input: t.object({ itemIds: t.array(t.string()) }),
 	sseUpdates: {
-		progress: z.object({ percent: z.number() }),
+		progress: t.object({ percent: t.number() }),
 	},
 	run: async (step, payload, sse) => {
 		const total = payload.itemIds.length;
@@ -158,20 +157,20 @@ const BatchJob = defineWorkflow({
 
 		return { processed: total };
 	},
-});
+}));
 ```
 
 ### Multi-Stage Updates
 
 ```ts
-const DeploymentWorkflow = defineWorkflow({
+const DeploymentWorkflow = defineWorkflow((t) => ({
 	type: 'deployment',
-	input: z.object({ appId: z.string() }),
+	input: t.object({ appId: t.string() }),
 	sseUpdates: {
-		build: z.object({ message: z.string() }),
-		test: z.object({ message: z.string() }),
-		deploy: z.object({ message: z.string() }),
-		complete: z.object({ url: z.string() }),
+		build: t.object({ message: t.string() }),
+		test: t.object({ message: t.string() }),
+		deploy: t.object({ message: t.string() }),
+		complete: t.object({ url: t.string() }),
 	},
 	run: async (step, payload, sse) => {
 		sse.emit('build', { message: 'Building application...' });
@@ -193,7 +192,7 @@ const DeploymentWorkflow = defineWorkflow({
 
 		return { deployed: true };
 	},
-});
+}));
 ```
 
 New clients connecting during the test stage will see the build and test messages, but not the deploy message (yet).
@@ -203,12 +202,12 @@ New clients connecting during the test stage will see the build and test message
 You can use updates to notify clients of errors without throwing:
 
 ```ts
-const RobustWorkflow = defineWorkflow({
+const RobustWorkflow = defineWorkflow((t) => ({
 	type: 'robust',
-	input: z.object({ taskId: z.string() }),
+	input: t.object({ taskId: t.string() }),
 	sseUpdates: {
-		info: z.object({ message: z.string() }),
-		error: z.object({ message: z.string() }),
+		info: t.object({ message: t.string() }),
+		error: t.object({ message: t.string() }),
 	},
 	run: async (step, payload, sse) => {
 		try {
@@ -220,7 +219,7 @@ const RobustWorkflow = defineWorkflow({
 			throw err; // Still let retries happen
 		}
 	},
-});
+}));
 ```
 
 Clients can show error toasts or warnings while the workflow continues retrying in the background.

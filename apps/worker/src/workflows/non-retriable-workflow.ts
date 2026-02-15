@@ -1,16 +1,13 @@
-import { z } from 'zod';
 import { defineWorkflow, NonRetriableError } from '@der-ablauf/workflows';
-
-const inputSchema = z.object({ shouldFail: z.boolean() });
 
 /**
  * Test workflow: throws NonRetriableError when shouldFail is true.
  * Used to verify that non-retriable errors skip retries and immediately
  * fail the step and workflow.
  */
-export const NonRetriableWorkflow = defineWorkflow({
+export const NonRetriableWorkflow = defineWorkflow((t) => ({
 	type: 'non-retriable',
-	input: inputSchema,
+	input: t.object({ shouldFail: t.boolean() }),
 	defaults: {
 		retries: { limit: 5, delay: '500ms', backoff: 'exponential' as const },
 	},
@@ -24,4 +21,4 @@ export const NonRetriableWorkflow = defineWorkflow({
 
 		return result;
 	},
-});
+}));

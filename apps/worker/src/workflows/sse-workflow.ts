@@ -1,17 +1,12 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
-const inputSchema = z.object({ itemCount: z.number() });
-
-const sseUpdates = {
-	progress: z.object({ percent: z.number() }),
-	done: z.object({ message: z.string() }),
-};
-
-export const SSEWorkflow = defineWorkflow({
+export const SSEWorkflow = defineWorkflow((t) => ({
 	type: 'sse-test',
-	input: inputSchema,
-	sseUpdates,
+	input: t.object({ itemCount: t.number() }),
+	sseUpdates: {
+		progress: t.object({ percent: t.number() }),
+		done: t.object({ message: t.string() }),
+	},
 	run: async (step, payload, sse) => {
 		sse.broadcast('progress', { percent: 0 });
 
@@ -29,4 +24,4 @@ export const SSEWorkflow = defineWorkflow({
 
 		return { processed: payload.itemCount };
 	},
-});
+}));

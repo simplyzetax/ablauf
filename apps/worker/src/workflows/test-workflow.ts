@@ -1,16 +1,11 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
 
-const inputSchema = z.object({ name: z.string() });
-
-const eventSchemas = {
-	approval: z.object({ approved: z.boolean() }),
-};
-
-export const TestWorkflow = defineWorkflow({
+export const TestWorkflow = defineWorkflow((t) => ({
 	type: 'test',
-	input: inputSchema,
-	events: eventSchemas,
+	input: t.object({ name: t.string() }),
+	events: {
+		approval: t.object({ approved: t.boolean() }),
+	},
 	defaults: {
 		retries: { limit: 2, delay: '500ms', backoff: 'exponential' as const },
 	},
@@ -29,4 +24,4 @@ export const TestWorkflow = defineWorkflow({
 
 		return { message, greeting };
 	},
-});
+}));

@@ -1,16 +1,13 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
-
-const inputSchema = z.object({ id: z.string() });
 
 // Module-level counters — persist across replay() calls within the same DO isolate.
 export const executionCounts = new Map<string, number>();
 
-export const ReplayCounterWorkflow = defineWorkflow({
+export const ReplayCounterWorkflow = defineWorkflow((t) => ({
 	type: 'replay-counter',
-	input: inputSchema,
+	input: t.object({ id: t.string() }),
 	events: {
-		continue: z.object({}),
+		continue: t.object({}),
 	},
 	run: async (step, payload) => {
 		const key1 = `${payload.id}:step-1`;
@@ -35,4 +32,4 @@ export const ReplayCounterWorkflow = defineWorkflow({
 
 		return { result1, result2, result3 };
 	},
-});
+}));

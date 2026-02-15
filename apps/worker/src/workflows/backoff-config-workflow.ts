@@ -1,16 +1,13 @@
-import { z } from 'zod';
 import { defineWorkflow } from '@der-ablauf/workflows';
-
-const inputSchema = z.object({
-	failCount: z.number(),
-	strategy: z.enum(['fixed', 'linear', 'exponential']),
-});
 
 const callCounts = new Map<string, number>();
 
-export const BackoffConfigWorkflow = defineWorkflow({
+export const BackoffConfigWorkflow = defineWorkflow((t) => ({
 	type: 'backoff-config',
-	input: inputSchema,
+	input: t.object({
+		failCount: t.number(),
+		strategy: t.enum(['fixed', 'linear', 'exponential']),
+	}),
 	defaults: {
 		retries: { limit: 5, delay: '100ms', backoff: 'fixed' as const },
 	},
@@ -36,4 +33,4 @@ export const BackoffConfigWorkflow = defineWorkflow({
 		);
 		return result;
 	},
-});
+}));

@@ -64,6 +64,7 @@ export {
 	InvalidDateError,
 	InvalidDurationError,
 	InvalidSizeError,
+	InvalidSchemaError,
 	NonRetriableError,
 	asWorkflowError,
 	createInternalWorkflowError,
@@ -73,6 +74,9 @@ export {
 	extractZodIssues,
 } from './errors';
 export type { ErrorCode, ErrorSource, WorkflowErrorStatus, WorkflowErrorCatalogEntry } from './errors';
+
+// Transport schema (SuperJSON-safe Zod subset)
+export { t, serializable, validateSchema, type SerializableSchema, type TransportSchema } from './serializable';
 
 // Live updates (WebSocket)
 export { LiveContext } from './engine/sse';

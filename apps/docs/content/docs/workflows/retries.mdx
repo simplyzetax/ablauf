@@ -51,11 +51,10 @@ Set default retry config for all steps in a workflow:
 
 ```ts
 import { defineWorkflow } from '@der-ablauf/workflows';
-import { z } from 'zod';
 
-const MyWorkflow = defineWorkflow({
+const MyWorkflow = defineWorkflow((t) => ({
 	type: 'my-workflow',
-	input: z.object({
+	input: t.object({
 		/* ... */
 	}),
 	defaults: {
@@ -70,7 +69,7 @@ const MyWorkflow = defineWorkflow({
 			/* ... */
 		});
 	},
-});
+}));
 ```
 
 Per-step overrides still work — they take precedence over workflow defaults.
@@ -118,9 +117,9 @@ Sometimes retrying is pointless — the error is permanent and will never succee
 ```ts
 import { defineWorkflow, NonRetriableError } from '@der-ablauf/workflows';
 
-const order = defineWorkflow({
+const order = defineWorkflow((t) => ({
 	type: 'process-order',
-	input: z.object({ userId: z.string() }),
+	input: t.object({ userId: t.string() }),
 	run: async (step, payload) => {
 		const user = await step.do('validate-user', async () => {
 			const user = await getUser(payload.userId);
@@ -131,7 +130,7 @@ const order = defineWorkflow({
 		});
 		// ...
 	},
-});
+}));
 ```
 
 When `NonRetriableError` is thrown:
