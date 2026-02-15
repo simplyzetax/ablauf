@@ -11,11 +11,12 @@ Ablauf includes built-in observability and a React dashboard for monitoring your
 
 ## What You Get
 
-- **Workflow List** — Browse all instances with filtering by type and status
-- **Detail View** — Inspect payload, result, and error details for any workflow
-- **Step Timeline** — Visualize step execution with a Gantt chart
-- **Retry History** — See per-attempt details for steps with retry logic
-- **Live Updates** — Real-time SSE updates as workflows execute
+- **Workflow Table** — Full-width data table with status indicators, type badges, and relative timestamps. Filter by status and type, or search by workflow ID with the `/` keyboard shortcut
+- **Detail Panel** — Slide-over sheet (50% viewport) for inspecting payload, result, errors, and step execution for any workflow
+- **Gantt Timeline** — Visualize step execution with a Gantt chart showing retry history bars
+- **Step List** — Collapsible step rows with duration, attempt counts, error details, and stack traces
+- **Error Panel** — Aggregated error view with per-step error messages, retry history, and expandable stack traces
+- **Live Updates** — Real-time WebSocket updates as workflows execute, with polling fallback
 
 ## Setup
 
