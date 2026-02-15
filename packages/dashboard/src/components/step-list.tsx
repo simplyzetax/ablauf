@@ -48,7 +48,6 @@ function StepRow({ step }: { step: StepInfo }) {
 
 				<CollapsibleContent>
 					<div className="px-3 pb-3 pt-1">
-						{/* Step metadata */}
 						<div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
 							<span>Type: {step.type}</span>
 							<span>Status: {step.status}</span>
@@ -56,10 +55,8 @@ function StepRow({ step }: { step: StepInfo }) {
 							{step.completedAt && <span>Completed: {formatTimestamp(step.completedAt)}</span>}
 						</div>
 
-						{/* Error */}
 						{step.error && <StepError error={step.error} errorStack={step.errorStack} />}
 
-						{/* Retry history */}
 						{step.retryHistory && step.retryHistory.length > 0 && (
 							<div className="space-y-1">
 								{step.retryHistory.map((retry) => (
@@ -76,7 +73,6 @@ function StepRow({ step }: { step: StepInfo }) {
 							</div>
 						)}
 
-						{/* Result */}
 						{step.result != null && <StepResult result={step.result} />}
 					</div>
 				</CollapsibleContent>

@@ -117,12 +117,10 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 			</SheetHeader>
 
 			<div className="space-y-5 px-4">
-				{/* Error banner — always expanded, not collapsible */}
 				{workflow.error && (
 					<div className="rounded-sm border border-red-800/50 bg-red-950/50 p-3 text-sm text-red-300">{workflow.error}</div>
 				)}
 
-				{/* Payload & Result */}
 				<div className="grid grid-cols-2 gap-4">
 					<JsonViewer label="Payload" data={workflow.payload} />
 					<JsonViewer label="Result" data={workflow.result} />
@@ -130,7 +128,6 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 
 				<Separator />
 
-				{/* Timeline */}
 				<div>
 					<h2 className="mb-3 text-sm font-semibold text-foreground">Timeline</h2>
 					<GanttTimeline timeline={timelineData?.timeline ?? []} />
@@ -138,7 +135,6 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 
 				<Separator />
 
-				{/* Steps */}
 				<div>
 					<h2 className="mb-3 text-sm font-semibold text-foreground">
 						Steps
@@ -147,7 +143,6 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 					<StepList steps={workflow.steps} />
 				</div>
 
-				{/* Error panel */}
 				<ErrorPanel steps={workflow.steps} workflowError={workflow.error} />
 			</div>
 		</TooltipProvider>

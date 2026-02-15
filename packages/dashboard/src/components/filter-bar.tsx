@@ -82,7 +82,7 @@ export function StatFilterBar({
 						ref={searchRef}
 						value={searchQuery}
 						onChange={(e) => onSearchChange(e.target.value)}
-						placeholder="Search ID\u2026"
+						placeholder="Search ID"
 						className="h-7 w-44 text-xs"
 						aria-label="Search workflows by ID"
 					/>
