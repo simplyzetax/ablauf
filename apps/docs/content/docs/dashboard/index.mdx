@@ -98,7 +98,7 @@ Each entry in the list is a `WorkflowIndexEntry`:
 }
 ```
 
-For full details about a specific workflow, use `ablauf.status(id)`.
+For full details about a specific workflow, use `ablauf.get(OrderWorkflow, { id }).getStatus()`.
 
 ## Shard Configuration
 
@@ -133,7 +133,7 @@ const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 // ablauf.list() will throw ObservabilityDisabledError
 ```
 
-This skips all index updates, reducing the number of Durable Object writes. You can still use `ablauf.status(id)` to check individual workflows if you know their ID.
+This skips all index updates, reducing the number of Durable Object writes. You can still use `ablauf.get(Workflow, { id }).getStatus()` to check individual workflows if you know their ID.
 
 ## Production Considerations
 

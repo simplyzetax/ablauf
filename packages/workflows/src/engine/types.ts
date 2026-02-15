@@ -336,17 +336,6 @@ export interface WorkflowRunnerStub {
 }
 
 /**
- * Type-safe version of {@link WorkflowRunnerStub} with narrowed `getStatus()` and `deliverEvent()`.
- */
-export type TypedWorkflowRunnerStub<Payload, Result, Events extends object, Type extends string = string> = Omit<
-	WorkflowRunnerStub,
-	'getStatus' | 'deliverEvent'
-> & {
-	getStatus(): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>;
-	deliverEvent(props: WorkflowEventProps<Events>): Promise<void>;
-};
-
-/**
  * SSE context for emitting real-time updates from within a workflow.
  *
  * @typeParam Updates - Map of update names to their data types.

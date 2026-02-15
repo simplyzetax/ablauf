@@ -15,9 +15,9 @@ import { MultiEventWorkflow } from '../workflows/multi-event-workflow';
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
 /** Expire all pending timers and fire the alarm handler. */
-async function advanceAlarm(stub: { _expireTimers(): Promise<void> }) {
-	await stub._expireTimers();
-	await runDurableObjectAlarm(stub as unknown as DurableObjectStub<undefined>);
+async function advanceAlarm(rpcStub: WorkflowRunnerStub) {
+	await rpcStub._expireTimers();
+	await runDurableObjectAlarm(rpcStub as unknown as DurableObjectStub<undefined>);
 }
 
 describe('WorkflowRunner', () => {
@@ -29,13 +29,13 @@ describe('WorkflowRunner', () => {
 			expect(status.steps).toContainEqual(expect.objectContaining({ name: 'greet', status: 'completed', result: 'Hello, Alice!' }));
 
 			// Advance past sleep
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('waiting');
 
 			// Deliver approval
-			await stub.deliverEvent({ event: 'approval', payload: { approved: true } });
+			await stub.sendEvent({ event: 'approval', payload: { approved: true } });
 
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
@@ -51,9 +51,9 @@ describe('WorkflowRunner', () => {
 			const stub = await ablauf.create(TestWorkflow, { id: 'reject-1', payload: { name: 'Bob' } });
 
 			// Advance past sleep
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			// Deliver rejection
-			await stub.deliverEvent({ event: 'approval', payload: { approved: false } });
+			await stub.sendEvent({ event: 'approval', payload: { approved: false } });
 
 			const status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
@@ -82,12 +82,12 @@ describe('WorkflowRunner', () => {
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
 			// Advance past sleep
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('waiting');
 
 			// Complete workflow
-			await stub.deliverEvent({ event: 'approval', payload: { approved: true } });
+			await stub.sendEvent({ event: 'approval', payload: { approved: true } });
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
 		});
@@ -109,12 +109,12 @@ describe('WorkflowRunner', () => {
 			const stub = await ablauf.create(TestWorkflow, { id: 'timeout-1', payload: { name: 'Eve' } });
 
 			// Advance past sleep
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('waiting');
 
 			// Fire alarm again to trigger the event timeout
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 
 			// The workflow should have errored because waitForEvent timed out
@@ -134,12 +134,12 @@ describe('WorkflowRunner', () => {
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
 			// Second attempt fails, alarm scheduled again
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
 			// Third attempt succeeds
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe('completed');
 			expect(status.result).toBe('recovered');
@@ -169,9 +169,9 @@ describe('WorkflowRunner', () => {
 				// @ts-expect-error name must be a string
 				await ablauf.create(TestWorkflow, { id: 'typed-bad-1', payload: { name: 123 } });
 				// @ts-expect-error approval payload.approved must be a boolean
-				await stub.deliverEvent({ event: 'approval', payload: { approved: 'yes' } });
+				await stub.sendEvent({ event: 'approval', payload: { approved: 'yes' } });
 				// @ts-expect-error unknown event key for TestWorkflow
-				await stub.deliverEvent({ event: 'not-approval', payload: { approved: true } });
+				await stub.sendEvent({ event: 'not-approval', payload: { approved: true } });
 			}
 		});
 
@@ -187,9 +187,9 @@ describe('WorkflowRunner', () => {
 				id: 'typed-runtime-bad-event',
 				payload: { name: 'Heidi' },
 			});
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 
-			const rawStub = stub as unknown as WorkflowRunnerStub;
+			const rawStub = stub._rpc;
 			const badPayloadError = await rawStub
 				.deliverEvent({ event: 'approval', payload: { approved: 'yes' } })
 				.then(() => null)
@@ -251,8 +251,8 @@ describe('WorkflowRunner', () => {
 		it('records errorStack on failed steps', async () => {
 			const stub = await ablauf.create(FailingStepWorkflow, { id: 'obs-error-1', payload: { failCount: 5 } });
 
-			await advanceAlarm(stub);
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
+			await advanceAlarm(stub._rpc);
 
 			const status = await stub.getStatus();
 			const failStep = status.steps.find((s: { name: string }) => s.name === 'unreliable');
@@ -264,7 +264,7 @@ describe('WorkflowRunner', () => {
 		it('records retryHistory across attempts', async () => {
 			const stub = await ablauf.create(FailingStepWorkflow, { id: 'obs-retry-1', payload: { failCount: 1 } });
 
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 
 			const status = await stub.getStatus();
 			expect(status.status).toBe('completed');
@@ -284,8 +284,8 @@ describe('WorkflowRunner', () => {
 
 	describe('SSE', () => {
 		it('waits for SSE updates', async () => {
-			const _stub = await ablauf.create(SSEWorkflow, { id: 'sse-1', payload: { itemCount: 10 } });
-			const event = await ablauf.waitForUpdate(SSEWorkflow, { id: 'sse-1', update: 'done' });
+			const handle = await ablauf.create(SSEWorkflow, { id: 'sse-1', payload: { itemCount: 10 } });
+			const event = await handle.waitForUpdate({ update: 'done' });
 			expect(event).toEqual({ message: 'Processed 10 items' });
 		});
 	});
@@ -300,11 +300,11 @@ describe('WorkflowRunner', () => {
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
 			expect(status.result).toBe('ok');
@@ -319,8 +319,8 @@ describe('WorkflowRunner', () => {
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
-			await advanceAlarm(stub);
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
 			expect(status.result).toBe('ok');
@@ -335,8 +335,8 @@ describe('WorkflowRunner', () => {
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('sleeping');
 
-			await advanceAlarm(stub);
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
+			await advanceAlarm(stub._rpc);
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
 			expect(status.result).toBe('ok');
@@ -350,8 +350,8 @@ describe('WorkflowRunner', () => {
 				payload: { failCount: 100 },
 			});
 
-			await advanceAlarm(stub);
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
+			await advanceAlarm(stub._rpc);
 
 			const status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('errored');
@@ -386,7 +386,7 @@ describe('WorkflowRunner', () => {
 				payload: { name: 'Waiting' },
 			});
 
-			await advanceAlarm(stub);
+			await advanceAlarm(stub._rpc);
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('waiting');
 
@@ -464,11 +464,11 @@ describe('WorkflowRunner', () => {
 			let status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('waiting');
 
-			await stub.deliverEvent({ event: 'first-approval', payload: { ok: true } });
+			await stub.sendEvent({ event: 'first-approval', payload: { ok: true } });
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('waiting');
 
-			await stub.deliverEvent({ event: 'second-approval', payload: { ok: false } });
+			await stub.sendEvent({ event: 'second-approval', payload: { ok: false } });
 			status = await stub.getStatus();
 			expect(status.status).toBe<WorkflowStatus>('completed');
 			expect(status.result).toEqual({

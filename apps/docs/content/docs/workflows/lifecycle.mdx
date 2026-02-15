@@ -24,18 +24,11 @@ A workflow can be in one of the following states:
 
 ## Getting Status
 
-Check a workflow's current state with the `status()` method:
+Check a workflow's current state via a `WorkflowHandle`:
 
 ```ts
-// Untyped — returns WorkflowStatusResponse
-const status = await ablauf.status(workflowId);
-```
-
-For better TypeScript support, pass your workflow class as a second argument:
-
-```ts
-// Typed — narrows payload and result types
-const status = await ablauf.status(workflowId, OrderWorkflow);
+const order = ablauf.get(OrderWorkflow, { id: workflowId });
+const status = await order.getStatus();
 // status.payload is typed as OrderPayload
 // status.result is typed as OrderResult | null
 ```
@@ -47,7 +40,8 @@ For the full shape of the status response including `StepInfo` details, see the 
 Sometimes you need to temporarily halt a workflow — maybe you're debugging, or waiting for maintenance to complete. Ablauf makes this graceful:
 
 ```ts
-await ablauf.pause(workflowId);
+const order = ablauf.get(OrderWorkflow, { id: workflowId });
+await order.pause();
 // Workflow stops at the next step boundary
 ```
 
@@ -59,7 +53,7 @@ await ablauf.pause(workflowId);
 When you're ready to continue:
 
 ```ts
-await ablauf.resume(workflowId);
+await order.resume();
 // Workflow replays and continues from where it left off
 ```
 
@@ -70,7 +64,7 @@ The workflow will replay its execution history (using cached results from comple
 If a workflow needs to be permanently stopped, use `terminate()`:
 
 ```ts
-await ablauf.terminate(workflowId);
+await order.terminate();
 // Workflow is permanently stopped — cannot be resumed
 ```
 

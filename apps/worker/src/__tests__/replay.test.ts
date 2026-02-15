@@ -23,7 +23,7 @@ describe('Replay mechanics', () => {
 		expect(executionCounts.get(`${id}:step-2`)).toBe(1);
 
 		// Deliver event triggers replay — step-1 and step-2 should NOT re-execute
-		await stub.deliverEvent({ event: 'continue', payload: {} });
+		await stub.sendEvent({ event: 'continue', payload: {} });
 		status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('completed');
 
@@ -93,7 +93,7 @@ describe('Replay mechanics', () => {
 		expect(status.status).toBe<WorkflowStatus>('waiting');
 
 		// Deliver event, which triggers replay, skips step-1 and step-2, runs step-3
-		await stub.deliverEvent({ event: 'continue', payload: {} });
+		await stub.sendEvent({ event: 'continue', payload: {} });
 		status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('completed');
 		expect(status.result).toEqual({ result1: 'first', result2: 'second', result3: 'third' });
