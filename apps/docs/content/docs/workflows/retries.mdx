@@ -193,6 +193,71 @@ Attempt 2: step.do() → write-ahead (running, attempts=2) → fn() → success 
 | The step function's return value | No | Isolate died before it could be saved |
 | JavaScript variables in memory | No | Isolate memory is wiped |
 
+## Result Size Limits
+
+Every workflow has a **cumulative memory budget** for step results. By default, the total serialized size of all completed step results cannot exceed **64 MB**. This prevents workflows from accumulating enough data to trigger an OOM crash during replay.
+
+After each `step.do()` execution, Ablauf measures the serialized result size and checks it against the remaining budget. If the new result would push the total over the limit, the step fails **before** the result is stored.
+
+### How It Works
+
+```
+Step 1: result = 2 MB  → total: 2 MB  / 64 MB ✓
+Step 2: result = 10 MB → total: 12 MB / 64 MB ✓
+Step 3: result = 55 MB → total: 67 MB / 64 MB ✗ → fails
+```
+
+### Default Behavior
+
+By default, exceeding the budget throws a `NonRetriableError` — the step fails immediately without retrying (since retrying will produce the same oversized result):
+
+```ts
+const MyWorkflow = defineWorkflow({
+	type: 'my-workflow',
+	input: z.object({ /* ... */ }),
+	// Default: 64 MB budget, non-retryable on overflow
+	run: async (step, payload) => { /* ... */ },
+});
+```
+
+### Custom Configuration
+
+Override the defaults with `resultSizeLimit`:
+
+```ts
+const HeavyWorkflow = defineWorkflow({
+	type: 'heavy-workflow',
+	input: z.object({ /* ... */ }),
+	resultSizeLimit: {
+		maxSize: '128mb',     // Increase the budget
+		onOverflow: 'retry',  // Use retry logic instead of immediate failure
+	},
+	run: async (step, payload) => { /* ... */ },
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxSize` | `string` | `"64mb"` | Cumulative byte budget. Accepts: `"512kb"`, `"64mb"`, `"1gb"`. |
+| `onOverflow` | `"fail" \| "retry"` | `"fail"` | `"fail"` throws NonRetriableError. `"retry"` throws a retryable error. |
+
+<Callout type="warn">
+	The 64 MB default leaves ~64 MB headroom for the engine, your workflow code, and deserialized objects within the 128 MB isolate limit. Raising it above 100 MB is risky — consider offloading heavy data to external storage instead.
+</Callout>
+
+### Size Strings
+
+Size strings follow the same pattern as [duration strings](/docs/server/api-reference#duration-strings):
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| `Nb` | `"100b"` | Bytes |
+| `Nkb` | `"512kb"` | Kilobytes |
+| `Nmb` | `"64mb"` | Megabytes |
+| `Ngb` | `"1gb"` | Gigabytes |
+
+Invalid size strings throw `InvalidSizeError`.
+
 ## Best Practices
 
 **Set realistic retry limits.** If an API is down, 100 retries won't help. Use retries for transient issues, not systemic failures.
