@@ -64,6 +64,73 @@ function generateTicks(totalDuration: number): number[] {
 	return ticks;
 }
 
+/**
+ * Segment in the sequential timeline. Each retry attempt and final attempt
+ * becomes its own segment, laid out in execution order.
+ */
+interface TimelineSegment {
+	/** Step name. */
+	stepName: string;
+	/** Label for this segment (step name or "attempt N"). */
+	label: string;
+	/** Whether this is a retry (sub-row) or the final attempt (main row). */
+	isRetry: boolean;
+	/** Segment duration in ms. */
+	duration: number;
+	/** Start offset in ms (relative to timeline start). */
+	offset: number;
+	/** Status for coloring. */
+	status: string;
+	/** Error message if failed. */
+	error: string | null;
+	/** Attempt number (for retries). */
+	attempt?: number;
+	/** Total attempts for this step. */
+	totalAttempts: number;
+}
+
+/**
+ * Build a sequential timeline from entries. Steps are laid out in order,
+ * with retry attempts preceding the final attempt for each step.
+ */
+function buildSequentialTimeline(timeline: TimelineEntry[]): { segments: TimelineSegment[]; totalDuration: number } {
+	const segments: TimelineSegment[] = [];
+	let cursor = 0;
+
+	for (const entry of timeline) {
+		// Retry attempts first (in order)
+		for (const retry of entry.retryHistory ?? []) {
+			segments.push({
+				stepName: entry.name,
+				label: `attempt ${retry.attempt}`,
+				isRetry: true,
+				duration: retry.duration,
+				offset: cursor,
+				status: 'failed',
+				error: retry.error,
+				attempt: retry.attempt,
+				totalAttempts: entry.attempts,
+			});
+			cursor += retry.duration;
+		}
+
+		// Final/current attempt
+		segments.push({
+			stepName: entry.name,
+			label: entry.name,
+			isRetry: false,
+			duration: entry.duration,
+			offset: cursor,
+			status: entry.status,
+			error: entry.error,
+			totalAttempts: entry.attempts,
+		});
+		cursor += entry.duration;
+	}
+
+	return { segments, totalDuration: Math.max(cursor, 1) };
+}
+
 const NAME_COL = '140px';
 
 /** Waterfall-style timeline chart for workflow step execution. */
@@ -76,21 +143,7 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 		);
 	}
 
-	// Calculate global time bounds including retry history
-	let globalMin = Infinity;
-	let globalMax = 0;
-	for (const entry of timeline) {
-		const start = entry.startedAt ?? 0;
-		const end = start + entry.duration;
-		if (start < globalMin) globalMin = start;
-		if (end > globalMax) globalMax = end;
-		for (const retry of entry.retryHistory ?? []) {
-			const retryStart = retry.timestamp - retry.duration;
-			if (retryStart < globalMin) globalMin = retryStart;
-			if (retry.timestamp > globalMax) globalMax = retry.timestamp;
-		}
-	}
-	const totalDuration = Math.max(globalMax - globalMin, 1);
+	const { segments, totalDuration } = buildSequentialTimeline(timeline);
 	const ticks = generateTicks(totalDuration);
 
 	return (
@@ -119,114 +172,107 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 				</div>
 
 				{/* Rows */}
-				{timeline.map((entry) => {
-					const hasRetries = entry.retryHistory && entry.retryHistory.length > 0;
-					const barLeft = (((entry.startedAt ?? 0) - globalMin) / totalDuration) * 100;
-					const barWidth = Math.max((entry.duration / totalDuration) * 100, 0.5);
-					const color = getBarColor(entry.status);
-					const textColor = getBarTextColor(entry.status);
+				{segments.map((seg) => {
+					const barLeft = (seg.offset / totalDuration) * 100;
+					const barWidth = Math.max((seg.duration / totalDuration) * 100, 0.5);
 
-					return (
-						<div key={entry.name}>
-							{/* Main step row */}
-							<div className="grid items-center" style={{ gridTemplateColumns: `${NAME_COL} 1fr`, minHeight: '28px' }}>
-								<div className="min-w-0 truncate pr-3 font-mono text-xs text-muted-foreground">{entry.name}</div>
+					if (seg.isRetry) {
+						// Retry sub-row
+						return (
+							<div
+								key={`${seg.stepName}-retry-${seg.attempt}`}
+								className="grid items-center"
+								style={{ gridTemplateColumns: `${NAME_COL} 1fr`, minHeight: '22px' }}
+							>
+								<div className="min-w-0 truncate pr-3 pl-4 font-mono text-[10px] text-muted-foreground/60">{seg.label}</div>
 
-								<div className="relative h-5">
+								<div className="relative h-3.5">
 									{/* Gridlines */}
 									{ticks.map((tick) => {
 										const left = (tick / totalDuration) * 100;
-										return <div key={tick} className="absolute top-0 h-full w-px bg-border/50" style={{ left: `${left}%` }} />;
+										return <div key={tick} className="absolute top-0 h-full w-px bg-border/30" style={{ left: `${left}%` }} />;
 									})}
 
-									{/* Bar */}
+									{/* Retry bar */}
 									<Tooltip>
 										<TooltipTrigger asChild>
 											<div
-												className="absolute top-0 flex h-full items-center"
+												className="absolute top-0 h-full bg-red-400/60"
 												style={{ left: `${barLeft}%`, width: `${barWidth}%`, minWidth: '2px' }}
-											>
-												<div
-													className={`h-full w-full ${color} ${
-														isRunning(entry.status)
-															? 'animate-[shimmer_2s_ease-in-out_infinite] bg-gradient-to-r from-blue-400 via-blue-300 to-blue-400 bg-[length:200%_100%]'
-															: ''
-													}`}
-												/>
-											</div>
+											/>
 										</TooltipTrigger>
 										<TooltipContent>
-											<p className="font-medium">{entry.name}</p>
-											<p className="text-muted-foreground">Duration: {formatDuration(entry.duration)}</p>
-											<p className="text-muted-foreground">Attempts: {entry.attempts}</p>
-											{entry.error && <p className="mt-0.5 text-red-400">{entry.error}</p>}
+											<p className="font-medium">
+												{seg.stepName} — Attempt {seg.attempt}
+											</p>
+											<p className="text-muted-foreground">Duration: {formatDuration(seg.duration)}</p>
+											{seg.error && <p className="mt-0.5 text-red-400">{seg.error}</p>}
 										</TooltipContent>
 									</Tooltip>
 
-									{/* Duration label to the right of bar */}
+									{/* Duration label */}
 									<span
-										className={`absolute top-0 flex h-full items-center pl-1.5 text-[10px] font-medium ${textColor}`}
+										className="absolute top-0 flex h-full items-center pl-1.5 text-[10px] text-red-400/60"
 										style={{ left: `${barLeft + barWidth}%` }}
 									>
-										{formatDuration(entry.duration)}
+										{formatDuration(seg.duration)}
 									</span>
 								</div>
 							</div>
+						);
+					}
 
-							{/* Retry sub-rows */}
-							{hasRetries &&
-								entry.retryHistory!.map((retry) => {
-									const retryStart = retry.timestamp - retry.duration;
-									const retryLeft = ((retryStart - globalMin) / totalDuration) * 100;
-									const retryWidth = Math.max((retry.duration / totalDuration) * 100, 0.5);
+					// Main step row
+					const color = getBarColor(seg.status);
+					const textColor = getBarTextColor(seg.status);
 
-									return (
-										<div
-											key={retry.attempt}
-											className="grid items-center"
-											style={{ gridTemplateColumns: `${NAME_COL} 1fr`, minHeight: '22px' }}
-										>
-											<div className="min-w-0 truncate pr-3 pl-4 font-mono text-[10px] text-muted-foreground/60">
-												attempt {retry.attempt}
-											</div>
+					return (
+						<div
+							key={`${seg.stepName}-main`}
+							className="grid items-center"
+							style={{ gridTemplateColumns: `${NAME_COL} 1fr`, minHeight: '28px' }}
+						>
+							<div className="min-w-0 truncate pr-3 font-mono text-xs text-muted-foreground">{seg.stepName}</div>
 
-											<div className="relative h-3.5">
-												{/* Gridlines */}
-												{ticks.map((tick) => {
-													const left = (tick / totalDuration) * 100;
-													return <div key={tick} className="absolute top-0 h-full w-px bg-border/30" style={{ left: `${left}%` }} />;
-												})}
-
-												{/* Retry bar */}
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<div
-															className="absolute top-0 h-full bg-red-400/60"
-															style={{
-																left: `${Math.max(retryLeft, 0)}%`,
-																width: `${retryWidth}%`,
-																minWidth: '2px',
-															}}
-														/>
-													</TooltipTrigger>
-													<TooltipContent>
-														<p className="font-medium">Attempt {retry.attempt}</p>
-														<p className="text-muted-foreground">Duration: {formatDuration(retry.duration)}</p>
-														{retry.error && <p className="mt-0.5 text-red-400">{retry.error}</p>}
-													</TooltipContent>
-												</Tooltip>
-
-												{/* Duration label */}
-												<span
-													className="absolute top-0 flex h-full items-center pl-1.5 text-[10px] text-red-400/60"
-													style={{ left: `${Math.max(retryLeft, 0) + retryWidth}%` }}
-												>
-													{formatDuration(retry.duration)}
-												</span>
-											</div>
-										</div>
-									);
+							<div className="relative h-5">
+								{/* Gridlines */}
+								{ticks.map((tick) => {
+									const left = (tick / totalDuration) * 100;
+									return <div key={tick} className="absolute top-0 h-full w-px bg-border/50" style={{ left: `${left}%` }} />;
 								})}
+
+								{/* Bar */}
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<div
+											className="absolute top-0 flex h-full items-center"
+											style={{ left: `${barLeft}%`, width: `${barWidth}%`, minWidth: '2px' }}
+										>
+											<div
+												className={`h-full w-full ${color} ${
+													isRunning(seg.status)
+														? 'animate-[shimmer_2s_ease-in-out_infinite] bg-gradient-to-r from-blue-400 via-blue-300 to-blue-400 bg-[length:200%_100%]'
+														: ''
+												}`}
+											/>
+										</div>
+									</TooltipTrigger>
+									<TooltipContent>
+										<p className="font-medium">{seg.stepName}</p>
+										<p className="text-muted-foreground">Duration: {formatDuration(seg.duration)}</p>
+										<p className="text-muted-foreground">Attempts: {seg.totalAttempts}</p>
+										{seg.error && <p className="mt-0.5 text-red-400">{seg.error}</p>}
+									</TooltipContent>
+								</Tooltip>
+
+								{/* Duration label */}
+								<span
+									className={`absolute top-0 flex h-full items-center pl-1.5 text-[10px] font-medium ${textColor}`}
+									style={{ left: `${barLeft + barWidth}%` }}
+								>
+									{formatDuration(seg.duration)}
+								</span>
+							</div>
 						</div>
 					);
 				})}
