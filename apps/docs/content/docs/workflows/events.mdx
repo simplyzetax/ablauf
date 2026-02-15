@@ -62,6 +62,33 @@ await payment.sendEvent({
 
 Try sending a typo'd event name or missing a required field — TypeScript will stop you before you even save the file.
 
+## Event Buffering
+
+You can send an event to a workflow instance before it reaches the corresponding `waitForEvent()` call, as long as the instance has been created. The event is buffered and automatically delivered when the workflow reaches the matching step.
+
+```ts
+// Create the workflow — it starts running (hasn't reached waitForEvent yet)
+const handle = await ablauf.create(OrderWorkflow, {
+	id: 'order-123',
+	payload: { orderId: 'abc' },
+});
+
+// Send event immediately — it gets buffered
+await handle.sendEvent({
+	event: 'payment-received',
+	payload: { amount: 99.99 },
+});
+
+// When the workflow reaches step.waitForEvent('payment-received'),
+// it picks up the buffered event and continues without suspending.
+```
+
+If multiple events of the same type are sent before consumption, only the most recent one is kept (**last-write-wins**).
+
+<Callout type="info">
+	Event buffering eliminates race conditions. You no longer need to wait for the workflow to reach `waitForEvent()` before sending events.
+</Callout>
+
 ## Validation
 
 Payloads are validated at runtime against the Zod schema:

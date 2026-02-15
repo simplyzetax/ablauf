@@ -84,6 +84,16 @@ Here's what happens when you call `step.waitForEvent()`:
 4. If there's a timeout, the Durable Object sets an alarm for the timeout time
 5. The Durable Object hibernates
 
+### When a Buffered Event Exists
+
+If the event was already sent before the workflow reached this step:
+
+1. `step.waitForEvent()` checks the event buffer
+2. If a matching buffered event is found, it is consumed immediately
+3. The step is persisted as "completed" with the buffered payload
+4. Execution continues without suspending — no `WaitInterrupt`, no alarm
+5. On subsequent replays, the step returns the cached result as usual
+
 ### When an Event Arrives
 
 1. External code calls `ablauf.sendEvent()`
