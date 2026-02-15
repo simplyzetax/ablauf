@@ -184,7 +184,9 @@ export function GanttTimeline({ timeline }: GanttTimelineProps) {
 								className="grid items-center"
 								style={{ gridTemplateColumns: `${NAME_COL} 1fr`, minHeight: '22px' }}
 							>
-								<div className="min-w-0 truncate pr-3 pl-4 font-mono text-[10px] text-muted-foreground/60">{seg.label}</div>
+								<div className="min-w-0 truncate border-l border-muted-foreground/25 pr-3 pl-3 ml-1 font-mono text-[10px] text-muted-foreground/60">
+									{seg.label}
+								</div>
 
 								<div className="relative h-3.5">
 									{/* Gridlines */}
