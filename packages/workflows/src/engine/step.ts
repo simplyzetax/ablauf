@@ -2,7 +2,7 @@ import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
 import { eq } from 'drizzle-orm';
 import { stepsTable } from '../db/schema';
 import { SleepInterrupt, WaitInterrupt } from './interrupts';
-import { StepRetryExhaustedError, DuplicateStepError, WorkflowError } from '../errors';
+import { StepRetryExhaustedError, DuplicateStepError, WorkflowError, NonRetriableError, StepFailedError } from '../errors';
 import { parseDuration } from './duration';
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from './types';
 import { DEFAULT_RETRY_CONFIG } from './types';
@@ -159,6 +159,34 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 
 			return result;
 		} catch (e) {
+			// Non-retriable errors bypass retry logic entirely
+			if (e instanceof NonRetriableError) {
+				const duration = Date.now() - startedAt;
+				const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
+					existing?.retryHistory ? JSON.parse(existing.retryHistory) : [];
+				const updatedHistory = [
+					...existingHistory,
+					{ attempt: newAttempts, error: e.message, errorStack: e.stack ?? null, timestamp: startedAt, duration },
+				];
+
+				await this.db
+					.update(stepsTable)
+					.set({
+						status: 'failed',
+						error: e.message,
+						attempts: newAttempts,
+						wakeAt: null,
+						startedAt,
+						duration,
+						errorStack: e.stack ?? null,
+						retryHistory: JSON.stringify(updatedHistory),
+					})
+					.where(eq(stepsTable.name, name));
+
+				throw new StepFailedError(name, e.message);
+			}
+
+			// existing retry logic continues unchanged below...
 			const errorMsg = e instanceof Error ? e.message : String(e);
 			const errorStack = e instanceof Error ? (e.stack ?? null) : null;
 			const duration = Date.now() - startedAt;
