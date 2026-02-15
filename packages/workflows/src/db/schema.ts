@@ -17,7 +17,7 @@ export const workflowTable = sqliteTable('workflow', {
 
 export const stepsTable = sqliteTable('steps', {
 	name: text('name').primaryKey(),
-	type: text('type').notNull(), // 'do' | 'sleep' | 'wait_for_event'
+	type: text('type').notNull(), // 'do' | 'sleep' | 'sleep_until' | 'wait_for_event'
 	status: text('status').notNull(), // 'completed' | 'failed' | 'sleeping' | 'waiting'
 	result: text('result'),
 	error: text('error'),
