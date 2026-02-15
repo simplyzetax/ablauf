@@ -425,7 +425,9 @@ const result = await step.waitForEvent('payment-received', {
 
 ## Error Classes
 
-All errors thrown by Ablauf extend `WorkflowError`, which extends Hono's `HTTPException`. Every error has a `code`, `status`, `source`, and `message`.
+### Engine Errors
+
+All engine errors extend `WorkflowError` (which extends `Error`). Every engine error has a `code`, `status`, `source`, and `message`.
 
 | Error Class                  | Code                      | Status | Source     |
 | ---------------------------- | ------------------------- | ------ | ---------- |
@@ -443,6 +445,32 @@ All errors thrown by Ablauf extend `WorkflowError`, which extends Hono's `HTTPEx
 | `DuplicateStepError`         | `VALIDATION_ERROR`        | 400    | engine     |
 | `InvalidDurationError`       | `VALIDATION_ERROR`        | 400    | validation |
 | `ObservabilityDisabledError` | `OBSERVABILITY_DISABLED`  | 400    | api        |
+
+### NonRetriableError
+
+`NonRetriableError` extends plain `Error` (not `WorkflowError`). It is a user-facing error designed to be thrown inside `step.do()` callbacks to signal that a failure is permanent and the step should not be retried.
+
+```ts
+import { NonRetriableError } from '@der-ablauf/workflows';
+
+await step.do('validate-user', async () => {
+	const user = await getUser(userId);
+	if (user.banned) {
+		throw new NonRetriableError('User is banned');
+	}
+	return user;
+});
+```
+
+When thrown:
+
+1. The step is immediately marked as `failed` — no retries are attempted, regardless of retry configuration
+2. The error is recorded in the step's retry history
+3. The workflow transitions to `errored`
+
+Use `NonRetriableError` for permanent failures where retrying would be wasteful: business rule violations, authorization failures, invalid data, or deleted resources.
+
+See [Skipping Retries with NonRetriableError](/docs/workflows/retries#skipping-retries-with-nonretriableerror) for more details and examples.
 
 ### Error JSON Shape
 
