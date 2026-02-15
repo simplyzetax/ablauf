@@ -32,12 +32,12 @@ const client = createAblaufClient({
 
 ### Configuration Options
 
-| Option            | Type                     | Description                                                                       |
-| ----------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `url`             | `string`                 | Base URL for the oRPC endpoint                                                    |
+| Option            | Type                     | Description                                                                        |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------------- |
+| `url`             | `string`                 | Base URL for the oRPC endpoint                                                     |
 | `wsUrl`           | `string`                 | Base URL for WebSocket connections (defaults to `url` with protocol swapped to ws) |
-| `withCredentials` | `boolean`                | Include cookies in requests (for auth)                                            |
-| `headers`         | `Record<string, string>` | Custom headers to send with every request                                         |
+| `withCredentials` | `boolean`                | Include cookies in requests (for auth)                                             |
+| `headers`         | `Record<string, string>` | Custom headers to send with every request                                          |
 
 ```ts
 // With authentication

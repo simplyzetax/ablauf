@@ -20,6 +20,13 @@
 			},
 		],
 	},
+	"workflows": [
+		{
+			"name": "ablauf-benchmark-cloudflare",
+			"binding": "CF_BENCH_WORKFLOW",
+			"class_name": "BenchmarkCloudflareWorkflow",
+		},
+	],
 	"migrations": [
 		{
 			"new_sqlite_classes": ["WorkflowRunner"],
