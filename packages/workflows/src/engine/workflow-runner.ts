@@ -222,18 +222,20 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			}
 
 			// Upsert: last-write-wins semantics
+			const serialized = superjson.stringify(payload);
+			const now = Date.now();
 			await this.db
 				.insert(eventBufferTable)
 				.values({
 					eventName: props.event,
-					payload: superjson.stringify(payload),
-					receivedAt: Date.now(),
+					payload: serialized,
+					receivedAt: now,
 				})
 				.onConflictDoUpdate({
 					target: eventBufferTable.eventName,
 					set: {
-						payload: superjson.stringify(payload),
-						receivedAt: Date.now(),
+						payload: serialized,
+						receivedAt: now,
 					},
 				});
 		}
