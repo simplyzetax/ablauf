@@ -1,7 +1,6 @@
 import { EventValidationError, ObservabilityDisabledError, UpdateTimeoutError, WorkflowNotRunningError, extractZodIssues } from './errors';
 import { listIndexEntries } from './engine/index-listing';
 import { parseDuration } from './engine/duration';
-import { parseSSEStream } from './engine/sse-stream';
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
@@ -236,62 +235,77 @@ export class Ablauf {
 		workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
 		props: { id: string; update: K; timeout?: string },
 	): Promise<SSEUpdates[K]> {
-		void workflow; // used only for type narrowing
-		const stub = this.getStub(props.id);
-		const stream = await stub.connectSSE();
-		const abortController = new AbortController();
+		void workflow;
+		const doId = this.binding.idFromName(props.id);
+		const stub = this.binding.get(doId);
+		const resp = await stub.fetch('http://fake-host/ws', {
+			headers: { Upgrade: 'websocket' },
+		});
+
+		const ws = resp.webSocket;
+		if (!ws) {
+			throw new WorkflowNotRunningError(props.id, 'WebSocket upgrade failed');
+		}
+		ws.accept();
 
 		const timeoutMs = props.timeout ? parseDuration(props.timeout) : null;
-		let timer: ReturnType<typeof setTimeout> | null = null;
 
-		const readUntilMatch = async (): Promise<SSEUpdates[K]> => {
-			for await (const update of parseSSEStream(stream, { signal: abortController.signal })) {
-				if (update.event === 'close') {
-					const status = await stub.getStatus();
-					throw new WorkflowNotRunningError(props.id, status.status);
+		return new Promise<SSEUpdates[K]>((resolve, reject) => {
+			let timer: ReturnType<typeof setTimeout> | null = null;
+
+			const cleanup = () => {
+				if (timer) clearTimeout(timer);
+				try {
+					ws.close();
+				} catch {
+					/* already closed */
 				}
+			};
 
-				if (update.event === props.update) {
-					return update.data as SSEUpdates[K];
+			ws.addEventListener('message', (evt) => {
+				try {
+					const parsed = JSON.parse(evt.data as string);
+					if (parsed.event === 'close') {
+						cleanup();
+						this.getStub(props.id)
+							.getStatus()
+							.then((status) => {
+								reject(new WorkflowNotRunningError(props.id, status.status));
+							})
+							.catch(reject);
+						return;
+					}
+					if (parsed.event === props.update) {
+						cleanup();
+						resolve(SuperJSON.parse(parsed.data) as SSEUpdates[K]);
+					}
+				} catch {
+					// Malformed message, skip
 				}
-			}
+			});
 
-			if (abortController.signal.aborted) {
-				throw new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs ?? 0}ms`);
-			}
+			ws.addEventListener('close', () => {
+				cleanup();
+				this.getStub(props.id)
+					.getStatus()
+					.then((status) => {
+						reject(new WorkflowNotRunningError(props.id, status.status));
+					})
+					.catch(reject);
+			});
 
-			const status = await stub.getStatus();
-			throw new WorkflowNotRunningError(props.id, status.status);
-		};
+			ws.addEventListener('error', () => {
+				cleanup();
+				reject(new WorkflowNotRunningError(props.id, 'WebSocket error'));
+			});
 
-		const readPromise = readUntilMatch();
-		const readPromiseHandled = readPromise.catch(() => undefined);
-		const timeoutPromise =
-			timeoutMs === null
-				? null
-				: new Promise<never>((_, reject) => {
-						timer = setTimeout(() => {
-							abortController.abort();
-							reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
-						}, timeoutMs);
-					});
-
-		try {
-			if (!timeoutPromise) {
-				return await readPromise;
+			if (timeoutMs !== null) {
+				timer = setTimeout(() => {
+					cleanup();
+					reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
+				}, timeoutMs);
 			}
-			return await Promise.race([readPromise, timeoutPromise]);
-		} catch (error) {
-			if (error instanceof UpdateTimeoutError) {
-				void readPromiseHandled;
-			}
-			throw error;
-		} finally {
-			if (timer) {
-				clearTimeout(timer);
-			}
-			abortController.abort();
-		}
+		});
 	}
 
 	/**

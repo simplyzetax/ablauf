@@ -7,7 +7,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Client
 
-`@der-ablauf/client` is a lightweight browser client for consuming Ablauf workflows from your frontend. It provides type-safe access to the dashboard API and real-time SSE subscriptions.
+`@der-ablauf/client` is a lightweight browser client for consuming Ablauf workflows from your frontend. It provides type-safe access to the dashboard API and real-time WebSocket subscriptions.
 
 ## Installation
 
@@ -32,11 +32,12 @@ const client = createAblaufClient({
 
 ### Configuration Options
 
-| Option            | Type                     | Description                               |
-| ----------------- | ------------------------ | ----------------------------------------- |
-| `url`             | `string`                 | Base URL for the oRPC endpoint            |
-| `withCredentials` | `boolean`                | Include cookies in requests (for auth)    |
-| `headers`         | `Record<string, string>` | Custom headers to send with every request |
+| Option            | Type                     | Description                                                                       |
+| ----------------- | ------------------------ | --------------------------------------------------------------------------------- |
+| `url`             | `string`                 | Base URL for the oRPC endpoint                                                    |
+| `wsUrl`           | `string`                 | Base URL for WebSocket connections (defaults to `url` with protocol swapped to ws) |
+| `withCredentials` | `boolean`                | Include cookies in requests (for auth)                                            |
+| `headers`         | `Record<string, string>` | Custom headers to send with every request                                         |
 
 ```ts
 // With authentication
@@ -84,13 +85,13 @@ const timeline = await client.workflows.timeline({ id: 'order-123' });
 
 ## Real-Time Subscriptions
 
-Subscribe to live updates from a running workflow using Server-Sent Events:
+Subscribe to live updates from a running workflow using WebSockets:
 
 ```ts
 import type { InferSSEUpdates } from '@der-ablauf/client';
 import type { OrderWorkflow } from './workflows/order';
 
-// Type-safe SSE subscription
+// Type-safe WebSocket subscription
 const stream = client.subscribe<typeof OrderWorkflow>('order-123');
 
 for await (const update of stream) {
@@ -122,7 +123,7 @@ controller.abort();
 
 ### Type Inference
 
-Use `InferSSEUpdates` to extract the SSE event types from a workflow class:
+Use `InferSSEUpdates` to extract the update event types from a workflow class:
 
 ```ts
 import type { InferSSEUpdates } from '@der-ablauf/client';

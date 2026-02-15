@@ -5,7 +5,7 @@ import migrations from '../../drizzle/migrations';
 import { workflowTable, stepsTable, instancesTable } from '../db/schema';
 import { StepContext } from './step';
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from './interrupts';
-import { SSEContext, NoOpSSEContext } from './sse';
+import { LiveContext, NoOpSSEContext } from './sse';
 import {
 	WorkflowNotFoundError,
 	WorkflowTypeUnknownError,
@@ -80,7 +80,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 		private db: DrizzleSqliteDODatabase;
 		private workflowType: string | null = null;
 		private workflowId: string | null = null;
-		private sseCtx: SSEContext<Record<string, unknown>> | null = null;
+		private liveCtx: LiveContext<Record<string, unknown>> | null = null;
 
 		constructor(ctx: DurableObjectState, env: Record<string, unknown>) {
 			super(ctx, env);
@@ -226,41 +226,51 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			await this.setStatus('terminated');
 		}
 
-		async connectSSE(): Promise<ReadableStream> {
-			try {
-				const [wf] = await this.db.select().from(workflowTable);
-				if (!wf) {
-					throw new WorkflowNotFoundError(this.workflowId ?? 'unknown');
-				}
-
-				const WorkflowCls = registry[wf.type];
-				const sseSchemas = WorkflowCls?.sseUpdates ?? null;
-
-				const { readable, writable } = new TransformStream();
-				const writer = writable.getWriter();
-
-				if (!sseSchemas) {
-					writer.close();
-					return readable;
-				}
-
-				if (!this.sseCtx) {
-					this.sseCtx = new SSEContext(this.db, sseSchemas, true);
-				}
-
-				// Flush persisted emit messages to the new client
-				await this.sseCtx.flushPersistedMessages(writer);
-
-				// Register for live updates
-				this.sseCtx.addWriter(writer);
-
-				return readable;
-			} catch (e) {
-				if (e instanceof WorkflowError) {
-					throw new Error(JSON.stringify(e.toJSON()));
-				}
-				throw e;
+		async fetch(request: Request): Promise<Response> {
+			if (request.headers.get('Upgrade') !== 'websocket') {
+				return new Response('Expected WebSocket', { status: 426 });
 			}
+
+			const [wf] = await this.db.select().from(workflowTable);
+			if (!wf) {
+				return new Response('Workflow not found', { status: 404 });
+			}
+
+			const WorkflowCls = registry[wf.type];
+			const sseSchemas = WorkflowCls?.sseUpdates ?? null;
+
+			if (!sseSchemas) {
+				// No SSE schema — reject with close code
+				const pair = new WebSocketPair();
+				this.ctx.acceptWebSocket(pair[1]);
+				pair[1].close(1008, 'Workflow does not define sseUpdates');
+				return new Response(null, { status: 101, webSocket: pair[0] });
+			}
+
+			const pair = new WebSocketPair();
+			this.ctx.acceptWebSocket(pair[1]);
+
+			// Ensure LiveContext exists
+			if (!this.liveCtx) {
+				this.liveCtx = new LiveContext(this.ctx, this.db, sseSchemas, true);
+			}
+
+			// Flush persisted emit messages to the new client
+			await this.liveCtx.flushPersistedMessages(pair[1]);
+
+			return new Response(null, { status: 101, webSocket: pair[0] });
+		}
+
+		async webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer): Promise<void> {
+			// Future: handle client→server messages (pause, resume, cancel)
+		}
+
+		async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+			ws.close(code, reason || 'Client disconnected');
+		}
+
+		async webSocketError(_ws: WebSocket, _error: unknown): Promise<void> {
+			_ws.close(1011, 'Unexpected error');
 		}
 
 		// ─── Index Shard RPC Methods ───
@@ -348,15 +358,15 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			const sseSchemas = WorkflowCls.sseUpdates ?? null;
 			if (sseSchemas) {
-				if (!this.sseCtx) {
-					this.sseCtx = new SSEContext(this.db, sseSchemas, true);
+				if (!this.liveCtx) {
+					this.liveCtx = new LiveContext(this.ctx, this.db, sseSchemas, true);
 				}
-				this.sseCtx.setReplay(true);
+				this.liveCtx.setReplay(true);
 				stepCtx.onFirstExecution = () => {
-					this.sseCtx?.setReplay(false);
+					this.liveCtx?.setReplay(false);
 				};
 			} else {
-				this.sseCtx = null;
+				this.liveCtx = null;
 			}
 
 			if (wf.paused) {
@@ -372,7 +382,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					const issues = extractZodIssues(e);
 					throw new PayloadValidationError('Invalid workflow input', issues);
 				}
-				const sseArg = this.sseCtx ?? new NoOpSSEContext();
+				const sseArg = this.liveCtx ?? new NoOpSSEContext();
 				const result = await instance.run(stepCtx, payload, sseArg);
 				await this.db.update(workflowTable).set({
 					status: 'completed',
@@ -380,7 +390,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					updatedAt: Date.now(),
 				});
 				this.updateIndex(wf.type, wf.workflowId, 'completed', Date.now());
-				this.sseCtx?.close();
+				this.liveCtx?.close();
 			} catch (e) {
 				if (e instanceof SleepInterrupt) {
 					await this.ctx.storage.setAlarm(e.wakeAt);
@@ -400,7 +410,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 						updatedAt: Date.now(),
 					});
 					this.updateIndex(wf.type, wf.workflowId, 'errored', Date.now());
-					this.sseCtx?.close();
+					this.liveCtx?.close();
 				}
 			}
 		}
@@ -443,7 +453,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 			}
 
 			if (status === 'completed' || status === 'errored' || status === 'terminated') {
-				this.sseCtx?.close();
+				this.liveCtx?.close();
 			}
 		}
 

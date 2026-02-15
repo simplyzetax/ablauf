@@ -330,7 +330,6 @@ export interface WorkflowRunnerStub {
 	pause(): Promise<void>;
 	resume(): Promise<void>;
 	terminate(): Promise<void>;
-	connectSSE(): Promise<ReadableStream>;
 	indexWrite(props: WorkflowIndexEntry): Promise<void>;
 	indexList(filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]>;
 	_expireTimers(): Promise<void>;

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { orpc, client } from '~/lib/orpc';
+import { orpc, getWsUrl } from '~/lib/orpc';
 import { StatusBadge } from '~/components/status-badge';
 import { JsonViewer } from '~/components/json-viewer';
 import { GanttTimeline } from '~/components/gantt-timeline';
@@ -43,20 +43,20 @@ function DetailPanelContent({ workflowId }: { workflowId: string }) {
 	const queryClient = useQueryClient();
 
 	useEffect(() => {
-		const abortController = new AbortController();
-		(async () => {
-			try {
-				const iterator = await client.workflows.subscribe({ id: workflowId }, { signal: abortController.signal });
-				for await (const _event of iterator) {
-					await queryClient.invalidateQueries({
-						queryKey: orpc.workflows.get.queryOptions({ input: { id: workflowId } }).queryKey,
-					});
-				}
-			} catch {
-				// Connection closed or aborted
-			}
-		})();
-		return () => abortController.abort();
+		const baseWsUrl = getWsUrl();
+		const ws = new WebSocket(`${baseWsUrl}/__ablauf/workflows/${workflowId}/ws`);
+
+		ws.addEventListener('message', () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.workflows.get.queryOptions({ input: { id: workflowId } }).queryKey,
+			});
+		});
+
+		ws.addEventListener('error', () => {
+			// Connection failed — polling fallback handles it
+		});
+
+		return () => ws.close();
 	}, [workflowId, queryClient]);
 
 	const { data: workflow, isLoading: workflowLoading } = useQuery(

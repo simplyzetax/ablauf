@@ -1,17 +1,17 @@
 ---
-title: Real-time Updates (SSE)
-description: Stream live progress to clients with Server-Sent Events
+title: Real-time Updates
+description: Stream live progress to clients with WebSocket hibernation
 ---
 
-# Real-time Updates (SSE)
+# Real-time Updates
 
-Ablauf supports Server-Sent Events (SSE) for real-time workflow progress updates. Stream progress bars, status messages, and completion notifications to your users as the workflow runs.
+Ablauf uses Cloudflare's Hibernatable WebSocket API for real-time workflow progress updates. Stream progress bars, status messages, and completion notifications to your users as the workflow runs — while the Durable Object hibernates between events, keeping memory costs near zero.
 
 Two methods: `broadcast()` for live-only updates, and `emit()` for persisted messages that new clients can replay.
 
-## Defining SSE Types
+## Defining Update Types
 
-SSE messages are typed with Zod schemas, just like events and payloads:
+Update messages are typed with Zod schemas, just like events and payloads:
 
 ```ts
 import { defineWorkflow } from '@der-ablauf/workflows';
@@ -39,7 +39,7 @@ const ImportWorkflow = defineWorkflow({
 			// Import to database
 		});
 
-		// emit() persists the message — new SSE clients will see it even after it was sent
+		// emit() persists the message — new clients will see it even after it was sent
 		sse.emit('complete', { recordCount: parsed.records });
 
 		return { imported: parsed.records };
@@ -47,14 +47,14 @@ const ImportWorkflow = defineWorkflow({
 });
 ```
 
-TypeScript autocompletes the message types and validates the payload shape. You can't send an invalid SSE message.
+TypeScript autocompletes the message types and validates the payload shape. You can't send an invalid update message.
 
 ## `broadcast()` vs `emit()`
 
 | Method        | Live clients | New clients | Persisted |
 | ------------- | ------------ | ----------- | --------- |
-| `broadcast()` | ✓ Yes        | ✗ No        | ✗ No      |
-| `emit()`      | ✓ Yes        | ✓ Yes       | ✓ Yes     |
+| `broadcast()` | Yes          | No          | No        |
+| `emit()`      | Yes          | Yes         | Yes       |
 
 **Use `broadcast()`** for transient progress updates that don't need to be replayed. Perfect for progress bars, status messages, or "still working..." heartbeats.
 
@@ -73,32 +73,11 @@ sse.emit('complete', { message: 'All done!' });
 
 Live clients see all the progress updates. A client connecting after completion only sees the "All done!" message.
 
-## Connecting to SSE from a Client
-
-### Using the Browser's EventSource API
-
-```ts
-const source = new EventSource(`/workflows/${workflowId}/sse`);
-
-source.addEventListener('progress', (event) => {
-	const data = JSON.parse((event as MessageEvent).data);
-	updateProgressBar(data.percent);
-});
-
-source.addEventListener('complete', (event) => {
-	const data = JSON.parse((event as MessageEvent).data);
-	showSuccessMessage(data.recordCount);
-});
-
-source.onerror = (error) => {
-	console.error('SSE connection error:', error);
-	source.close();
-};
-```
+## Connecting from a Client
 
 ### Using the Ablauf Client Package
 
-The `@der-ablauf/client` package provides a type-safe oRPC client for the dashboard API, including SSE subscriptions:
+The `@der-ablauf/client` package provides a type-safe client with WebSocket subscriptions:
 
 ```ts
 import { createAblaufClient } from '@der-ablauf/client';
@@ -119,18 +98,29 @@ for await (const update of client.subscribe<typeof ImportWorkflow>('wf-123')) {
 }
 ```
 
-If you prefer the raw dashboard stream, use `workflows.subscribe` directly:
+### Using Native WebSocket
+
+You can also connect directly using the browser's WebSocket API:
 
 ```ts
-const iterator = await client.workflows.subscribe({ id: 'wf-123' });
+const ws = new WebSocket(`wss://my-worker.example.com/__ablauf/workflows/${workflowId}/ws`);
 
-for await (const update of iterator) {
-	// update: { event: string; data: unknown }
-	console.log(update.event, update.data);
-}
+ws.addEventListener('message', (event) => {
+	const { event: name, data } = JSON.parse(event.data);
+	if (name === 'progress') {
+		updateProgressBar(data);
+	}
+	if (name === 'close') {
+		ws.close();
+	}
+});
+
+ws.addEventListener('error', () => {
+	console.error('WebSocket connection error');
+});
 ```
 
-## SSE During Workflow Replay
+## Replay Behavior
 
 <Callout type="info">
 	During workflow replay, `broadcast()` calls are automatically skipped — no duplicate progress messages for your users. `emit()` messages
@@ -208,9 +198,9 @@ const DeploymentWorkflow = defineWorkflow({
 
 New clients connecting during the test stage will see the build and test messages, but not the deploy message (yet).
 
-## Error Messages via SSE
+## Error Messages via Updates
 
-You can use SSE to notify clients of errors without throwing:
+You can use updates to notify clients of errors without throwing:
 
 ```ts
 const RobustWorkflow = defineWorkflow({
@@ -237,11 +227,11 @@ Clients can show error toasts or warnings while the workflow continues retrying 
 
 ## Performance Notes
 
-- `broadcast()` is very cheap — just a write to an in-memory SSE writer
+- `broadcast()` is very cheap — sends to connected WebSocket clients in memory
 - `emit()` writes to SQLite, so use it for milestones, not every iteration of a tight loop
-- SSE connections are long-lived HTTP connections — plan your Worker concurrency accordingly
-- Ablauf automatically closes stale SSE connections after workflow completion
+- WebSocket connections use Cloudflare's Hibernatable WebSocket API — the Durable Object can sleep between events, keeping memory cost near zero even with many connected clients
+- Ablauf automatically sends a close frame and disconnects clients after workflow completion
 
 ---
 
-SSE makes Ablauf workflows feel interactive and responsive. Your users see real-time progress instead of staring at a spinner. And you get to keep your long-running logic simple and durable.
+Real-time updates make Ablauf workflows feel interactive and responsive. Your users see live progress instead of staring at a spinner. And with WebSocket hibernation, you get this with minimal resource cost.
