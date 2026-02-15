@@ -168,7 +168,10 @@ export interface Step<Events extends object = {}> {
 	/**
 	 * Suspend workflow execution until an external event is delivered.
 	 *
-	 * The workflow status becomes `"waiting"` until the event arrives via `sendEvent()`.
+	 * If the event was already sent before the workflow reached this step, the
+	 * buffered event is consumed immediately and execution continues without
+	 * suspending. Otherwise, the workflow status becomes `"waiting"` until the
+	 * event arrives via `sendEvent()`.
 	 *
 	 * @param name - The event name to wait for (must match a key in the workflow's events map).
 	 * @param options - Optional timeout configuration.

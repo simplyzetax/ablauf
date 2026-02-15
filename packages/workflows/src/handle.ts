@@ -51,9 +51,17 @@ export class WorkflowHandle<
 	 * The event name and payload are validated against the workflow's event schemas
 	 * before delivery to the Durable Object.
 	 *
+	 * If the workflow has already reached `waitForEvent()` for this event type,
+	 * the event is delivered immediately and the workflow resumes. If the workflow
+	 * hasn't reached `waitForEvent()` yet, the event is buffered and will be
+	 * delivered automatically when the workflow reaches the matching step.
+	 *
+	 * Events use **last-write-wins** semantics: if multiple events of the same type
+	 * are sent before consumption, only the most recent one is kept.
+	 *
 	 * @param props - The event name and payload.
 	 * @throws {EventValidationError} If the event name is unknown or the payload fails validation.
-	 * @throws {WorkflowNotRunningError} If the workflow is not waiting for this event.
+	 * @throws {WorkflowNotRunningError} If the workflow is in a terminal state (completed, errored, terminated).
 	 *
 	 * @example
 	 * ```ts

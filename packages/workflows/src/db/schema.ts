@@ -31,6 +31,16 @@ export const stepsTable = sqliteTable('steps', {
 	retryHistory: text('retry_history'),
 });
 
+/** Buffer for events sent before the workflow reaches `waitForEvent()`. */
+export const eventBufferTable = sqliteTable('event_buffer', {
+	/** Event name matching a key in the workflow's event schema. */
+	eventName: text('event_name').primaryKey(),
+	/** Superjson-serialized event payload. */
+	payload: text('payload').notNull(),
+	/** Unix timestamp (ms) when the event was received. */
+	receivedAt: integer('received_at').notNull(),
+});
+
 export const sseMessagesTable = sqliteTable('sse_messages', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	event: text('event').notNull(),

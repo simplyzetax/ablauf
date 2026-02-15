@@ -1,6 +1,6 @@
 import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
 import { eq } from 'drizzle-orm';
-import { stepsTable } from '../db/schema';
+import { stepsTable, eventBufferTable } from '../db/schema';
 import { SleepInterrupt, WaitInterrupt } from './interrupts';
 import {
 	StepRetryExhaustedError,
@@ -317,6 +317,29 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 
 		if (existing?.status === 'waiting') {
 			throw new WaitInterrupt(name as string, existing.wakeAt);
+		}
+
+		// Check event buffer for an early-delivered event
+		const [buffered] = await this.db
+			.select()
+			.from(eventBufferTable)
+			.where(eq(eventBufferTable.eventName, name as string));
+
+		if (buffered) {
+			// Consume the buffered event: persist step first, then delete from buffer.
+			// Insert-before-delete order ensures crash safety: if the isolate dies after
+			// the insert but before the delete, the next replay finds the completed step
+			// and the orphaned buffer entry is cleaned up on terminal state.
+			await this.db.insert(stepsTable).values({
+				name: name as string,
+				type: 'wait_for_event',
+				status: 'completed',
+				result: buffered.payload,
+				completedAt: Date.now(),
+				attempts: 0,
+			});
+			await this.db.delete(eventBufferTable).where(eq(eventBufferTable.eventName, name as string));
+			return superjson.parse(buffered.payload) as Events[K];
 		}
 
 		const timeoutAt = options?.timeout ? Date.now() + parseDuration(options.timeout) : null;

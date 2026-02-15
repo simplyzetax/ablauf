@@ -5,6 +5,7 @@ import m0002 from './0002_smooth_martin_li.sql';
 import m0003 from './0003_cultured_runaways.sql';
 import m0004 from './0004_furry_meteorite.sql';
 import m0005 from './0005_sse_update_events.sql';
+import m0006 from './0006_petite_the_leader.sql';
 
 export default {
 	journal,
@@ -15,5 +16,6 @@ export default {
 		m0003,
 		m0004,
 		m0005,
+		m0006,
 	},
 };

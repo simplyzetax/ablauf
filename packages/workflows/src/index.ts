@@ -84,4 +84,4 @@ export { dashboardRouter, timelineEntrySchema } from './dashboard';
 export type { DashboardContext, TimelineEntry } from './dashboard';
 
 // DB schema (for consumer migrations)
-export { workflowTable, stepsTable, instancesTable, sseMessagesTable } from './db/schema';
+export { workflowTable, stepsTable, instancesTable, sseMessagesTable, eventBufferTable } from './db/schema';
