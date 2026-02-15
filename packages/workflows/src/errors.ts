@@ -413,3 +413,25 @@ export class ObservabilityDisabledError extends WorkflowError {
 export function extractZodIssues(e: unknown): unknown[] {
 	return e instanceof Error && 'issues' in e ? (e as { issues: unknown[] }).issues : [{ message: String(e) }];
 }
+
+/**
+ * Thrown by user code inside `step.do()` to indicate the error is permanent
+ * and the step should NOT be retried. The step is immediately marked as failed
+ * and the workflow transitions to `errored`.
+ *
+ * Unlike {@link WorkflowError} subclasses, this is a user-facing error class
+ * that extends plain `Error` — no error codes, HTTP statuses, or sources needed.
+ *
+ * @example
+ * ```ts
+ * await step.do('validate', async () => {
+ *   if (user.banned) throw new NonRetriableError('User is banned');
+ * });
+ * ```
+ */
+export class NonRetriableError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'NonRetriableError';
+	}
+}
