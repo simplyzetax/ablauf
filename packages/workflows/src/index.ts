@@ -29,12 +29,15 @@ export type {
 	StepDoOptions,
 	StepWaitOptions,
 	StepInfo,
+	ResultSizeLimitConfig,
+	ResultSizeOverflow,
 	WorkflowIndexEntry,
 	WorkflowIndexListFilters,
 	WorkflowShardConfig,
 } from './engine/types';
 export {
 	DEFAULT_RETRY_CONFIG,
+	DEFAULT_RESULT_SIZE_LIMIT,
 	workflowStatusSchema,
 	stepInfoSchema,
 	workflowStatusResponseSchema,
