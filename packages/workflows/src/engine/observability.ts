@@ -49,6 +49,8 @@ export interface WorkflowStatusChangeEvent {
 	result?: unknown;
 	/** Error message, present only when status is `"errored"`. */
 	error?: string;
+	/** Unix timestamp (ms) when the workflow was originally created. Present on events emitted outside the main replay cycle (pause, resume, terminate). */
+	createdAt?: number;
 	/** Unix timestamp (ms) when the status change occurred. */
 	timestamp: number;
 }
@@ -453,6 +455,9 @@ export class ShardObservabilityProvider implements ObservabilityProvider<ShardCo
 	onWorkflowStatusChange(collector: ShardCollector, event: WorkflowStatusChangeEvent): void {
 		collector.status = event.status;
 		collector.updatedAt = event.timestamp;
+		if (event.createdAt !== undefined) {
+			collector.createdAt = event.createdAt;
+		}
 	}
 
 	/**

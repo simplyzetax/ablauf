@@ -645,11 +645,13 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				const type = this.workflowType;
 				const id = this.workflowId;
 				if (type && id) {
+					const [wf] = await this.db.select({ createdAt: workflowTable.createdAt }).from(workflowTable).limit(1);
 					const collector = provider.createCollector(id, type);
 					provider.onWorkflowStatusChange(collector, {
 						workflowId: id,
 						type,
 						status,
+						createdAt: wf?.createdAt,
 						timestamp: now,
 					});
 					this.ctx.waitUntil(provider.flush(collector, status));
@@ -663,6 +665,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 							workflowId: wf.workflowId,
 							type: wf.type,
 							status,
+							createdAt: wf.createdAt,
 							timestamp: now,
 						});
 						this.ctx.waitUntil(provider.flush(collector, status));
