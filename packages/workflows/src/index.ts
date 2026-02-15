@@ -58,6 +58,7 @@ export {
 	WorkflowNotRunningError,
 	ObservabilityDisabledError,
 	DuplicateStepError,
+	InvalidDateError,
 	InvalidDurationError,
 	NonRetriableError,
 	asWorkflowError,

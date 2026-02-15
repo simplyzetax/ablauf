@@ -372,6 +372,17 @@ export class InvalidDurationError extends WorkflowError {
 }
 
 /**
+ * Thrown when a `Date` passed to `step.sleepUntil()` is invalid (e.g., `new Date("garbage")`).
+ *
+ * Error code: `VALIDATION_ERROR` | HTTP status: `400`
+ */
+export class InvalidDateError extends WorkflowError {
+	constructor() {
+		super(createErrorInit('VALIDATION_ERROR', 'validation', 'Invalid date passed to step.sleepUntil(). Expected a valid Date instance.'));
+	}
+}
+
+/**
  * Thrown when a requested resource (other than a workflow instance) is not found.
  *
  * Error code: `RESOURCE_NOT_FOUND` | HTTP status: `404`

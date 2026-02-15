@@ -1,6 +1,6 @@
 ---
-title: step.sleep()
-description: Pause a workflow for a duration
+title: step.sleep() & step.sleepUntil()
+description: Pause a workflow for a duration or until a specific time
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -78,9 +78,72 @@ await step.sleep('good', '5s');
 await step.sleep('good', '500ms');
 ```
 
+## step.sleepUntil()
+
+When you need to sleep until a specific point in time rather than a relative duration, use `step.sleepUntil()`. It accepts a `Date` object instead of a duration string.
+
+```ts
+// Sleep until midnight UTC on January 15th
+await step.sleepUntil('wait-for-midnight', new Date('2025-01-15T00:00:00Z'));
+
+// Sleep until a computed time
+const launchDate = new Date(payload.scheduledAt);
+await step.sleepUntil('wait-for-launch', launchDate);
+```
+
+### When to Use sleepUntil vs sleep
+
+| Use Case | Method |
+| --- | --- |
+| Wait a fixed amount of time | `step.sleep('pause', '30s')` |
+| Wait until a specific date/time | `step.sleepUntil('launch', date)` |
+| Schedule for a calendar event | `step.sleepUntil('meeting', meetingTime)` |
+| Rate limiting between operations | `step.sleep('throttle', '1s')` |
+
+### Past Dates
+
+If the date is in the past, the alarm fires immediately and execution continues without delay. This is useful for workflows where the target time may have already passed during prior step execution.
+
+### Invalid Dates
+
+Passing an invalid `Date` (e.g., `new Date('garbage')`) throws `InvalidDateError`:
+
+```ts
+// ❌ Throws InvalidDateError
+await step.sleepUntil('bad', new Date('not-a-date'));
+
+// ✅ Valid Date objects
+await step.sleepUntil('good', new Date('2025-06-15T09:00:00Z'));
+await step.sleepUntil('computed', new Date(Date.now() + 3600_000));
+```
+
+### Example: Scheduled Task
+
+```ts
+const workflow = defineWorkflow({
+	type: 'scheduled-report',
+	input: z.object({ reportDate: z.string() }),
+	run: async (step, payload) => {
+		const targetDate = new Date(payload.reportDate);
+
+		await step.sleepUntil('wait-for-report-date', targetDate);
+
+		const report = await step.do('generate-report', async () => {
+			return await generateMonthlyReport();
+		});
+
+		await step.do('send-report', async () => {
+			await sendEmail('team@company.com', report);
+		});
+
+		return { sent: true };
+	},
+});
+```
+
 ## How It Works
 
-Here's what happens when you call `step.sleep()`:
+Both `step.sleep()` and `step.sleepUntil()` use the same underlying mechanism:
 
 ### First Execution
 

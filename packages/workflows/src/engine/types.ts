@@ -137,6 +137,29 @@ export interface Step<Events extends object = {}> {
 	sleep(name: string, duration: string): Promise<void>;
 
 	/**
+	 * Pause workflow execution until a specific point in time.
+	 *
+	 * Unlike {@link sleep} which accepts a relative duration, `sleepUntil` accepts an
+	 * absolute `Date`. Uses a Durable Object alarm; the workflow status becomes `"sleeping"`.
+	 * If the date is in the past the alarm fires immediately and execution continues.
+	 *
+	 * @param name - Unique step name within this workflow run.
+	 * @param date - The absolute point in time to sleep until.
+	 * @throws {@link InvalidDateError} When the date is not a valid `Date` instance.
+	 * @throws {@link DuplicateStepError} When another step with the same name exists.
+	 *
+	 * @example
+	 * ```ts
+	 * // Sleep until midnight UTC on 2025-01-15
+	 * await step.sleepUntil("wait-for-midnight", new Date("2025-01-15T00:00:00Z"));
+	 *
+	 * // Sleep until 30 minutes from now (equivalent to step.sleep("x", "30m"))
+	 * await step.sleepUntil("nap", new Date(Date.now() + 30 * 60 * 1000));
+	 * ```
+	 */
+	sleepUntil(name: string, date: Date): Promise<void>;
+
+	/**
 	 * Suspend workflow execution until an external event is delivered.
 	 *
 	 * The workflow status becomes `"waiting"` until the event arrives via `sendEvent()`.

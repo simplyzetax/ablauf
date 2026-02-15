@@ -2,7 +2,14 @@ import type { DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
 import { eq } from 'drizzle-orm';
 import { stepsTable } from '../db/schema';
 import { SleepInterrupt, WaitInterrupt } from './interrupts';
-import { StepRetryExhaustedError, DuplicateStepError, WorkflowError, NonRetriableError, StepFailedError } from '../errors';
+import {
+	StepRetryExhaustedError,
+	DuplicateStepError,
+	WorkflowError,
+	NonRetriableError,
+	StepFailedError,
+	InvalidDateError,
+} from '../errors';
 import { parseDuration } from './duration';
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults } from './types';
 import { DEFAULT_RETRY_CONFIG } from './types';
@@ -256,6 +263,35 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		await this.db.insert(stepsTable).values({
 			name,
 			type: 'sleep',
+			status: 'sleeping',
+			wakeAt,
+			attempts: 0,
+		});
+
+		throw new SleepInterrupt(name, wakeAt);
+	}
+
+	async sleepUntil(name: string, date: Date): Promise<void> {
+		this.checkDuplicateName(name, 'step.sleepUntil');
+
+		const wakeAt = date.getTime();
+		if (Number.isNaN(wakeAt)) {
+			throw new InvalidDateError();
+		}
+
+		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
+
+		if (existing?.status === 'completed') {
+			return;
+		}
+
+		if (existing?.status === 'sleeping') {
+			throw new SleepInterrupt(name, existing.wakeAt!);
+		}
+
+		await this.db.insert(stepsTable).values({
+			name,
+			type: 'sleep_until',
 			status: 'sleeping',
 			wakeAt,
 			attempts: 0,

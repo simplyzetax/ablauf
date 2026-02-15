@@ -12,6 +12,7 @@ import { BackoffConfigWorkflow } from '../workflows/backoff-config-workflow';
 import { NoSchemaWorkflow } from '../workflows/no-schema-workflow';
 import { MultiEventWorkflow } from '../workflows/multi-event-workflow';
 import { NonRetriableWorkflow } from '../workflows/non-retriable-workflow';
+import { SleepUntilWorkflow } from '../workflows/sleep-until-workflow';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
@@ -477,6 +478,58 @@ describe('WorkflowRunner', () => {
 				first: true,
 				second: false,
 			});
+		});
+	});
+
+	describe('sleepUntil', () => {
+		it('sleeps until a future date then continues', async () => {
+			const futureDate = Date.now() + 60_000; // 1 minute in the future
+			const stub = await ablauf.create(SleepUntilWorkflow, {
+				id: 'sleep-until-future-1',
+				payload: { wakeAt: futureDate },
+			});
+
+			let status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('sleeping');
+			expect(status.steps).toContainEqual(expect.objectContaining({ name: 'before-sleep', status: 'completed', result: 'before' }));
+
+			// Advance past sleep
+			await advanceAlarm(stub._rpc);
+
+			status = await stub.getStatus();
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toEqual({ before: 'before', after: 'after' });
+		});
+
+		it('completes immediately when the date is in the past', async () => {
+			const pastDate = Date.now() - 60_000; // 1 minute in the past
+			const stub = await ablauf.create(SleepUntilWorkflow, {
+				id: 'sleep-until-past-1',
+				payload: { wakeAt: pastDate },
+			});
+
+			// Past date: alarm fires immediately, so after one alarm cycle it completes
+			let status = await stub.getStatus();
+			// Workflow may be sleeping (alarm set for past fires on next tick) or already completed
+			if (status.status === 'sleeping') {
+				await advanceAlarm(stub._rpc);
+				status = await stub.getStatus();
+			}
+			expect(status.status).toBe<WorkflowStatus>('completed');
+			expect(status.result).toEqual({ before: 'before', after: 'after' });
+		});
+
+		it('records the step as type sleep_until', async () => {
+			const futureDate = Date.now() + 60_000;
+			const stub = await ablauf.create(SleepUntilWorkflow, {
+				id: 'sleep-until-type-1',
+				payload: { wakeAt: futureDate },
+			});
+
+			const status = await stub.getStatus();
+			const sleepStep = status.steps.find((s) => s.name === 'nap');
+			expect(sleepStep).toBeDefined();
+			expect(sleepStep!.type).toBe('sleep_until');
 		});
 	});
 

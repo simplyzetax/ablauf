@@ -346,7 +346,7 @@ type WorkflowStatus =
 	| 'completed' // All steps finished successfully
 	| 'errored' // A step or validation error occurred
 	| 'paused' // Manually paused via pause()
-	| 'sleeping' // Waiting for a step.sleep() timer
+	| 'sleeping' // Waiting for a step.sleep() or step.sleepUntil() timer
 	| 'waiting' // Waiting for a step.waitForEvent() delivery
 	| 'terminated'; // Permanently stopped via terminate()
 ```

@@ -18,7 +18,7 @@ A workflow can be in one of the following states:
 - **`"completed"`** — Finished successfully with a result
 - **`"errored"`** — Failed with an unrecoverable error
 - **`"paused"`** — Manually paused (can be resumed)
-- **`"sleeping"`** — Waiting for a timer (`step.sleep()` or retry backoff)
+- **`"sleeping"`** — Waiting for a timer (`step.sleep()`, `step.sleepUntil()`, or retry backoff)
 - **`"waiting"`** — Waiting for an external event
 - **`"terminated"`** — Manually terminated (permanent)
 
