@@ -15,6 +15,12 @@ import { z } from 'zod';
 export const workflowStatusSchema = z.enum(['created', 'running', 'completed', 'errored', 'paused', 'sleeping', 'waiting', 'terminated']);
 export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
 
+export const stepStatusSchema = z.enum(['running', 'completed', 'failed', 'sleeping', 'waiting']);
+export type StepStatus = z.infer<typeof stepStatusSchema>;
+
+export const stepTypeSchema = z.enum(['do', 'sleep', 'sleep_until', 'wait_for_event']);
+export type StepType = z.infer<typeof stepTypeSchema>;
+
 /**
  * Strategy for calculating the delay between retry attempts.
  *
@@ -225,9 +231,9 @@ export const stepInfoSchema = z.object({
 	/** Unique name of the step. */
 	name: z.string(),
 	/** Step type: `"do"`, `"sleep"`, or `"wait_for_event"`. */
-	type: z.string(),
+	type: stepTypeSchema,
 	/** Current status (e.g., `"completed"`, `"failed"`, `"sleeping"`, `"waiting"`). */
-	status: z.string(),
+	status: stepStatusSchema,
 	/** Number of execution attempts (including retries). */
 	attempts: z.number(),
 	/** Persisted result, or `null` if not yet completed. */
