@@ -150,11 +150,69 @@ The full `AblaufConfig` options:
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 	// Register workflows (with optional shard config)
 	workflows: [OrderWorkflow, [HighVolumeWorkflow, { shards: 8 }]],
-	// Enable/disable observability indexing (default: true)
+	// Observability: true (default), false, or a custom ObservabilityProvider
 	observability: true,
 	// CORS origins for the dashboard API
 	corsOrigins: ['https://dashboard.example.com'],
 });
 ```
 
+The `observability` option accepts three modes:
+
+- **`true`** (default) — Uses the built-in `ShardObservabilityProvider` with shard-based Durable Object indexing.
+- **`false`** — Disables all observability. `ablauf.list()` throws `ObservabilityReadNotConfiguredError`.
+- **Custom `ObservabilityProvider`** — Plug in your own storage backend (see below).
+
 See the [API Reference](/docs/server/api-reference) for the complete method signatures and type definitions.
+
+## Custom Observability Provider
+
+By default, Ablauf uses shard-based indexing for workflow listing and dashboard data. You can replace this entirely with your own storage backend by providing a custom `ObservabilityProvider`:
+
+```ts
+import { Ablauf } from '@der-ablauf/workflows';
+import type { ObservabilityProvider } from '@der-ablauf/workflows';
+
+const myProvider: ObservabilityProvider<MyCollector> = {
+	createCollector(workflowId, type) {
+		return { workflowId, type, events: [] };
+	},
+	onWorkflowStart(collector, event) { /* ... */ },
+	onWorkflowStatusChange(collector, event) { /* ... */ },
+	onStepStart(collector, event) { /* ... */ },
+	onStepComplete(collector, event) { /* ... */ },
+	onStepRetry(collector, event) { /* ... */ },
+	async flush(collector, reason) {
+		// Batch write all collected events to your database
+		await db.insert(collector.events);
+	},
+	// Optional: enable dashboard read features
+	async listWorkflows(filters) { /* query your database */ },
+	async getWorkflowStatus(id) { /* query your database */ },
+	async getWorkflowTimeline(id) { /* query your database */ },
+};
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [OrderWorkflow],
+	observability: myProvider,
+});
+```
+
+<Callout type="info">
+	If your custom provider only implements write methods (the lifecycle hooks), the dashboard list endpoint will throw
+	`ObservabilityReadNotConfiguredError`. You can still use `ablauf.get()` to check individual workflows by ID.
+</Callout>
+
+To customize the built-in shard provider directly (e.g., for custom shard counts), use `ShardObservabilityProvider`:
+
+```ts
+import { Ablauf, ShardObservabilityProvider } from '@der-ablauf/workflows';
+
+const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
+	workflows: [OrderWorkflow],
+	observability: new ShardObservabilityProvider(env.WORKFLOW_RUNNER, {
+		shards: { 'order-processing': { shards: 8 } },
+		workflowTypes: ['order-processing'],
+	}),
+});
+```

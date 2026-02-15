@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 
-import { Ablauf, ObservabilityDisabledError } from '@der-ablauf/workflows';
+import { Ablauf, ObservabilityReadNotConfiguredError } from '@der-ablauf/workflows';
 import { EchoWorkflow } from '../workflows/echo-workflow';
 import { TestWorkflow } from '../workflows/test-workflow';
 
@@ -97,13 +97,13 @@ describe('Indexing & Observability', () => {
 	});
 
 	describe('observability disabled', () => {
-		it('throws ObservabilityDisabledError when listing with observability off', async () => {
+		it('throws ObservabilityReadNotConfiguredError when listing with observability off', async () => {
 			const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 				workflows: [EchoWorkflow],
 				observability: false,
 			});
 
-			await expect(ablauf.list('echo')).rejects.toThrow(ObservabilityDisabledError);
+			await expect(ablauf.list('echo')).rejects.toThrow(ObservabilityReadNotConfiguredError);
 		});
 	});
 });

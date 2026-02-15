@@ -14,6 +14,7 @@ import { parseDuration } from './duration';
 import { parseSize } from './size';
 import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults, ResultSizeLimitConfig } from './types';
 import { DEFAULT_RETRY_CONFIG, DEFAULT_RESULT_SIZE_LIMIT } from './types';
+import type { StepObserver } from './observability';
 import superjson from 'superjson';
 
 /**
@@ -37,9 +38,15 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 	private hasExecuted = false;
 	private usedNames = new Set<string>();
 
+	/**
+	 * @param db - Drizzle ORM database instance backed by Durable Object SQLite storage.
+	 * @param defaults - Optional workflow-level defaults for retry and result size limits.
+	 * @param observer - Optional observer for emitting step lifecycle events to the observability provider.
+	 */
 	constructor(
 		private db: DrizzleSqliteDODatabase,
 		defaults?: Partial<WorkflowDefaults>,
+		private observer?: StepObserver,
 	) {
 		const resolvedSizeLimit: ResultSizeLimitConfig = { ...DEFAULT_RESULT_SIZE_LIMIT, ...defaults?.resultSizeLimit };
 		this.defaults = {
@@ -130,6 +137,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 				})
 				.where(eq(stepsTable.name, name));
 
+			this.observer?.onStepRetry(name, crashedAttempts, errorMsg, undefined, wakeAt, Date.now());
 			throw new SleepInterrupt(name, wakeAt);
 		}
 
@@ -155,6 +163,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 				this.hasExecuted = true;
 				this.onFirstExecution?.();
 			}
+			this.observer?.onStepStart(name, 'do', startedAt);
 			const result = await fn();
 			const serialized = superjson.stringify(result);
 			await this.checkResultSizeLimit(name, serialized);
@@ -172,6 +181,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 				})
 				.where(eq(stepsTable.name, name));
 
+			this.observer?.onStepComplete(name, 'do', result, duration, Date.now());
 			return result;
 		} catch (e) {
 			// Non-retriable errors bypass retry logic entirely
@@ -249,6 +259,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 				})
 				.where(eq(stepsTable.name, name));
 
+			this.observer?.onStepRetry(name, newAttempts, errorMsg, errorStack ?? undefined, wakeAt, Date.now());
 			// Use alarm-based retry: throw SleepInterrupt so the DO sets an alarm
 			throw new SleepInterrupt(name, wakeAt);
 		}
@@ -276,6 +287,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			attempts: 0,
 		});
 
+		this.observer?.onStepStart(name, 'sleep', Date.now());
 		throw new SleepInterrupt(name, wakeAt);
 	}
 
@@ -305,6 +317,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			attempts: 0,
 		});
 
+		this.observer?.onStepStart(name, 'sleep_until', Date.now());
 		throw new SleepInterrupt(name, wakeAt);
 	}
 
@@ -347,6 +360,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 				attempts: 0,
 			});
 			await this.db.delete(eventBufferTable).where(eq(eventBufferTable.eventName, name as string));
+			this.observer?.onStepComplete(name as string, 'wait_for_event', superjson.parse(buffered.payload), 0, Date.now());
 			return superjson.parse(buffered.payload) as Events[K];
 		}
 
@@ -360,6 +374,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			attempts: 0,
 		});
 
+		this.observer?.onStepStart(name as string, 'wait_for_event', Date.now());
 		throw new WaitInterrupt(name as string, timeoutAt);
 	}
 

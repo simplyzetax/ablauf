@@ -32,6 +32,7 @@ packages/workflows/     # @der-ablauf/workflows — core engine (the library)
       duration.ts         # parseDuration("5s") → ms
       shard.ts            # FNV-1a hash for index sharding
       index-listing.ts    # shared shard query + dedup logic
+      observability.ts    # ObservabilityProvider interface + ShardObservabilityProvider
       define-workflow.ts  # defineWorkflow() functional API
       base-workflow.ts    # BaseWorkflow abstract class
       types.ts            # all TypeScript types/interfaces
@@ -66,7 +67,8 @@ WorkflowError (extends Hono HTTPException)
 ├── WorkflowNotRunningError      (409, "engine")
 ├── DuplicateStepError           (400, "engine")
 ├── InvalidDurationError         (400, "validation")
-└── ObservabilityDisabledError   (400, "api")
+├── ObservabilityDisabledError   (400, "api")
+└── ObservabilityReadNotConfiguredError (400, "api")
 ```
 
 ### Rules
@@ -113,6 +115,7 @@ const MyWorkflow = defineWorkflow({
 - **Replay-based execution**: workflows replay from the beginning on every wake-up. Completed steps return cached results from SQLite. New steps execute and persist.
 - **Interrupt-driven flow control**: `step.sleep()`, `step.waitForEvent()`, and pause all throw interrupt classes (not Error subclasses). The runner catches these and sets DO alarms.
 - **Shard-based indexing**: workflow instances are listed via index shards (`__index:{type}:{shard}`). Use `listIndexEntries()` from `engine/index-listing.ts` for querying — don't duplicate the shard traversal logic.
+- **Pluggable observability**: The `ObservabilityProvider<TCollector>` interface in `engine/observability.ts` defines write methods (lifecycle event callbacks + flush) and optional read methods (dashboard queries). The built-in `ShardObservabilityProvider` implements this using DO-based index shards. Users can fully replace it via `AblaufConfig.observability`.
 
 ## Code Conventions
 

@@ -14,6 +14,7 @@ export type ErrorCode =
 	| 'WORKFLOW_NOT_RUNNING'
 	| 'RESOURCE_NOT_FOUND'
 	| 'OBSERVABILITY_DISABLED'
+	| 'OBSERVABILITY_READ_NOT_CONFIGURED'
 	| 'INTERNAL_ERROR'
 	| 'INVALID_SCHEMA';
 
@@ -48,6 +49,7 @@ export const WORKFLOW_ERROR_CATALOG = {
 	WORKFLOW_NOT_RUNNING: { status: 409, message: 'Workflow is not running' },
 	RESOURCE_NOT_FOUND: { status: 404, message: 'Resource not found' },
 	OBSERVABILITY_DISABLED: { status: 400, message: 'Observability is disabled' },
+	OBSERVABILITY_READ_NOT_CONFIGURED: { status: 400, message: 'Observability read methods are not configured' },
 	INTERNAL_ERROR: { status: 500, message: 'An unexpected error occurred' },
 	INVALID_SCHEMA: { status: 400, message: 'Schema contains unsupported types' },
 } as const satisfies Record<ErrorCode, WorkflowErrorCatalogEntry>;
@@ -425,6 +427,29 @@ export class ObservabilityDisabledError extends WorkflowError {
 				'OBSERVABILITY_DISABLED',
 				'api',
 				'Observability is disabled. Enable it in AblaufConfig to use listing and indexing features.',
+			),
+		);
+	}
+}
+
+/**
+ * Thrown when a dashboard read operation is attempted but the observability
+ * provider does not implement the required read method (`listWorkflows`,
+ * `getWorkflowStatus`, or `getWorkflowTimeline`).
+ *
+ * This happens when:
+ * - `observability` is set to `false`
+ * - A custom provider is used that only implements write methods
+ *
+ * Error code: `OBSERVABILITY_READ_NOT_CONFIGURED` | HTTP status: `400`
+ */
+export class ObservabilityReadNotConfiguredError extends WorkflowError {
+	constructor() {
+		super(
+			createErrorInit(
+				'OBSERVABILITY_READ_NOT_CONFIGURED',
+				'api',
+				'Observability read methods are not configured. Provide a provider with listWorkflows/getWorkflowStatus/getWorkflowTimeline to use dashboard features.',
 			),
 		);
 	}

@@ -424,3 +424,10 @@ export interface SSE<Updates extends object = {}> {
 	/** Close all active SSE connections for this workflow instance. */
 	close(): void;
 }
+
+/**
+ * Reason the observability provider's `flush()` was called.
+ * Corresponds to the workflow status at the time of flush — the rest point
+ * that ended the current replay cycle.
+ */
+export type FlushReason = WorkflowStatus;
