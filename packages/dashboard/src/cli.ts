@@ -28,7 +28,10 @@ console.log();
 
 const { createServer } = await import('vite');
 
+const dashboardRoot = new URL('..', import.meta.url).pathname;
+
 const server = await createServer({
+	root: dashboardRoot,
 	configFile: new URL('../vite.config.ts', import.meta.url).pathname,
 	server: { port: Number(port), open: true },
 });
