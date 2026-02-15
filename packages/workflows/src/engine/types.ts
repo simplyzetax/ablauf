@@ -333,6 +333,7 @@ export interface WorkflowRunnerStub {
 	indexWrite(props: WorkflowIndexEntry): Promise<void>;
 	indexList(filters?: WorkflowIndexListFilters): Promise<WorkflowIndexEntry[]>;
 	_expireTimers(): Promise<void>;
+	_simulateOOMCrash(stepName: string, attempts?: number): Promise<void>;
 }
 
 /**

@@ -63,7 +63,78 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			throw new SleepInterrupt(name, existing.wakeAt);
 		}
 
+		// Crash recovery: step was executing when isolate died (OOM or unrecoverable crash).
+		// The write-ahead below sets status='running' before fn() executes. If the isolate
+		// is killed mid-execution, this status persists in SQLite. On the next replay we
+		// detect it here and feed the crash into the normal retry mechanism.
+		if (existing?.status === 'running') {
+			const crashedAttempts = existing.attempts;
+			const errorMsg =
+				'Step crashed — Loss of isolate (possible OOM). See: https://developers.cloudflare.com/workers/observability/errors/#durable-objects';
+
+			const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
+				existing.retryHistory ? JSON.parse(existing.retryHistory) : [];
+			const crashDuration = existing.startedAt ? Date.now() - existing.startedAt : 0;
+			const updatedHistory = [
+				...existingHistory,
+				{
+					attempt: crashedAttempts,
+					error: errorMsg,
+					errorStack: null,
+					timestamp: existing.startedAt ?? Date.now(),
+					duration: crashDuration,
+				},
+			];
+			const retryHistorySerialized = JSON.stringify(updatedHistory);
+
+			if (crashedAttempts >= retryConfig.limit) {
+				await this.db
+					.update(stepsTable)
+					.set({
+						status: 'failed',
+						error: errorMsg,
+						wakeAt: null,
+						errorStack: null,
+						retryHistory: retryHistorySerialized,
+					})
+					.where(eq(stepsTable.name, name));
+				throw new StepRetryExhaustedError(name, crashedAttempts, errorMsg);
+			}
+
+			const baseDelay = parseDuration(retryConfig.delay);
+			const delay = this.calculateBackoff(baseDelay, crashedAttempts, retryConfig.backoff);
+			const wakeAt = Date.now() + delay;
+
+			await this.db
+				.update(stepsTable)
+				.set({
+					status: 'failed',
+					error: errorMsg,
+					wakeAt,
+					errorStack: null,
+					retryHistory: retryHistorySerialized,
+				})
+				.where(eq(stepsTable.name, name));
+
+			throw new SleepInterrupt(name, wakeAt);
+		}
+
 		const startedAt = Date.now();
+		const newAttempts = attempts + 1;
+
+		// Write-ahead: mark step as 'running' before execution so that if the isolate
+		// is killed (OOM), the next replay can detect the crash and handle retries.
+		if (existing) {
+			await this.db.update(stepsTable).set({ status: 'running', attempts: newAttempts, startedAt }).where(eq(stepsTable.name, name));
+		} else {
+			await this.db.insert(stepsTable).values({
+				name,
+				type: 'do',
+				status: 'running',
+				attempts: newAttempts,
+				startedAt,
+			});
+		}
 
 		try {
 			if (!this.hasExecuted) {
@@ -74,37 +145,23 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			const serialized = superjson.stringify(result);
 			const duration = Date.now() - startedAt;
 
-			if (existing) {
-				await this.db
-					.update(stepsTable)
-					.set({
-						status: 'completed',
-						result: serialized,
-						attempts: attempts + 1,
-						completedAt: Date.now(),
-						startedAt,
-						duration,
-					})
-					.where(eq(stepsTable.name, name));
-			} else {
-				await this.db.insert(stepsTable).values({
-					name,
-					type: 'do',
+			await this.db
+				.update(stepsTable)
+				.set({
 					status: 'completed',
 					result: serialized,
-					attempts: 1,
+					attempts: newAttempts,
 					completedAt: Date.now(),
 					startedAt,
 					duration,
-				});
-			}
+				})
+				.where(eq(stepsTable.name, name));
 
 			return result;
 		} catch (e) {
 			const errorMsg = e instanceof Error ? e.message : String(e);
 			const errorStack = e instanceof Error ? (e.stack ?? null) : null;
 			const duration = Date.now() - startedAt;
-			const newAttempts = attempts + 1;
 
 			// Build retry history
 			const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
@@ -113,33 +170,19 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			const retryHistorySerialized = JSON.stringify(updatedHistory);
 
 			if (newAttempts >= retryConfig.limit) {
-				if (existing) {
-					await this.db
-						.update(stepsTable)
-						.set({
-							status: 'failed',
-							error: errorMsg,
-							attempts: newAttempts,
-							wakeAt: null,
-							startedAt,
-							duration,
-							errorStack,
-							retryHistory: retryHistorySerialized,
-						})
-						.where(eq(stepsTable.name, name));
-				} else {
-					await this.db.insert(stepsTable).values({
-						name,
-						type: 'do',
+				await this.db
+					.update(stepsTable)
+					.set({
 						status: 'failed',
 						error: errorMsg,
 						attempts: newAttempts,
+						wakeAt: null,
 						startedAt,
 						duration,
 						errorStack,
 						retryHistory: retryHistorySerialized,
-					});
-				}
+					})
+					.where(eq(stepsTable.name, name));
 				const cause = e instanceof Error ? e.message : String(e);
 				throw new StepRetryExhaustedError(name, newAttempts, cause);
 			}
@@ -149,24 +192,9 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			const delay = this.calculateBackoff(baseDelay, newAttempts, retryConfig.backoff);
 			const wakeAt = Date.now() + delay;
 
-			if (existing) {
-				await this.db
-					.update(stepsTable)
-					.set({
-						status: 'failed',
-						error: errorMsg,
-						attempts: newAttempts,
-						wakeAt,
-						startedAt,
-						duration,
-						errorStack,
-						retryHistory: retryHistorySerialized,
-					})
-					.where(eq(stepsTable.name, name));
-			} else {
-				await this.db.insert(stepsTable).values({
-					name,
-					type: 'do',
+			await this.db
+				.update(stepsTable)
+				.set({
 					status: 'failed',
 					error: errorMsg,
 					attempts: newAttempts,
@@ -175,8 +203,8 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 					duration,
 					errorStack,
 					retryHistory: retryHistorySerialized,
-				});
-			}
+				})
+				.where(eq(stepsTable.name, name));
 
 			// Use alarm-based retry: throw SleepInterrupt so the DO sets an alarm
 			throw new SleepInterrupt(name, wakeAt);

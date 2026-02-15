@@ -206,3 +206,9 @@ Retries use Durable Object alarms, not blocking sleeps. When a step fails and ha
 4. When the alarm fires, the workflow replays and the step executes again
 
 The workflow doesn't sit in memory waiting. It hibernates and wakes up when it's time to retry. Sleep for a week between retries? No problem. Cloudflare doesn't charge you for patience.
+
+### Crash Recovery (OOM)
+
+Before executing your step function, Ablauf persists a `"running"` status with an incremented attempt counter. If the isolate is killed mid-execution (e.g., by exceeding the 128 MB memory limit), the next replay detects the orphaned `"running"` state and feeds the crash into the normal retry mechanism. No special handling is needed on your part.
+
+See [Crash & OOM Recovery](/docs/workflows/retries#crash--oom-recovery) for details.
