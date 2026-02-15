@@ -68,7 +68,8 @@ app.all('/__ablauf/*', async (c) => {
 Once your worker is running, start the dashboard:
 
 ```bash
-npx ablauf-dashboard --url http://localhost:8787
+bunx @der-ablauf/dashboard --url https://my-worker.example.com --port 3000
+
 ```
 
 The dashboard opens in your browser and connects to your worker's RPC endpoint automatically.
