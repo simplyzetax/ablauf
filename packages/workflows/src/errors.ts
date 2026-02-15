@@ -14,7 +14,8 @@ export type ErrorCode =
 	| 'WORKFLOW_NOT_RUNNING'
 	| 'RESOURCE_NOT_FOUND'
 	| 'OBSERVABILITY_DISABLED'
-	| 'INTERNAL_ERROR';
+	| 'INTERNAL_ERROR'
+	| 'INVALID_SCHEMA';
 
 /**
  * Identifies where an error originated.
@@ -48,6 +49,7 @@ export const WORKFLOW_ERROR_CATALOG = {
 	RESOURCE_NOT_FOUND: { status: 404, message: 'Resource not found' },
 	OBSERVABILITY_DISABLED: { status: 400, message: 'Observability is disabled' },
 	INTERNAL_ERROR: { status: 500, message: 'An unexpected error occurred' },
+	INVALID_SCHEMA: { status: 400, message: 'Schema contains unsupported types' },
 } as const satisfies Record<ErrorCode, WorkflowErrorCatalogEntry>;
 
 const VALID_ERROR_SOURCES: readonly ErrorSource[] = ['api', 'engine', 'step', 'validation'] as const;
@@ -423,6 +425,35 @@ export class ObservabilityDisabledError extends WorkflowError {
 				'OBSERVABILITY_DISABLED',
 				'api',
 				'Observability is disabled. Enable it in AblaufConfig to use listing and indexing features.',
+			),
+		);
+	}
+}
+
+/**
+ * Thrown when a workflow schema uses Zod types that are not compatible with
+ * SuperJSON serialization (e.g., `z.function()`, `z.promise()`, `z.symbol()`).
+ *
+ * Error code: `INVALID_SCHEMA` | HTTP status: `400`
+ *
+ * @example
+ * ```ts
+ * // This would throw InvalidSchemaError at workflow registration time:
+ * defineWorkflow((t) => ({
+ *   type: "bad",
+ *   input: z.object({ cb: z.function() }), // smuggled past `t`
+ *   run: async () => {},
+ * }));
+ * ```
+ */
+export class InvalidSchemaError extends WorkflowError {
+	constructor(path: string, typeName: string) {
+		super(
+			createErrorInit(
+				'INVALID_SCHEMA',
+				'validation',
+				`Unsupported Zod type "${typeName}" at path "${path}". Only SuperJSON-compatible types are allowed in workflow schemas.`,
+				{ path, typeName },
 			),
 		);
 	}
