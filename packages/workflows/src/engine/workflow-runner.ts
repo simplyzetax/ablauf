@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { drizzle, type DrizzleSqliteDODatabase } from 'drizzle-orm/durable-sqlite';
 import { migrate } from 'drizzle-orm/durable-sqlite/migrator';
 import migrations from '../../drizzle/migrations';
-import { workflowTable, stepsTable, instancesTable } from '../db/schema';
+import { workflowTable, stepsTable, instancesTable, eventBufferTable } from '../db/schema';
 import { StepContext } from './step';
 import { SleepInterrupt, WaitInterrupt, PauseInterrupt, isInterrupt } from './interrupts';
 import { LiveContext, NoOpSSEContext } from './sse';
@@ -196,24 +196,46 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 			const [step] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, props.event));
 
-			if (!step || step.status !== 'waiting') {
-				throw new WorkflowNotRunningError(wf.workflowId, step ? step.status : 'no matching step');
+			if (step?.status === 'waiting') {
+				// Direct delivery: step is actively waiting for this event
+				await this.db
+					.update(stepsTable)
+					.set({
+						status: 'completed',
+						result: superjson.stringify(payload),
+						completedAt: Date.now(),
+					})
+					.where(eq(stepsTable.name, props.event));
+
+				await this.scheduleNextAlarm();
+				await this.setStatus('running');
+				// Safety alarm: ensures crash recovery if OOM kills the isolate during replay
+				await this.ctx.storage.setAlarm(Date.now() + 1000);
+				await this.replay();
+				return;
 			}
 
-			await this.db
-				.update(stepsTable)
-				.set({
-					status: 'completed',
-					result: superjson.stringify(payload),
-					completedAt: Date.now(),
-				})
-				.where(eq(stepsTable.name, props.event));
+			// No waiting step — buffer the event if workflow is in a non-terminal state
+			const terminalStatuses = ['completed', 'errored', 'terminated'];
+			if (terminalStatuses.includes(wf.status)) {
+				throw new WorkflowNotRunningError(wf.workflowId, wf.status);
+			}
 
-			await this.scheduleNextAlarm();
-			await this.setStatus('running');
-			// Safety alarm: ensures crash recovery if OOM kills the isolate during replay
-			await this.ctx.storage.setAlarm(Date.now() + 1000);
-			await this.replay();
+			// Upsert: last-write-wins semantics
+			await this.db
+				.insert(eventBufferTable)
+				.values({
+					eventName: props.event,
+					payload: superjson.stringify(payload),
+					receivedAt: Date.now(),
+				})
+				.onConflictDoUpdate({
+					target: eventBufferTable.eventName,
+					set: {
+						payload: superjson.stringify(payload),
+						receivedAt: Date.now(),
+					},
+				});
 		}
 
 		async pause(): Promise<void> {
@@ -231,6 +253,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 		async terminate(): Promise<void> {
 			await this.ctx.storage.deleteAlarm();
+			// Clean up any unconsumed buffered events
+			await this.db.delete(eventBufferTable);
 			await this.setStatus('terminated');
 		}
 
@@ -424,6 +448,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 					updatedAt: Date.now(),
 				});
 				this.updateIndex(wf.type, wf.workflowId, 'completed', Date.now());
+				// Clean up any unconsumed buffered events
+				await this.db.delete(eventBufferTable);
 				this.liveCtx?.close();
 			} catch (e) {
 				if (e instanceof SleepInterrupt) {
@@ -444,6 +470,8 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 						updatedAt: Date.now(),
 					});
 					this.updateIndex(wf.type, wf.workflowId, 'errored', Date.now());
+					// Clean up any unconsumed buffered events
+					await this.db.delete(eventBufferTable);
 					this.liveCtx?.close();
 				}
 			}
