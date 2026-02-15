@@ -50,8 +50,8 @@ When you send an event, TypeScript enforces the correct event name and payload s
 
 ```ts
 // Fully typed — autocomplete on event names and payload properties
-await ablauf.sendEvent(PaymentWorkflow, {
-	id: workflowInstanceId,
+const payment = ablauf.get(PaymentWorkflow, { id: workflowInstanceId });
+await payment.sendEvent({
 	event: 'payment-confirmed',
 	payload: {
 		transactionId: 'txn_123',
@@ -86,8 +86,8 @@ const app = new Hono();
 app.post('/webhooks/payment', async (c) => {
 	const body = await c.req.json();
 
-	await ablauf.sendEvent(PaymentWorkflow, {
-		id: body.workflowId,
+	const payment = ablauf.get(PaymentWorkflow, { id: body.workflowId });
+	await payment.sendEvent({
 		event: 'payment-confirmed',
 		payload: {
 			transactionId: body.transaction_id,
@@ -112,8 +112,8 @@ Let users resume workflows with a button click:
 app.post('/workflows/:id/approve', async (c) => {
 	const id = c.req.param('id');
 
-	await ablauf.sendEvent(ApprovalWorkflow, {
-		id,
+	const workflow = ablauf.get(ApprovalWorkflow, { id });
+	await workflow.sendEvent({
 		event: 'approved',
 		payload: {
 			approvedBy: c.get('userId'),

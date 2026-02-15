@@ -113,15 +113,12 @@ describe('WebSocket live updates', () => {
 	});
 
 	it('waitForUpdate resolves typed data via WebSocket', async () => {
-		await ablauf.create(SSEWorkflow, {
+		const handle = await ablauf.create(SSEWorkflow, {
 			id: 'ws-wait-update-1',
 			payload: { itemCount: 8 },
 		});
 
-		const done = await ablauf.waitForUpdate(SSEWorkflow, {
-			id: 'ws-wait-update-1',
-			update: 'done',
-		});
+		const done = await handle.waitForUpdate({ update: 'done' });
 
 		expect(done).toEqual({ message: 'Processed 8 items' });
 	});

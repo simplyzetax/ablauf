@@ -1,14 +1,10 @@
-import { EventValidationError, ObservabilityDisabledError, UpdateTimeoutError, WorkflowNotRunningError, extractZodIssues } from './errors';
+import { ObservabilityDisabledError } from './errors';
 import { listIndexEntries } from './engine/index-listing';
-import { parseDuration } from './engine/duration';
 import type {
 	WorkflowClass,
 	WorkflowRunnerStub,
 	WorkflowRunnerInitProps,
-	WorkflowStatusResponse,
-	WorkflowStatusResponseFor,
-	TypedWorkflowRunnerStub,
-	WorkflowEventProps,
+	WorkflowEvents,
 	WorkflowIndexListFilters,
 	WorkflowIndexEntry,
 	WorkflowShardConfig,
@@ -22,6 +18,7 @@ import type { DashboardContext } from './dashboard';
 import { CORSPlugin, StrictGetMethodPlugin } from '@orpc/server/plugins';
 import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import SuperJSON from 'superjson';
+import { WorkflowHandle } from './handle';
 
 /** Configuration for the Ablauf workflow engine. */
 export interface AblaufConfig {
@@ -78,8 +75,20 @@ export class Ablauf {
 		}
 	}
 
-	private getStub(id: string): WorkflowRunnerStub {
-		return this.binding.get(this.binding.idFromName(id)) as unknown as WorkflowRunnerStub;
+	private createHandle<
+		Payload,
+		Result,
+		Events extends object = WorkflowEvents,
+		Type extends string = string,
+		SSEUpdates extends object = {},
+	>(
+		workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
+		id: string,
+	): WorkflowHandle<Payload, Result, Events, Type, SSEUpdates> {
+		const doId = this.binding.idFromName(id);
+		const rawStub = this.binding.get(doId);
+		const rpcStub = rawStub as unknown as WorkflowRunnerStub;
+		return new WorkflowHandle(rpcStub, rawStub, workflow, id);
 	}
 
 	/**
@@ -87,225 +96,52 @@ export class Ablauf {
 	 *
 	 * @param workflow - The workflow class defining the type and input schema.
 	 * @param props - The instance ID and payload.
-	 * @returns A typed stub for interacting with the created workflow instance.
+	 * @returns A {@link WorkflowHandle} for interacting with the created workflow instance.
 	 * @throws {PayloadValidationError} If the payload fails Zod schema validation.
 	 * @throws {WorkflowAlreadyExistsError} If a workflow with the given ID already exists.
 	 *
 	 * @example
 	 * ```ts
-	 * const stub = await ablauf.create(OrderWorkflow, {
+	 * const order = await ablauf.create(OrderWorkflow, {
 	 *   id: "order-123",
 	 *   payload: { orderId: "123", amount: 99.99 },
 	 * });
+	 * const status = await order.getStatus();
 	 * ```
 	 */
-	async create<Payload, Result, Events extends object, Type extends string>(
-		workflow: WorkflowClass<Payload, Result, Events, Type>,
-		props: { id: string; payload: NoInfer<Payload> },
-	): Promise<TypedWorkflowRunnerStub<Payload, Result, Events, Type>> {
-		const payload = workflow.inputSchema.parse(props.payload);
-		const stub = this.getStub(props.id);
-		const initProps: WorkflowRunnerInitProps = { type: workflow.type, id: props.id, payload };
-		await stub.initialize(initProps);
-		return stub as TypedWorkflowRunnerStub<Payload, Result, Events, Type>;
-	}
-
-	/**
-	 * Send a typed event to a running workflow instance.
-	 *
-	 * @param workflow - The workflow class (for type inference and event schema lookup).
-	 * @param props - The instance ID, event name, and event payload.
-	 * @throws {EventValidationError} If the event name is unknown or the payload fails validation.
-	 * @throws {WorkflowNotRunningError} If the workflow is not waiting for this event.
-	 *
-	 * @example
-	 * ```ts
-	 * await ablauf.sendEvent(OrderWorkflow, {
-	 *   id: "order-123",
-	 *   event: "payment-received",
-	 *   payload: { amount: 99.99, transactionId: "tx-456" },
-	 * });
-	 * ```
-	 */
-	async sendEvent<Payload, Result, Events extends object, Type extends string>(
-		workflow: WorkflowClass<Payload, Result, Events, Type>,
-		props: { id: string } & NoInfer<WorkflowEventProps<Events>>,
-	): Promise<void> {
-		const schema = workflow.events[props.event];
-		if (!schema) {
-			throw new EventValidationError(props.event, [{ message: `Unknown event "${props.event}" for workflow type "${workflow.type}"` }]);
-		}
-		let payload: unknown;
-		try {
-			payload = schema.parse(props.payload);
-		} catch (e) {
-			const issues = extractZodIssues(e);
-			throw new EventValidationError(props.event, issues);
-		}
-		const stub = this.getStub(props.id);
-		await stub.deliverEvent({ event: props.event, payload });
-	}
-
-	/**
-	 * Get the current status of a workflow instance.
-	 *
-	 * @param id - The workflow instance ID.
-	 * @returns The untyped workflow status response.
-	 */
-	async status(id: string): Promise<WorkflowStatusResponse>;
-	/**
-	 * Get the current status of a workflow instance with typed payload and result.
-	 *
-	 * @param id - The workflow instance ID.
-	 * @param workflow - The workflow class for narrowing the response type.
-	 * @returns A typed status response with inferred payload, result, and type.
-	 */
-	async status<Payload, Result, Events extends object, Type extends string>(
-		id: string,
-		workflow: WorkflowClass<Payload, Result, Events, Type>,
-	): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>;
-	async status(id: string, workflow?: WorkflowClass): Promise<WorkflowStatusResponse> {
-		void workflow; // used only for type narrowing
-		const stub = this.getStub(id);
-		return stub.getStatus();
-	}
-
-	/**
-	 * Pause a running workflow. It will finish its current step, then suspend.
-	 *
-	 * @param id - The workflow instance ID.
-	 */
-	async pause(id: string): Promise<void> {
-		const stub = this.getStub(id);
-		await stub.pause();
-	}
-
-	/**
-	 * Resume a paused workflow. Replays execution history and continues from where it stopped.
-	 *
-	 * @param id - The workflow instance ID.
-	 */
-	async resume(id: string): Promise<void> {
-		const stub = this.getStub(id);
-		await stub.resume();
-	}
-
-	/**
-	 * Permanently terminate a workflow. It cannot be resumed after termination.
-	 *
-	 * @param id - The workflow instance ID.
-	 */
-	async terminate(id: string): Promise<void> {
-		const stub = this.getStub(id);
-		await stub.terminate();
-	}
-
-	/**
-	 * Wait for a specific SSE update from a running workflow.
-	 *
-	 * Connects to the workflow's SSE stream and resolves when the named update
-	 * arrives, or rejects if the timeout expires or the workflow stops running.
-	 *
-	 * @param workflow - The workflow class (for SSE update type inference).
-	 * @param props - Options including the instance ID, update name, and optional timeout.
-	 * @param props.id - The workflow instance ID.
-	 * @param props.update - The SSE update event name to wait for.
-	 * @param props.timeout - Optional timeout as a duration string (e.g., `"30s"`, `"5m"`).
-	 * @returns The typed data payload of the matched SSE update event.
-	 * @throws {UpdateTimeoutError} If the timeout expires before the update arrives.
-	 * @throws {WorkflowNotRunningError} If the workflow completes or errors before the update.
-	 *
-	 * @example
-	 * ```ts
-	 * const progress = await ablauf.waitForUpdate(OrderWorkflow, {
-	 *   id: "order-123",
-	 *   update: "progress",
-	 *   timeout: "30s",
-	 * });
-	 * ```
-	 */
-	async waitForUpdate<
-		Payload,
-		Result,
-		Events extends object,
-		Type extends string,
-		SSEUpdates extends object,
-		K extends Extract<keyof SSEUpdates, string>,
-	>(
+	async create<Payload, Result, Events extends object, Type extends string, SSEUpdates extends object = {}>(
 		workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
-		props: { id: string; update: K; timeout?: string },
-	): Promise<SSEUpdates[K]> {
-		void workflow;
-		const doId = this.binding.idFromName(props.id);
-		const stub = this.binding.get(doId);
-		const resp = await stub.fetch('http://fake-host/ws', {
-			headers: { Upgrade: 'websocket' },
-		});
+		props: { id: string; payload: NoInfer<Payload> },
+	): Promise<WorkflowHandle<Payload, Result, Events, Type, SSEUpdates>> {
+		const payload = workflow.inputSchema.parse(props.payload);
+		const handle = this.createHandle(workflow, props.id);
+		const initProps: WorkflowRunnerInitProps = { type: workflow.type, id: props.id, payload };
+		await handle._rpc.initialize(initProps);
+		return handle;
+	}
 
-		const ws = resp.webSocket;
-		if (!ws) {
-			throw new WorkflowNotRunningError(props.id, 'WebSocket upgrade failed');
-		}
-		ws.accept();
-
-		const timeoutMs = props.timeout ? parseDuration(props.timeout) : null;
-
-		return new Promise<SSEUpdates[K]>((resolve, reject) => {
-			let timer: ReturnType<typeof setTimeout> | null = null;
-
-			const cleanup = () => {
-				if (timer) clearTimeout(timer);
-				try {
-					ws.close();
-				} catch {
-					/* already closed */
-				}
-			};
-
-			ws.addEventListener('message', (evt) => {
-				try {
-					const parsed = JSON.parse(evt.data as string);
-					if (parsed.event === 'close') {
-						cleanup();
-						this.getStub(props.id)
-							.getStatus()
-							.then((status) => {
-								reject(new WorkflowNotRunningError(props.id, status.status));
-							})
-							.catch(reject);
-						return;
-					}
-					if (parsed.event === props.update) {
-						cleanup();
-						resolve(SuperJSON.parse(parsed.data) as SSEUpdates[K]);
-					}
-				} catch {
-					// Malformed message, skip
-				}
-			});
-
-			ws.addEventListener('close', () => {
-				cleanup();
-				this.getStub(props.id)
-					.getStatus()
-					.then((status) => {
-						reject(new WorkflowNotRunningError(props.id, status.status));
-					})
-					.catch(reject);
-			});
-
-			ws.addEventListener('error', () => {
-				cleanup();
-				reject(new WorkflowNotRunningError(props.id, 'WebSocket error'));
-			});
-
-			if (timeoutMs !== null) {
-				timer = setTimeout(() => {
-					cleanup();
-					reject(new UpdateTimeoutError(String(props.update), props.timeout ?? `${timeoutMs}ms`));
-				}, timeoutMs);
-			}
-		});
+	/**
+	 * Get a handle for an existing workflow instance.
+	 *
+	 * This does not make a network call — it returns a handle that can be used
+	 * to interact with the workflow via its methods.
+	 *
+	 * @param workflow - The workflow class (for type inference and event schema).
+	 * @param props - The instance ID.
+	 * @returns A {@link WorkflowHandle} for the workflow instance.
+	 *
+	 * @example
+	 * ```ts
+	 * const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+	 * const status = await order.getStatus();
+	 * await order.sendEvent({ event: 'payment', payload: { amount: 99 } });
+	 * ```
+	 */
+	get<Payload, Result, Events extends object, Type extends string, SSEUpdates extends object = {}>(
+		workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
+		props: { id: string },
+	): WorkflowHandle<Payload, Result, Events, Type, SSEUpdates> {
+		return this.createHandle(workflow, props.id);
 	}
 
 	/**

@@ -47,10 +47,10 @@ const ablauf = new Ablauf(env.WORKFLOW_RUNNER, {
 Create and start a new workflow instance.
 
 ```ts
-create<Payload, Result, Events extends object, Type extends string>(
-  workflow: WorkflowClass<Payload, Result, Events, Type>,
+create<Payload, Result, Events extends object, Type extends string, SSEUpdates extends object>(
+  workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
   props: { id: string; payload: Payload }
-): Promise<TypedWorkflowRunnerStub<Payload, Result, Events, Type>>
+): Promise<WorkflowHandle<Payload, Result, Events, Type, SSEUpdates>>
 ```
 
 **Parameters:**
@@ -61,7 +61,7 @@ create<Payload, Result, Events extends object, Type extends string>(
 
 **Returns:**
 
-A typed `TypedWorkflowRunnerStub` for interacting with the workflow instance.
+A [`WorkflowHandle`](#workflowhandle) for interacting with the workflow instance.
 
 **Throws:**
 
@@ -71,156 +71,42 @@ A typed `TypedWorkflowRunnerStub` for interacting with the workflow instance.
 **Example:**
 
 ```ts
-const stub = await ablauf.create(OrderWorkflow, {
+const order = await ablauf.create(OrderWorkflow, {
   id: "order-123",
   payload: { orderId: "123", items: [...] },
 });
 
-const status = await stub.getStatus();
+const status = await order.getStatus();
 ```
 
 ---
 
-#### `sendEvent()`
+#### `get()`
 
-Send a typed event to a running workflow.
+Get a handle for an existing workflow instance. This does not make a network call.
 
 ```ts
-sendEvent<Payload, Result, Events extends object, Type extends string>(
-  workflow: WorkflowClass<Payload, Result, Events, Type>,
-  props: { id: string } & WorkflowEventProps<Events>
-): Promise<void>
+get<Payload, Result, Events extends object, Type extends string, SSEUpdates extends object>(
+  workflow: WorkflowClass<Payload, Result, Events, Type, SSEUpdates>,
+  props: { id: string }
+): WorkflowHandle<Payload, Result, Events, Type, SSEUpdates>
 ```
 
 **Parameters:**
 
-- `workflow` — The workflow class (for type inference)
+- `workflow` — The workflow class (for type inference and event schema)
 - `props.id` — Workflow instance ID
-- `props.event` — Event name
-- `props.payload` — Event payload (validated against event schema)
-
-**Throws:**
-
-- `EventValidationError` — If event payload validation fails
-- `WorkflowNotFoundError` — If the workflow instance doesn't exist
-
-**Example:**
-
-```ts
-await ablauf.sendEvent(OrderWorkflow, {
-	id: 'order-123',
-	event: 'payment-received',
-	payload: { amount: 99.99, transactionId: 'tx-456' },
-});
-```
-
----
-
-#### `status()`
-
-Get the current status of a workflow instance.
-
-```ts
-// Untyped
-status(id: string): Promise<WorkflowStatusResponse>
-
-// Typed
-status<Payload, Result, Events extends object, Type extends string>(
-  id: string,
-  workflow: WorkflowClass<Payload, Result, Events, Type>
-): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>
-```
-
-**Parameters:**
-
-- `id` — Workflow instance ID
-- `workflow` — Optional workflow class for type inference
 
 **Returns:**
 
-A `WorkflowStatusResponse` with the current state, payload, result, steps, and metadata.
+A [`WorkflowHandle`](#workflowhandle) for interacting with the workflow instance.
 
 **Example:**
 
 ```ts
-// Untyped
-const status = await ablauf.status('order-123');
-
-// Typed
-const status = await ablauf.status('order-123', OrderWorkflow);
-// status.payload is typed as OrderPayload
-// status.result is typed as OrderResult | null
-```
-
----
-
-#### `pause()`
-
-Pause a running workflow.
-
-```ts
-pause(id: string): Promise<void>
-```
-
-The workflow will finish its current step, then pause before the next one. It can be resumed with `resume()`.
-
----
-
-#### `resume()`
-
-Resume a paused workflow.
-
-```ts
-resume(id: string): Promise<void>
-```
-
-The workflow replays its execution history and continues from where it paused.
-
----
-
-#### `terminate()`
-
-Permanently terminate a workflow.
-
-```ts
-terminate(id: string): Promise<void>
-```
-
-The workflow is permanently stopped and cannot be resumed. Its state remains stored.
-
----
-
-#### `waitForUpdate()`
-
-Wait for a specific SSE update from a running workflow.
-
-```ts
-waitForUpdate<...>(
-  workflow: WorkflowClass,
-  props: { id: string; update: string; timeout?: string }
-): Promise<SSEUpdates[K]>
-```
-
-**Parameters:**
-
-- `workflow` — The workflow class (for type inference)
-- `props.id` — Workflow instance ID
-- `props.update` — The SSE event name to wait for
-- `props.timeout` — Optional timeout as a duration string (e.g., `"30s"`, `"5m"`)
-
-**Throws:**
-
-- `UpdateTimeoutError` — If the timeout expires before the update arrives
-- `WorkflowNotRunningError` — If the workflow completes or errors before the update
-
-**Example:**
-
-```ts
-const progress = await ablauf.waitForUpdate(OrderWorkflow, {
-	id: 'order-123',
-	update: 'progress',
-	timeout: '30s',
-});
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+const status = await order.getStatus();
+await order.sendEvent({ event: 'payment', payload: { amount: 99 } });
 ```
 
 ---
@@ -298,6 +184,114 @@ app.all('/__ablauf/*', async (c) => {
 	if (matchedRpc) return c.newResponse(rpcResponse.body, rpcResponse);
 
 	return new Response('Not Found', { status: 404 });
+});
+```
+
+---
+
+## WorkflowHandle
+
+The `WorkflowHandle` is the primary interface for interacting with a specific workflow instance. You get a handle from `ablauf.create()` or `ablauf.get()`.
+
+### `getStatus()`
+
+Get the current status of this workflow instance.
+
+```ts
+getStatus(): Promise<WorkflowStatusResponseFor<Payload, Result, Type>>
+```
+
+**Returns:** A typed status response with inferred payload, result, and type.
+
+---
+
+### `sendEvent()`
+
+Send a typed event to this workflow instance.
+
+```ts
+sendEvent(props: WorkflowEventProps<Events>): Promise<void>
+```
+
+**Parameters:**
+
+- `props.event` — Event name
+- `props.payload` — Event payload (validated against event schema)
+
+**Throws:**
+
+- `EventValidationError` — If event payload validation fails
+- `WorkflowNotRunningError` — If the workflow is not waiting for this event
+
+**Example:**
+
+```ts
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+await order.sendEvent({
+	event: 'payment-received',
+	payload: { amount: 99.99, transactionId: 'tx-456' },
+});
+```
+
+---
+
+### `pause()`
+
+Pause this workflow. It will finish its current step, then suspend.
+
+```ts
+pause(): Promise<void>
+```
+
+---
+
+### `resume()`
+
+Resume this paused workflow. Replays execution history and continues from where it stopped.
+
+```ts
+resume(): Promise<void>
+```
+
+---
+
+### `terminate()`
+
+Permanently terminate this workflow. It cannot be resumed after termination.
+
+```ts
+terminate(): Promise<void>
+```
+
+---
+
+### `waitForUpdate()`
+
+Wait for a specific SSE update from this workflow.
+
+```ts
+waitForUpdate<K extends keyof SSEUpdates>(
+  props: { update: K; timeout?: string }
+): Promise<SSEUpdates[K]>
+```
+
+**Parameters:**
+
+- `props.update` — The SSE event name to wait for
+- `props.timeout` — Optional timeout as a duration string (e.g., `"30s"`, `"5m"`)
+
+**Throws:**
+
+- `UpdateTimeoutError` — If the timeout expires before the update arrives
+- `WorkflowNotRunningError` — If the workflow completes or errors before the update
+
+**Example:**
+
+```ts
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+const progress = await order.waitForUpdate({
+	update: 'progress',
+	timeout: '30s',
 });
 ```
 
@@ -471,7 +465,8 @@ Across Durable Object RPC boundaries, errors lose their class identity. Use `err
 
 ```ts
 try {
-	await ablauf.status('order-123');
+	const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+	await order.getStatus();
 } catch (e) {
 	if (e instanceof WorkflowError && e.code === 'WORKFLOW_NOT_FOUND') {
 		// handle not found

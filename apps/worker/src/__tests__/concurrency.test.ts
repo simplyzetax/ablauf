@@ -8,9 +8,9 @@ import { EchoWorkflow } from '../workflows/echo-workflow';
 
 const ablauf = new Ablauf(env.WORKFLOW_RUNNER);
 
-async function advanceAlarm(stub: { _expireTimers(): Promise<void> }) {
-	await stub._expireTimers();
-	await runDurableObjectAlarm(stub as unknown as DurableObjectStub<undefined>);
+async function advanceAlarm(rpcStub: WorkflowRunnerStub) {
+	await rpcStub._expireTimers();
+	await runDurableObjectAlarm(rpcStub as unknown as DurableObjectStub<undefined>);
 }
 
 describe('Concurrency & Error Paths', () => {
@@ -23,7 +23,7 @@ describe('Concurrency & Error Paths', () => {
 		const status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('completed');
 
-		const rawStub = stub as unknown as WorkflowRunnerStub;
+		const rawStub = stub._rpc;
 		const error = await rawStub
 			.deliverEvent({ event: 'nonexistent', payload: {} })
 			.then(() => null)
@@ -37,11 +37,11 @@ describe('Concurrency & Error Paths', () => {
 			payload: { name: 'WrongEvent' },
 		});
 
-		await advanceAlarm(stub);
+		await advanceAlarm(stub._rpc);
 		const status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('waiting');
 
-		const rawStub = stub as unknown as WorkflowRunnerStub;
+		const rawStub = stub._rpc;
 		const error = await rawStub
 			.deliverEvent({ event: 'nonexistent', payload: {} })
 			.then(() => null)
@@ -59,11 +59,11 @@ describe('Concurrency & Error Paths', () => {
 			payload: { name: 'BadPayload' },
 		});
 
-		await advanceAlarm(stub);
+		await advanceAlarm(stub._rpc);
 		const status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('waiting');
 
-		const rawStub = stub as unknown as WorkflowRunnerStub;
+		const rawStub = stub._rpc;
 		const error = await rawStub
 			.deliverEvent({ event: 'approval', payload: { approved: 'not-a-boolean' } })
 			.then(() => null)
@@ -103,7 +103,7 @@ describe('Concurrency & Error Paths', () => {
 		const status = await stub.getStatus();
 		expect(status.status).toBe<WorkflowStatus>('sleeping');
 
-		const rawStub = stub as unknown as WorkflowRunnerStub;
+		const rawStub = stub._rpc;
 		const error = await rawStub
 			.deliverEvent({ event: 'approval', payload: { approved: true } })
 			.then(() => null)

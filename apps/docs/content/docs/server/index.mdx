@@ -62,13 +62,21 @@ app.post('/orders', async (c) => {
 });
 ```
 
+## Getting a Workflow Handle
+
+Use `get()` to get a handle for an existing workflow instance. This is how you interact with workflows after creation — send events, check status, pause, resume, or terminate:
+
+```ts
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+```
+
 ## Sending Events
 
 Send typed events to running workflows. The event name and payload are type-checked and validated:
 
 ```ts
-await ablauf.sendEvent(OrderWorkflow, {
-	id: 'order-123',
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+await order.sendEvent({
 	event: 'payment-received',
 	payload: { amount: 99.99, transactionId: 'tx-456' },
 });
@@ -79,11 +87,10 @@ await ablauf.sendEvent(OrderWorkflow, {
 Get the current status of any workflow instance:
 
 ```ts
-// Untyped
-const status = await ablauf.status('order-123');
-
-// Typed — payload and result are inferred from the workflow class
-const status = await ablauf.status('order-123', OrderWorkflow);
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+const status = await order.getStatus();
+// status.payload is typed as OrderPayload
+// status.result is typed as OrderResult | null
 ```
 
 ## Lifecycle Control
@@ -91,9 +98,10 @@ const status = await ablauf.status('order-123', OrderWorkflow);
 Pause, resume, or terminate workflows:
 
 ```ts
-await ablauf.pause('order-123'); // Finish current step, then suspend
-await ablauf.resume('order-123'); // Replay and continue from where it paused
-await ablauf.terminate('order-123'); // Permanently stop (cannot be resumed)
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+await order.pause(); // Finish current step, then suspend
+await order.resume(); // Replay and continue from where it paused
+await order.terminate(); // Permanently stop (cannot be resumed)
 ```
 
 ## Waiting for SSE Updates
@@ -101,8 +109,8 @@ await ablauf.terminate('order-123'); // Permanently stop (cannot be resumed)
 Wait for a specific real-time update from a workflow. This is useful for request-response patterns where you need to wait for a workflow to reach a certain point:
 
 ```ts
-const progress = await ablauf.waitForUpdate(OrderWorkflow, {
-	id: 'order-123',
+const order = ablauf.get(OrderWorkflow, { id: 'order-123' });
+const progress = await order.waitForUpdate({
 	update: 'progress',
 	timeout: '30s',
 });

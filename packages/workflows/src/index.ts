@@ -1,6 +1,7 @@
 // Core API
 export { Ablauf } from './client';
 export type { AblaufConfig } from './client';
+export { WorkflowHandle } from './handle';
 export { createWorkflowRunner } from './engine/workflow-runner';
 export type { CreateWorkflowRunnerConfig, WorkflowRegistration } from './engine/workflow-runner';
 export { BaseWorkflow } from './engine/base-workflow';
@@ -16,7 +17,6 @@ export type {
 	WorkflowStatusResponse,
 	WorkflowStatusResponseFor,
 	WorkflowRunnerStub,
-	TypedWorkflowRunnerStub,
 	WorkflowEventProps,
 	WorkflowRunnerInitProps,
 	WorkflowRunnerEventProps,

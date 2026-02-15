@@ -107,7 +107,8 @@ app.post('/greet', async (c) => {
 // Get workflow status
 app.get('/workflows/:id', async (c) => {
 	const id = c.req.param('id');
-	const status = await ablauf.status(id, GreetingWorkflow);
+	const workflow = ablauf.get(GreetingWorkflow, { id });
+	const status = await workflow.getStatus();
 	return c.json(status);
 });
 
