@@ -15,6 +15,12 @@ import { z } from 'zod';
 export const workflowStatusSchema = z.enum(['created', 'running', 'completed', 'errored', 'paused', 'sleeping', 'waiting', 'terminated']);
 export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
 
+export const stepStatusSchema = z.enum(['running', 'completed', 'failed', 'sleeping', 'waiting']);
+export type StepStatus = z.infer<typeof stepStatusSchema>;
+
+export const stepTypeSchema = z.enum(['do', 'sleep', 'sleep_until', 'wait_for_event']);
+export type StepType = z.infer<typeof stepTypeSchema>;
+
 /**
  * Strategy for calculating the delay between retry attempts.
  *
@@ -137,6 +143,29 @@ export interface Step<Events extends object = {}> {
 	sleep(name: string, duration: string): Promise<void>;
 
 	/**
+	 * Pause workflow execution until a specific point in time.
+	 *
+	 * Unlike {@link sleep} which accepts a relative duration, `sleepUntil` accepts an
+	 * absolute `Date`. Uses a Durable Object alarm; the workflow status becomes `"sleeping"`.
+	 * If the date is in the past the alarm fires immediately and execution continues.
+	 *
+	 * @param name - Unique step name within this workflow run.
+	 * @param date - The absolute point in time to sleep until.
+	 * @throws {@link InvalidDateError} When the date is not a valid `Date` instance.
+	 * @throws {@link DuplicateStepError} When another step with the same name exists.
+	 *
+	 * @example
+	 * ```ts
+	 * // Sleep until midnight UTC on 2025-01-15
+	 * await step.sleepUntil("wait-for-midnight", new Date("2025-01-15T00:00:00Z"));
+	 *
+	 * // Sleep until 30 minutes from now (equivalent to step.sleep("x", "30m"))
+	 * await step.sleepUntil("nap", new Date(Date.now() + 30 * 60 * 1000));
+	 * ```
+	 */
+	sleepUntil(name: string, date: Date): Promise<void>;
+
+	/**
 	 * Suspend workflow execution until an external event is delivered.
 	 *
 	 * The workflow status becomes `"waiting"` until the event arrives via `sendEvent()`.
@@ -202,9 +231,9 @@ export const stepInfoSchema = z.object({
 	/** Unique name of the step. */
 	name: z.string(),
 	/** Step type: `"do"`, `"sleep"`, or `"wait_for_event"`. */
-	type: z.string(),
+	type: stepTypeSchema,
 	/** Current status (e.g., `"completed"`, `"failed"`, `"sleeping"`, `"waiting"`). */
-	status: z.string(),
+	status: stepStatusSchema,
 	/** Number of execution attempts (including retries). */
 	attempts: z.number(),
 	/** Persisted result, or `null` if not yet completed. */

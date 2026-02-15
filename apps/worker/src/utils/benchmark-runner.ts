@@ -50,7 +50,7 @@ export async function runAblaufBenchmark(
 		}
 
 		if (status.status === 'errored' || status.status === 'terminated') {
-			throw new Error(`Ablauf benchmark failed with status \"${status.status}\": ${status.error ?? 'no details'}`);
+			throw new Error(`Ablauf benchmark failed with status "${status.status}": ${status.error ?? 'no details'}`);
 		}
 
 		await delay(config.pollIntervalMs);
@@ -99,7 +99,7 @@ export async function runCloudflareBenchmark(
 		}
 
 		if (status.status === 'errored' || status.status === 'terminated') {
-			throw new Error(`Cloudflare benchmark failed with status \"${status.status}\": ${status.error?.message ?? 'no details'}`);
+			throw new Error(`Cloudflare benchmark failed with status "${status.status}": ${status.error?.message ?? 'no details'}`);
 		}
 
 		await delay(config.pollIntervalMs);

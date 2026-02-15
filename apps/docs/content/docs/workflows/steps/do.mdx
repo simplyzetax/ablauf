@@ -33,7 +33,7 @@ On the first execution, the function runs and the result is persisted. On every 
 
 ### Unique Step Names
 
-Step names must be unique within a workflow run. No two calls to `step.do()`, `step.sleep()`, or `step.waitForEvent()` can share a name.
+Step names must be unique within a workflow run. No two calls to `step.do()`, `step.sleep()`, `step.sleepUntil()`, or `step.waitForEvent()` can share a name.
 
 ```ts
 // ❌ This will throw DuplicateStepError

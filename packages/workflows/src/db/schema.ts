@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-import type { WorkflowStatus } from '../engine/types';
+import type { StepStatus, StepType, WorkflowStatus } from '../engine/types';
 
 // Per-workflow-instance tables (stored in each workflow DO)
 export const workflowTable = sqliteTable('workflow', {
@@ -17,8 +17,8 @@ export const workflowTable = sqliteTable('workflow', {
 
 export const stepsTable = sqliteTable('steps', {
 	name: text('name').primaryKey(),
-	type: text('type').notNull(), // 'do' | 'sleep' | 'wait_for_event'
-	status: text('status').notNull(), // 'completed' | 'failed' | 'sleeping' | 'waiting'
+	type: text('type').notNull().$type<StepType>(),
+	status: text('status').notNull().$type<StepStatus>(),
 	result: text('result'),
 	error: text('error'),
 	attempts: integer('attempts').notNull().default(0),
