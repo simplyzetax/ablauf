@@ -91,9 +91,11 @@ Bun.serve({
 			// Escape '<' to prevent XSS via crafted --url values
 			const configJson = JSON.stringify({ apiUrl: url }).replace(/</g, '\\u003c');
 			const configScript = `<script>window.__ABLAUF_CONFIG__=${configJson}</script>`;
+			const headers = new Headers(response.headers);
+			headers.delete('content-length');
 			return new Response(html.replace('<head>', `<head>${configScript}`), {
 				status: response.status,
-				headers: response.headers,
+				headers,
 			});
 		}
 		return response;
