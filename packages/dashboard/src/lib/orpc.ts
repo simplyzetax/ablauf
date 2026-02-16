@@ -1,16 +1,13 @@
 import { createDashboardClient } from '@der-ablauf/client';
 import { createRouterUtils } from '@orpc/tanstack-query';
+import { getApiUrl } from './config';
 
-function getBaseUrl(): string {
-	return import.meta.env.VITE_ABLAUF_API_URL ?? 'http://localhost:8787';
-}
-
+/** Returns the WebSocket URL derived from the configured worker URL. */
 export function getWsUrl(): string {
-	const base = getBaseUrl();
-	return base.replace(/^http/, 'ws');
+	return getApiUrl().replace(/^http/, 'ws');
 }
 
 export const client = createDashboardClient({
-	url: `${getBaseUrl()}/__ablauf`,
+	url: `${getApiUrl()}/__ablauf`,
 });
 export const orpc = createRouterUtils(client);

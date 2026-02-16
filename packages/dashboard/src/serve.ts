@@ -83,8 +83,20 @@ Bun.serve({
 			}
 		}
 
-		// Fall through to TanStack Start SSR handler
-		return server.fetch(req);
+		// Fall through to TanStack Start SSR handler, injecting runtime config
+		const response = await server.fetch(req);
+		const contentType = response.headers.get('content-type') ?? '';
+		if (contentType.includes('text/html')) {
+			const html = await response.text();
+			// Escape '<' to prevent XSS via crafted --url values
+			const configJson = JSON.stringify({ apiUrl: url }).replace(/</g, '\\u003c');
+			const configScript = `<script>window.__ABLAUF_CONFIG__=${configJson}</script>`;
+			return new Response(html.replace('<head>', `<head>${configScript}`), {
+				status: response.status,
+				headers: response.headers,
+			});
+		}
+		return response;
 	},
 });
 
