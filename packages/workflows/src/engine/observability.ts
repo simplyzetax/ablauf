@@ -12,8 +12,6 @@ import type {
 import { listIndexEntries } from './index-listing';
 import { shardIndex } from './shard';
 
-// ─── Event Types ───────────────────────────────────────────────────────────────
-
 /**
  * Emitted when a workflow instance begins execution for the first time.
  *
@@ -122,8 +120,6 @@ export interface StepRetryEvent {
 	timestamp: number;
 }
 
-// ─── Filters ───────────────────────────────────────────────────────────────────
-
 /**
  * Filters for querying workflow instances through an observability provider.
  *
@@ -138,8 +134,6 @@ export interface WorkflowListFilters {
 	/** Maximum number of entries to return. */
 	limit?: number;
 }
-
-// ─── ObservabilityProvider ──────────────────────────────────────────────────────
 
 /**
  * Pluggable interface for observing workflow and step lifecycle events.
@@ -274,8 +268,6 @@ export interface ObservabilityProvider<TCollector = void> {
 	}>;
 }
 
-// ─── StepObserver ──────────────────────────────────────────────────────────────
-
 /**
  * Lightweight observer interface for step-level events within a single workflow.
  *
@@ -324,8 +316,6 @@ export interface StepObserver {
 		timestamp: number,
 	): void;
 }
-
-// ─── ShardObservabilityProvider ─────────────────────────────────────────────────
 
 /**
  * Internal collector used by {@link ShardObservabilityProvider} to accumulate
