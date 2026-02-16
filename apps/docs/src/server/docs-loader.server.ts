@@ -1,5 +1,6 @@
 import { notFound } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
+import type { PageData } from 'fumadocs-core/source';
 import { source } from '@/lib/source.server';
 
 export type DocsPageLoaderData =
@@ -31,12 +32,15 @@ export const pageLoader = createServerFn({ method: 'GET' })
 
 		const pageTree = (await source.serializePageTree(source.getPageTree())) as unknown as { [key: string]: {} };
 		if (page.data.type === 'openapi') {
+			// Cast needed: multiple() narrows to PageData & { type: "openapi" } which doesn't
+			// include OpenAPIPageData's getAPIPageProps due to bun's duplicate fumadocs-core resolution
+			const data = page.data as PageData & { type: 'openapi'; getAPIPageProps: () => unknown };
 			return {
 				kind: 'openapi',
-				title: page.data.title,
-				description: page.data.description,
+				title: data.title,
+				description: data.description,
 				pageTree,
-				apiPageProps: JSON.parse(JSON.stringify(page.data.getAPIPageProps())) as { [key: string]: {} },
+				apiPageProps: JSON.parse(JSON.stringify(data.getAPIPageProps())) as { [key: string]: {} },
 			};
 		}
 
