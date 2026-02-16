@@ -12,7 +12,15 @@ import {
 } from '../errors';
 import { parseDuration } from './duration';
 import { parseSize } from './size';
-import type { Step, StepDoOptions, StepWaitOptions, RetryConfig, WorkflowDefaults, ResultSizeLimitConfig } from './types';
+import type {
+	Step,
+	StepDoOptions,
+	StepWaitOptions,
+	RetryConfig,
+	WorkflowDefaults,
+	ResultSizeLimitConfig,
+	RetryHistoryEntry,
+} from './types';
 import { DEFAULT_RETRY_CONFIG, DEFAULT_RESULT_SIZE_LIMIT } from './types';
 import type { StepObserver } from './observability';
 import superjson from 'superjson';
@@ -93,8 +101,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			const errorMsg =
 				'Step crashed — Loss of isolate (possible OOM). See: https://developers.cloudflare.com/workers/observability/errors/#durable-objects';
 
-			const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
-				existing.retryHistory ? JSON.parse(existing.retryHistory) : [];
+			const existingHistory: RetryHistoryEntry[] = existing.retryHistory ? JSON.parse(existing.retryHistory) : [];
 			const crashDuration = existing.startedAt ? Date.now() - existing.startedAt : 0;
 			const updatedHistory = [
 				...existingHistory,
@@ -187,8 +194,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			// Non-retriable errors bypass retry logic entirely
 			if (e instanceof NonRetriableError) {
 				const duration = Date.now() - startedAt;
-				const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
-					existing?.retryHistory ? JSON.parse(existing.retryHistory) : [];
+				const existingHistory: RetryHistoryEntry[] = existing?.retryHistory ? JSON.parse(existing.retryHistory) : [];
 				const updatedHistory = [
 					...existingHistory,
 					{ attempt: newAttempts, error: e.message, errorStack: e.stack ?? null, timestamp: startedAt, duration },
@@ -217,8 +223,7 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 			const duration = Date.now() - startedAt;
 
 			// Build retry history
-			const existingHistory: Array<{ attempt: number; error: string; errorStack: string | null; timestamp: number; duration: number }> =
-				existing?.retryHistory ? JSON.parse(existing.retryHistory) : [];
+			const existingHistory: RetryHistoryEntry[] = existing?.retryHistory ? JSON.parse(existing.retryHistory) : [];
 			const updatedHistory = [...existingHistory, { attempt: newAttempts, error: errorMsg, errorStack, timestamp: startedAt, duration }];
 			const retryHistorySerialized = JSON.stringify(updatedHistory);
 
@@ -300,7 +305,6 @@ export class StepContext<Events extends object = {}> implements Step<Events> {
 		}
 
 		const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.name, name));
-
 		if (existing?.status === 'completed') {
 			return;
 		}

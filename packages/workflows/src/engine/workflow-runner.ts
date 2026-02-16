@@ -29,6 +29,8 @@ import type {
 	WorkflowRunnerInitProps,
 	WorkflowClass,
 	WorkflowShardConfig,
+	WorkflowIndexEntry,
+	WorkflowIndexListFilters,
 } from './types';
 
 /**
@@ -333,7 +335,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 
 		// ─── Index Shard RPC Methods ───
 
-		async indexWrite(props: { id: string; status: string; createdAt: number; updatedAt: number }): Promise<void> {
+		async indexWrite(props: WorkflowIndexEntry): Promise<void> {
 			await this.db
 				.insert(instancesTable)
 				.values(props)
@@ -343,7 +345,7 @@ export function createWorkflowRunner(config: CreateWorkflowRunnerConfig) {
 				});
 		}
 
-		async indexList(filters?: { status?: string; limit?: number }): Promise<Array<typeof instancesTable.$inferSelect>> {
+		async indexList(filters?: WorkflowIndexListFilters): Promise<Array<typeof instancesTable.$inferSelect>> {
 			let query = this.db.select().from(instancesTable);
 			if (filters?.status) {
 				query = query.where(eq(instancesTable.status, filters.status)) as typeof query;

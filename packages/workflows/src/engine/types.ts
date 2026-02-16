@@ -272,6 +272,23 @@ export interface WorkflowInstance<Payload = unknown, Result = unknown, Events ex
 	run(step: Step<Events>, payload: Payload, sse: SSE<SSEUpdates>): Promise<Result>;
 }
 
+/** Zod schema for a single failed retry attempt within a step's retry history. */
+export const retryHistoryEntrySchema = z.object({
+	/** The retry attempt number (1-based). */
+	attempt: z.number(),
+	/** Error message from the failed attempt. */
+	error: z.string(),
+	/** Stack trace from the failed attempt, or `null` if unavailable. */
+	errorStack: z.string().nullable(),
+	/** Unix timestamp (ms) when the attempt started. */
+	timestamp: z.number(),
+	/** Wall-clock execution duration of the attempt in milliseconds. */
+	duration: z.number(),
+});
+
+/** A single entry in a step's retry history, representing one failed attempt. */
+export type RetryHistoryEntry = z.infer<typeof retryHistoryEntrySchema>;
+
 /** Zod schema for a single step's execution details. */
 export const stepInfoSchema = z.object({
 	/** Unique name of the step. */
@@ -295,17 +312,7 @@ export const stepInfoSchema = z.object({
 	/** Error stack trace from the most recent failure, or `null`. */
 	errorStack: z.string().nullable(),
 	/** History of failed retry attempts, or `null` if no retries occurred. */
-	retryHistory: z
-		.array(
-			z.object({
-				attempt: z.number(),
-				error: z.string(),
-				errorStack: z.string().nullable(),
-				timestamp: z.number(),
-				duration: z.number(),
-			}),
-		)
-		.nullable(),
+	retryHistory: z.array(retryHistoryEntrySchema).nullable(),
 });
 
 /** Detailed information about a single step's execution. */
