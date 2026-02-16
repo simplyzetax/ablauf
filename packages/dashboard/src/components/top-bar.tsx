@@ -6,12 +6,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/comp
 import { Separator } from '~/components/ui/separator';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '~/lib/utils';
+import { getApiUrl } from '~/lib/config';
 
 /** Top navigation bar with app nav, connection status, and refresh control. */
 export function TopBar() {
 	const connection = useConnectionStatus();
 	const queryClient = useQueryClient();
-	const apiUrl = import.meta.env.VITE_ABLAUF_API_URL ?? 'http://localhost:8787';
+	const apiUrl = getApiUrl();
 
 	return (
 		<TooltipProvider>
